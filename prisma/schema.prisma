@@ -1,13 +1,147 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
+}
+
+// 広告媒体: google / yahoo / bing
+// 広告種別: search（リスティング）/ display（ディスプレイ）
+
+model Campaign {
+  id            String   @id @default(cuid())
+  name          String
+  platform      String   // "google" | "yahoo" | "bing"
+  adType        String   // "search" | "display"
+  status        String   @default("active") // "active" | "paused" | "ended"
+  monthlyBudget Float?   // 月次予算（円）
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  adGroups  AdGroup[]
+  budgetLogs BudgetLog[]
+  metrics   DailyMetric[]
+}
+
+model AdGroup {
+  id         String   @id @default(cuid())
+  campaignId String
+  name       String
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaign  Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creatives Creative[]
+  metrics   DailyMetric[]
+}
+
+// クリエイティブ（広告）
+model Creative {
+  id           String   @id @default(cuid())
+  adGroupId    String
+  name         String
+  type         String   // "text" | "image" | "responsive"
+  headline1    String?
+  headline2    String?
+  headline3    String?
+  description1 String?
+  description2 String?
+  imageUrl     String?
+  status       String   @default("active") // "active" | "paused" | "removed"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  adGroup   AdGroup          @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
+  histories CreativeHistory[]
+  metrics   DailyMetric[]
+}
+
+// クリエイティブの変更履歴（誰がいつ何を変えたか）
+model CreativeHistory {
+  id         String   @id @default(cuid())
+  creativeId String
+  changedBy  String
+  changeType String   // "created" | "updated" | "paused" | "resumed" | "removed"
+  beforeData String?  // 変更前のJSON文字列
+  afterData  String?  // 変更後のJSON文字列
+  note       String?
+  changedAt  DateTime @default(now())
+
+  creative Creative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+}
+
+// 日次パフォーマンスデータ
+model DailyMetric {
+  id          String   @id @default(cuid())
+  date        DateTime
+  campaignId  String?
+  adGroupId   String?
+  creativeId  String?
+  platform    String   // "google" | "yahoo" | "bing"
+
+  impressions Int   @default(0)
+  clicks      Int   @default(0)
+  cost        Float @default(0)
+  conversions Float @default(0)
+  convValue   Float @default(0)
+
+  ctr Float? // clicks / impressions
+  cpc Float? // cost / clicks
+  cpa Float? // cost / conversions
+  roas Float? // convValue / cost * 100
+
+  createdAt DateTime @default(now())
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adGroup  AdGroup?  @relation(fields: [adGroupId], references: [id], onDelete: SetNull)
+  creative Creative? @relation(fields: [creativeId], references: [id], onDelete: SetNull)
+
+  @@unique([date, campaignId, adGroupId, creativeId, platform])
+}
+
+// 予算ログ
+model BudgetLog {
+  id         String   @id @default(cuid())
+  campaignId String
+  month      String   // "2025-03" 形式
+  budget     Float
+  spent      Float    @default(0)
+  changedBy  String?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+// 検索語句レポート（除外キーワード分析用）
+model SearchTermReport {
+  id           String   @id @default(cuid())
+  date         DateTime
+  platform     String
+  campaignId   String?
+  campaignName String?
+  searchTerm   String
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  cost         Float    @default(0)
+  conversions  Float    @default(0)
+  ctr          Float?
+  cpc          Float?
+  cpa          Float?
+  matchType    String?
+  isExcluded   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+// データ同期ログ
+model SyncLog {
+  id         String    @id @default(cuid())
+  platform   String    // "google" | "yahoo" | "bing" | "all"
+  syncType   String    // "auto" | "manual"
+  status     String    // "running" | "success" | "failed"
+  message    String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
 }
