@@ -76,6 +76,12 @@ type TrendPoint = {
   cost: number;
   cpa: number | null;
   conversions: number;
+  google_cv: number;
+  yahoo_cv: number;
+  bing_cv: number;
+  google_cpa: number | null;
+  yahoo_cpa: number | null;
+  bing_cpa: number | null;
 };
 
 type BudgetPlatform = {
@@ -156,6 +162,7 @@ const pct1Format = new Intl.NumberFormat('ja-JP', {
   maximumFractionDigits: 1,
 });
 const dateShort = new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'numeric' });
+const dateLong = new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
 const timeFormat = new Intl.DateTimeFormat('ja-JP', {
   hour: '2-digit',
   minute: '2-digit',
@@ -258,6 +265,9 @@ function getMockTrendData(period: Period): TrendPoint[] {
     const bing = Math.round((14 + wave * 14 + t * 8) * 1000);
     const cost = google + yahoo + bing;
     const conversions = Math.max(1, Math.round(cost / 6100));
+    const google_cv = Math.max(0, Math.round(google / 6800));
+    const yahoo_cv = Math.max(0, Math.round(yahoo / 6500));
+    const bing_cv = Math.max(0, Math.round(bing / 7200));
     return {
       date: date.toISOString().split('T')[0],
       google,
@@ -266,6 +276,12 @@ function getMockTrendData(period: Period): TrendPoint[] {
       cost,
       conversions,
       cpa: Math.round(cost / conversions),
+      google_cv,
+      yahoo_cv,
+      bing_cv,
+      google_cpa: google_cv > 0 ? Math.round(google / google_cv) : null,
+      yahoo_cpa:  yahoo_cv  > 0 ? Math.round(yahoo  / yahoo_cv)  : null,
+      bing_cpa:   bing_cv   > 0 ? Math.round(bing   / bing_cv)   : null,
     };
   });
 }
@@ -747,6 +763,14 @@ export default function DashboardPage() {
     cpaTargetLine: cpaTarget ?? undefined,
   }));
 
+  // 表示期間の開始・終了日
+  const dateRangeText = (() => {
+    if (displayTrend.length === 0) return null;
+    const first = new Date(displayTrend[0].date);
+    const last = new Date(displayTrend[displayTrend.length - 1].date);
+    return `${dateLong.format(first)} 〜 ${dateLong.format(last)}`;
+  })();
+
   // 最終更新テキスト
   function formatLastUpdated(d: Date | null): string {
     if (!d) return '';
@@ -768,8 +792,13 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">ダッシュボード</h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
               <p className="text-sm text-muted-foreground">{PERIOD_SUBTITLE[period]}の実績サマリー</p>
+              {dateRangeText && (
+                <span className="text-xs tabular-nums text-muted-foreground/70 bg-muted px-2 py-0.5 rounded-full">
+                  {dateRangeText}
+                </span>
+              )}
               {lastUpdated && (
                 <span className="text-xs text-muted-foreground/50 tabular-nums">
                   · {formatLastUpdated(lastUpdated)}
@@ -1041,7 +1070,7 @@ export default function DashboardPage() {
                     tickLine={false}
                   />
                   <Tooltip
-                    formatter={(v) => [jpyFormat.format(Number(v ?? 0)), 'CPA']}
+                    formatter={(v, name) => [v != null ? jpyFormat.format(Number(v)) : '—', name]}
                     labelFormatter={(l) => l}
                     contentStyle={{
                       borderRadius: '8px',
@@ -1049,6 +1078,7 @@ export default function DashboardPage() {
                       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                     }}
                   />
+                  <Legend iconSize={10} />
                   {/* 目標ライン */}
                   {cpaTarget && (
                     <Line
@@ -1061,15 +1091,24 @@ export default function DashboardPage() {
                       dot={false}
                     />
                   )}
-                  <Line
-                    type="monotone"
-                    dataKey="cpa"
-                    name="CPA"
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: '#6366f1' }}
-                    connectNulls
-                  />
+                  {platform === 'all' ? (
+                    <>
+                      <Line type="monotone" dataKey="cpa" name="合計" stroke="#6366f1" strokeWidth={2.5} dot={false} connectNulls />
+                      <Line type="monotone" dataKey="google_cpa" name="Google" stroke={PLATFORM_COLORS.google} strokeWidth={1.5} dot={false} connectNulls />
+                      <Line type="monotone" dataKey="yahoo_cpa" name="Yahoo!" stroke={PLATFORM_COLORS.yahoo} strokeWidth={1.5} dot={false} connectNulls />
+                      <Line type="monotone" dataKey="bing_cpa" name="Bing" stroke={PLATFORM_COLORS.bing} strokeWidth={1.5} dot={false} connectNulls />
+                    </>
+                  ) : (
+                    <Line
+                      type="monotone"
+                      dataKey={`${platform}_cpa`}
+                      name={`${PLATFORM_LABELS[platform]} CPA`}
+                      stroke={PLATFORM_COLORS[platform]}
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: PLATFORM_COLORS[platform] }}
+                      connectNulls
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -1093,7 +1132,7 @@ export default function DashboardPage() {
                     tickLine={false}
                   />
                   <Tooltip
-                    formatter={(v) => [numFormat.format(Number(v ?? 0)), 'CV数']}
+                    formatter={(v, name) => [numFormat.format(Number(v ?? 0)), name]}
                     labelFormatter={(l) => l}
                     contentStyle={{
                       borderRadius: '8px',
@@ -1101,15 +1140,25 @@ export default function DashboardPage() {
                       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                     }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="conversions"
-                    name="CV数"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: '#10b981' }}
-                    connectNulls
-                  />
+                  <Legend iconSize={10} />
+                  {platform === 'all' ? (
+                    <>
+                      <Line type="monotone" dataKey="conversions" name="合計" stroke="#10b981" strokeWidth={2.5} dot={false} connectNulls />
+                      <Line type="monotone" dataKey="google_cv" name="Google" stroke={PLATFORM_COLORS.google} strokeWidth={1.5} dot={false} connectNulls />
+                      <Line type="monotone" dataKey="yahoo_cv" name="Yahoo!" stroke={PLATFORM_COLORS.yahoo} strokeWidth={1.5} dot={false} connectNulls />
+                      <Line type="monotone" dataKey="bing_cv" name="Bing" stroke={PLATFORM_COLORS.bing} strokeWidth={1.5} dot={false} connectNulls />
+                    </>
+                  ) : (
+                    <Line
+                      type="monotone"
+                      dataKey={`${platform}_cv`}
+                      name={`${PLATFORM_LABELS[platform]} CV`}
+                      stroke={PLATFORM_COLORS[platform]}
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: PLATFORM_COLORS[platform] }}
+                      connectNulls
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
