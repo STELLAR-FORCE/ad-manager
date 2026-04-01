@@ -260,20 +260,52 @@ function calcDelta(current: number, previous: number): number | null {
   return (current - previous) / previous;
 }
 
-function buildAnomalies(current: Metrics, previous: Metrics): Anomaly[] {
+function buildAnomalies(
+  current: Metrics,
+  previous: Metrics,
+  budget: BudgetUsage | null,
+  cpaTarget: number | null,
+): Anomaly[] {
   const list: Anomaly[] = [];
-  const costDelta = calcDelta(current.cost, previous.cost);
-  const cvDelta = calcDelta(current.conversions, previous.conversions);
-  const cpaDelta = calcDelta(current.cpa, previous.cpa);
 
-  if (costDelta !== null && costDelta > 0.3)
-    list.push({ type: 'warning', message: `費用が前期比 ${pctFormat.format(costDelta)} 急増しています` });
-  if (cvDelta !== null && cvDelta < -0.2)
-    list.push({ type: 'warning', message: `CV数が前期比 ${pctFormat.format(Math.abs(cvDelta))} 急落しています` });
+  const costDelta = calcDelta(current.cost, previous.cost);
+  const cvDelta   = calcDelta(current.conversions, previous.conversions);
+  const cpaDelta  = calcDelta(current.cpa, previous.cpa);
+  const ctrDelta  = calcDelta(current.ctr, previous.ctr);
+
+  // ── 警告 ─────────────────────────────────────────
+  // 目標CPA 20%超過
+  if (cpaTarget && current.cpa > 0 && current.cpa > cpaTarget * 1.2)
+    list.push({ type: 'warning', message: `CPA が目標値の ${pct1Format.format(current.cpa / cpaTarget)} に達しています（目標 ${jpyFormat.format(cpaTarget)}、実績 ${jpyFormat.format(Math.round(current.cpa))}）` });
+
+  // CPA 前期比 20%悪化
   if (cpaDelta !== null && cpaDelta > 0.2)
     list.push({ type: 'warning', message: `CPA が前期比 ${pctFormat.format(cpaDelta)} 悪化しています` });
+
+  // CV 前期比 30%急落
+  if (cvDelta !== null && cvDelta < -0.3)
+    list.push({ type: 'warning', message: `CV数が前期比 ${pctFormat.format(Math.abs(cvDelta))} 急落しています` });
+
+  // 予算超過
+  if (budget && budget.totalBudget > 0 && budget.utilization > 1)
+    list.push({ type: 'warning', message: `月次予算を超過しています（消化率 ${pct1Format.format(budget.utilization)}）` });
+
+  // ── 注意 ─────────────────────────────────────────
+  // 費用 前期比 30%急増
+  if (costDelta !== null && costDelta > 0.3)
+    list.push({ type: 'info', message: `費用が前期比 ${pctFormat.format(costDelta)} 急増しています` });
+
+  // 費用 前期比 30%急減（予算未消化の可能性）
   if (costDelta !== null && costDelta < -0.3)
     list.push({ type: 'info', message: `費用が前期比 ${pctFormat.format(Math.abs(costDelta))} 大幅減少しています（予算未消化の可能性）` });
+
+  // CTR 前期比 20%低下（クリエイティブ疲弊）
+  if (ctrDelta !== null && ctrDelta < -0.2)
+    list.push({ type: 'info', message: `CTR が前期比 ${pctFormat.format(Math.abs(ctrDelta))} 低下しています（クリエイティブ疲弊の可能性）` });
+
+  // 予算残り 10%未満
+  if (budget && budget.totalBudget > 0 && budget.utilization >= 0.9 && budget.utilization <= 1)
+    list.push({ type: 'info', message: `月次予算の残り ${pct1Format.format(1 - budget.utilization)} です（消化率 ${pct1Format.format(budget.utilization)}）` });
 
   return list;
 }
@@ -755,7 +787,7 @@ export default function DashboardPage() {
 
   const { current, previous, byPlatform } = displaySummary;
   const deltaLabel = dateRange.compareEnabled ? '比較期間比' : '前期間比';
-  const anomalies = isMock ? [] : buildAnomalies(current, previous);
+  const anomalies = isMock ? [] : buildAnomalies(current, previous, displayBudget, cpaTarget);
 
   // 比較トレンドをインデックス合わせでマージ
   const showCompare = dateRange.compareEnabled && compareTrend.length > 0;
@@ -820,19 +852,30 @@ export default function DashboardPage() {
             </SelectContent>
           </Select>
 
-          {/* 通知ベル */}
-          {anomalies.length > 0 && (
-            <Popover>
-              <PopoverTrigger className="relative p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" aria-label={`通知 ${anomalies.length}件`}>
-                <Bell className="h-4 w-4" aria-hidden="true" />
+          {/* 通知ベル（常時表示） */}
+          <Popover>
+            <PopoverTrigger
+              className="relative p-2 rounded-md hover:bg-accent transition-colors"
+              aria-label={anomalies.length > 0 ? `通知 ${anomalies.length}件` : '通知なし'}
+            >
+              <Bell
+                className={cn('h-4 w-4', anomalies.length > 0 ? 'text-foreground' : 'text-muted-foreground/50')}
+                aria-hidden="true"
+              />
+              {anomalies.length > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white tabular-nums">
                   {anomalies.length}
                 </span>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 p-0">
-                <div className="px-4 py-3 border-b border-border">
-                  <p className="text-sm font-medium">要チェック</p>
-                </div>
+              )}
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 p-0">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-medium">アラート</p>
+                {anomalies.length > 0 && (
+                  <span className="text-xs text-muted-foreground">{anomalies.length}件</span>
+                )}
+              </div>
+              {anomalies.length > 0 ? (
                 <div className="divide-y divide-border">
                   {anomalies.map((a, i) => (
                     <div key={i} className="flex items-start gap-3 px-4 py-3 text-sm">
@@ -845,9 +888,13 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-              </PopoverContent>
-            </Popover>
-          )}
+              ) : (
+                <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                  現在アラートはありません
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
 
           {/* 更新ボタン */}
           <Button
