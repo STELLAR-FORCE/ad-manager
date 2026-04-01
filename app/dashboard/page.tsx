@@ -1070,15 +1070,39 @@ export default function DashboardPage() {
                     tickLine={false}
                   />
                   <Tooltip
-                    formatter={(v, name) => [v != null ? jpyFormat.format(Number(v)) : '—', name]}
-                    labelFormatter={(l) => l}
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: '1px solid hsl(var(--border))',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload as typeof chartData[0];
+                      return (
+                        <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[160px]">
+                          <p className="font-medium text-foreground mb-2">{label}</p>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">合計</span>
+                            <span className="tabular-nums font-semibold">{d.cpa != null ? jpyFormat.format(d.cpa) : '—'}</span>
+                          </div>
+                          {platform === 'all' && (
+                            <>
+                              {(['google', 'yahoo', 'bing'] as const).map((p) => (
+                                <div key={p} className="flex justify-between gap-4">
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p] }} />
+                                    <span className="text-muted-foreground">{PLATFORM_LABELS[p]}</span>
+                                  </span>
+                                  <span className="tabular-nums">{d[`${p}_cpa`] != null ? jpyFormat.format(d[`${p}_cpa`]!) : '—'}</span>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                          {cpaTarget && (
+                            <div className="flex justify-between gap-4 pt-1 border-t border-border/50">
+                              <span className="text-muted-foreground">目標</span>
+                              <span className="tabular-nums">{jpyFormat.format(cpaTarget)}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
                     }}
                   />
-                  <Legend iconSize={10} />
                   {/* 目標ライン */}
                   {cpaTarget && (
                     <Line
@@ -1091,24 +1115,15 @@ export default function DashboardPage() {
                       dot={false}
                     />
                   )}
-                  {platform === 'all' ? (
-                    <>
-                      <Line type="monotone" dataKey="cpa" name="合計" stroke="#6366f1" strokeWidth={2.5} dot={false} connectNulls />
-                      <Line type="monotone" dataKey="google_cpa" name="Google" stroke={PLATFORM_COLORS.google} strokeWidth={1.5} dot={false} connectNulls />
-                      <Line type="monotone" dataKey="yahoo_cpa" name="Yahoo!" stroke={PLATFORM_COLORS.yahoo} strokeWidth={1.5} dot={false} connectNulls />
-                      <Line type="monotone" dataKey="bing_cpa" name="Bing" stroke={PLATFORM_COLORS.bing} strokeWidth={1.5} dot={false} connectNulls />
-                    </>
-                  ) : (
-                    <Line
-                      type="monotone"
-                      dataKey={`${platform}_cpa`}
-                      name={`${PLATFORM_LABELS[platform]} CPA`}
-                      stroke={PLATFORM_COLORS[platform]}
-                      strokeWidth={2}
-                      dot={{ r: 3, fill: PLATFORM_COLORS[platform] }}
-                      connectNulls
-                    />
-                  )}
+                  <Line
+                    type="monotone"
+                    dataKey="cpa"
+                    name="CPA"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#6366f1' }}
+                    connectNulls
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -1132,33 +1147,42 @@ export default function DashboardPage() {
                     tickLine={false}
                   />
                   <Tooltip
-                    formatter={(v, name) => [numFormat.format(Number(v ?? 0)), name]}
-                    labelFormatter={(l) => l}
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: '1px solid hsl(var(--border))',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload as typeof chartData[0];
+                      return (
+                        <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[160px]">
+                          <p className="font-medium text-foreground mb-2">{label}</p>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">合計</span>
+                            <span className="tabular-nums font-semibold">{numFormat.format(d.conversions)}</span>
+                          </div>
+                          {platform === 'all' && (
+                            <>
+                              {(['google', 'yahoo', 'bing'] as const).map((p) => (
+                                <div key={p} className="flex justify-between gap-4">
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p] }} />
+                                    <span className="text-muted-foreground">{PLATFORM_LABELS[p]}</span>
+                                  </span>
+                                  <span className="tabular-nums">{numFormat.format(d[`${p}_cv`])}</span>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      );
                     }}
                   />
-                  <Legend iconSize={10} />
-                  {platform === 'all' ? (
-                    <>
-                      <Line type="monotone" dataKey="conversions" name="合計" stroke="#10b981" strokeWidth={2.5} dot={false} connectNulls />
-                      <Line type="monotone" dataKey="google_cv" name="Google" stroke={PLATFORM_COLORS.google} strokeWidth={1.5} dot={false} connectNulls />
-                      <Line type="monotone" dataKey="yahoo_cv" name="Yahoo!" stroke={PLATFORM_COLORS.yahoo} strokeWidth={1.5} dot={false} connectNulls />
-                      <Line type="monotone" dataKey="bing_cv" name="Bing" stroke={PLATFORM_COLORS.bing} strokeWidth={1.5} dot={false} connectNulls />
-                    </>
-                  ) : (
-                    <Line
-                      type="monotone"
-                      dataKey={`${platform}_cv`}
-                      name={`${PLATFORM_LABELS[platform]} CV`}
-                      stroke={PLATFORM_COLORS[platform]}
-                      strokeWidth={2}
-                      dot={{ r: 3, fill: PLATFORM_COLORS[platform] }}
-                      connectNulls
-                    />
-                  )}
+                  <Line
+                    type="monotone"
+                    dataKey="conversions"
+                    name="CV数"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#10b981' }}
+                    connectNulls
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
