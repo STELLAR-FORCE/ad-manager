@@ -39,6 +39,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { Meter, Label, ProgressCircle, Chip } from '@heroui/react';
 import { cn } from '@/lib/utils';
 
 // ─── 型定義 ────────────────────────────────────────────────
@@ -74,6 +75,7 @@ type TrendPoint = {
   bing: number;
   cost: number;
   cpa: number | null;
+  conversions: number;
 };
 
 type BudgetPlatform = {
@@ -148,6 +150,10 @@ const pctFormat = new Intl.NumberFormat('ja-JP', {
   style: 'percent',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
+});
+const pct1Format = new Intl.NumberFormat('ja-JP', {
+  style: 'percent',
+  maximumFractionDigits: 1,
 });
 const dateShort = new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'numeric' });
 const timeFormat = new Intl.DateTimeFormat('ja-JP', {
@@ -258,6 +264,7 @@ function getMockTrendData(period: Period): TrendPoint[] {
       yahoo,
       bing,
       cost,
+      conversions,
       cpa: Math.round(cost / conversions),
     };
   });
@@ -314,7 +321,6 @@ function DeltaBadge({
     </span>
   );
 }
-
 
 function TargetBadge({
   actual,
@@ -395,12 +401,12 @@ function KpiCard({
   }
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardContent className="pt-6">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-slate-500">{title}</p>
-            <p className="text-2xl font-bold mt-1 tabular-nums">{value}</p>
+            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="text-2xl font-bold mt-1 tabular-nums tracking-tight">{value}</p>
 
             {/* 目標比表示 */}
             {onSetTarget && (
@@ -428,7 +434,7 @@ function KpiCard({
                     </button>
                     <button
                       onClick={cancelEdit}
-                      className="text-slate-400 hover:text-slate-600"
+                      className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                       aria-label="キャンセル"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -444,7 +450,7 @@ function KpiCard({
                     />
                     <button
                       onClick={startEdit}
-                      className="text-slate-300 hover:text-slate-500 transition-colors"
+                      className="text-muted-foreground/30 hover:text-muted-foreground transition-colors"
                       aria-label="目標値を編集"
                     >
                       <Pencil className="h-3 w-3" />
@@ -453,7 +459,7 @@ function KpiCard({
                 ) : (
                   <button
                     onClick={startEdit}
-                    className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors"
+                    className="text-xs text-muted-foreground/50 hover:text-muted-foreground flex items-center gap-1 transition-colors"
                     aria-label="目標値を設定"
                   >
                     <Pencil className="h-3 w-3" />
@@ -464,17 +470,17 @@ function KpiCard({
             )}
 
             {sub && !onSetTarget && (
-              <p className="text-xs text-slate-400 mt-1">{sub}</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">{sub}</p>
             )}
           </div>
-          <div className="p-2 rounded-lg bg-blue-50 shrink-0">
-            <Icon className="h-5 w-5 text-blue-600" aria-hidden="true" />
+          <div className="p-2 rounded-lg bg-primary/8 shrink-0">
+            <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
           </div>
         </div>
         {delta != null && (
-          <div className="flex items-center gap-1.5 mt-3 pt-2 border-t">
+          <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-border/50">
             <DeltaBadge delta={delta} lowerIsBetter={lowerIsBetter} />
-            <span className="text-xs text-slate-400">{deltaLabel}</span>
+            <span className="text-xs text-muted-foreground/60">{deltaLabel}</span>
           </div>
         )}
       </CardContent>
@@ -489,7 +495,7 @@ function FunnelFlow({ metrics, isMock }: { metrics: Metrics; isMock: boolean }) 
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          表示→クリック→CV フロー
+          表示 → クリック → CV フロー
           {isMock && (
             <Badge variant="secondary" className="text-xs font-normal">
               サンプル
@@ -498,56 +504,59 @@ function FunnelFlow({ metrics, isMock }: { metrics: Metrics; isMock: boolean }) 
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center justify-center gap-1 flex-wrap">
-          <div className="text-center px-3 py-2">
-            <p className="text-xs text-slate-500 mb-1">表示数</p>
-            <p className="text-2xl font-bold tabular-nums text-slate-800">
+        <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-3">
+          {/* 表示数 */}
+          <div className="rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 px-5 py-5 text-center space-y-3">
+            <p className="text-xs font-medium text-muted-foreground tracking-wide uppercase">表示数</p>
+            <p className="text-3xl font-bold tabular-nums leading-none">
               {numFormat.format(impressions)}
             </p>
+            <div className="border-t border-border/40 pt-2.5 space-y-1">
+              <p className="text-xs text-muted-foreground">費用</p>
+              <p className="text-sm font-semibold tabular-nums">{jpyFormat.format(Math.round(cost))}</p>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-0.5 px-1">
-            <span className="text-sm font-semibold tabular-nums text-blue-600">
-              {pctFormat.format(ctr)}
-            </span>
-            <span className="text-xs text-slate-400">CTR</span>
-            <ArrowRight className="h-4 w-4 text-slate-300 mt-0.5" aria-hidden="true" />
+
+          {/* CTR → */}
+          <div className="flex flex-col items-center gap-1 px-1">
+            <span className="text-sm font-bold tabular-nums text-blue-600">{pctFormat.format(ctr)}</span>
+            <span className="text-[10px] font-medium text-muted-foreground tracking-widest">CTR</span>
+            <ArrowRight className="h-5 w-5 text-muted-foreground/40 mt-0.5" aria-hidden="true" />
           </div>
-          <div className="text-center px-3 py-2">
-            <p className="text-xs text-slate-500 mb-1">クリック数</p>
-            <p className="text-2xl font-bold tabular-nums text-blue-700">
+
+          {/* クリック数 */}
+          <div className="rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 px-5 py-5 text-center space-y-3">
+            <p className="text-xs font-medium text-blue-500 tracking-wide uppercase">クリック数</p>
+            <p className="text-3xl font-bold tabular-nums leading-none text-blue-700">
               {numFormat.format(clicks)}
             </p>
+            <div className="border-t border-blue-100 pt-2.5 space-y-1">
+              <p className="text-xs text-blue-400">CPC</p>
+              <p className="text-sm font-semibold tabular-nums text-blue-700">
+                {cpc > 0 ? jpyFormat.format(Math.round(cpc)) : '—'}
+              </p>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-0.5 px-1">
-            <span className="text-sm font-semibold tabular-nums text-green-600">
-              {pctFormat.format(cvr)}
-            </span>
-            <span className="text-xs text-slate-400">CVR</span>
-            <ArrowRight className="h-4 w-4 text-slate-300 mt-0.5" aria-hidden="true" />
+
+          {/* CVR → */}
+          <div className="flex flex-col items-center gap-1 px-1">
+            <span className="text-sm font-bold tabular-nums text-green-600">{pctFormat.format(cvr)}</span>
+            <span className="text-[10px] font-medium text-muted-foreground tracking-widest">CVR</span>
+            <ArrowRight className="h-5 w-5 text-muted-foreground/40 mt-0.5" aria-hidden="true" />
           </div>
-          <div className="text-center px-3 py-2">
-            <p className="text-xs text-slate-500 mb-1">CV数</p>
-            <p className="text-2xl font-bold tabular-nums text-green-700">
+
+          {/* CV数 */}
+          <div className="rounded-xl bg-gradient-to-br from-green-100 to-green-50 px-5 py-5 text-center space-y-3">
+            <p className="text-xs font-medium text-green-600 tracking-wide uppercase">CV数</p>
+            <p className="text-3xl font-bold tabular-nums leading-none text-green-700">
               {numFormat.format(Math.round(conversions))}
             </p>
-          </div>
-        </div>
-        <div className="flex justify-center gap-6 lg:gap-12 mt-4 pt-4 border-t">
-          <div className="text-center">
-            <p className="text-xs text-slate-500 mb-0.5">費用</p>
-            <p className="font-semibold tabular-nums text-sm">{jpyFormat.format(Math.round(cost))}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-slate-500 mb-0.5">CPC</p>
-            <p className="font-semibold tabular-nums text-sm">
-              {cpc > 0 ? jpyFormat.format(Math.round(cpc)) : '—'}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-slate-500 mb-0.5">CPA</p>
-            <p className="font-semibold tabular-nums text-sm">
-              {cpa > 0 ? jpyFormat.format(Math.round(cpa)) : '—'}
-            </p>
+            <div className="border-t border-green-100 pt-2.5 space-y-1">
+              <p className="text-xs text-green-500">CPA</p>
+              <p className="text-sm font-semibold tabular-nums text-green-700">
+                {cpa > 0 ? jpyFormat.format(Math.round(cpa)) : '—'}
+              </p>
+            </div>
           </div>
         </div>
       </CardContent>
@@ -555,7 +564,8 @@ function FunnelFlow({ metrics, isMock }: { metrics: Metrics; isMock: boolean }) 
   );
 }
 
-function BudgetBar({
+/** HeroUI Meter を使った予算バー */
+function BudgetMeter({
   spent,
   budget,
   utilization,
@@ -566,50 +576,93 @@ function BudgetBar({
   utilization: number;
   label: string;
 }) {
-  const pct = Math.min(utilization * 100, 100);
   const color =
     utilization >= 0.9
-      ? 'bg-red-500'
+      ? 'danger'
       : utilization >= 0.75
-        ? 'bg-amber-400'
-        : 'bg-blue-500';
+        ? 'warning'
+        : 'accent';
+
+  const spentText = jpyFormat.format(Math.round(spent));
+  const budgetText = budget > 0 ? jpyFormat.format(Math.round(budget)) : null;
+  const pctText = budget > 0 ? pct1Format.format(utilization) : null;
 
   return (
-    <div>
-      <div className="flex items-center justify-between text-xs mb-1.5">
-        <span className="text-slate-600 font-medium">{label}</span>
-        <span className="text-slate-500 tabular-nums">
-          {jpyFormat.format(Math.round(spent))}
-          {budget > 0 && (
-            <span className="text-slate-400"> / {jpyFormat.format(Math.round(budget))}</span>
-          )}
-          {budget > 0 && (
+    <Meter
+      aria-label={`${label} 予算消化率`}
+      value={Math.round(utilization * 100)}
+      minValue={0}
+      maxValue={100}
+      color={color as 'accent' | 'warning' | 'danger'}
+      className="w-full"
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <Label className="text-xs font-medium text-foreground">{label}</Label>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {spentText}
+          {budgetText && <span className="text-muted-foreground/50"> / {budgetText}</span>}
+          {pctText && (
             <span
               className={cn(
-                'ml-1.5 font-semibold tabular-nums',
-                utilization >= 0.9 ? 'text-red-600' : utilization >= 0.75 ? 'text-amber-600' : 'text-slate-700'
+                'ml-1.5 font-semibold',
+                utilization >= 0.9
+                  ? 'text-red-600'
+                  : utilization >= 0.75
+                    ? 'text-amber-600'
+                    : 'text-foreground'
               )}
             >
-              {new Intl.NumberFormat('ja-JP', { style: 'percent', maximumFractionDigits: 1 }).format(utilization)}
+              {pctText}
             </span>
           )}
         </span>
       </div>
-      {budget > 0 ? (
-        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-          <div
-            className={cn('h-2 rounded-full transition-all', color)}
-            style={{ width: `${pct}%` }}
-            role="progressbar"
-            aria-valuenow={Math.round(pct)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`${label} 予算消化率 ${Math.round(pct)}%`}
-          />
-        </div>
-      ) : (
-        <div className="h-2 bg-slate-100 rounded-full" aria-label="予算未設定" />
-      )}
+      <Meter.Track>
+        <Meter.Fill />
+      </Meter.Track>
+    </Meter>
+  );
+}
+
+/** HeroUI ProgressCircle を使った全体消化率 */
+function BudgetCircle({
+  utilization,
+  totalSpent,
+  totalBudget,
+}: {
+  utilization: number;
+  totalSpent: number;
+  totalBudget: number;
+}) {
+  const pct = Math.round(utilization * 100);
+  const color =
+    utilization >= 0.9
+      ? 'danger'
+      : utilization >= 0.75
+        ? 'warning'
+        : 'success';
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <ProgressCircle
+        aria-label="全体予算消化率"
+        value={pct}
+        size="lg"
+        color={color as 'success' | 'warning' | 'danger'}
+      >
+        <ProgressCircle.Track>
+          <ProgressCircle.TrackCircle />
+          <ProgressCircle.FillCircle />
+        </ProgressCircle.Track>
+      </ProgressCircle>
+      <div className="text-center">
+        <p className="text-2xl font-bold tabular-nums">{pct1Format.format(utilization)}</p>
+        <p className="text-xs text-muted-foreground">消化率</p>
+      </div>
+      <div className="text-center text-xs text-muted-foreground tabular-nums space-y-0.5">
+        <p>{jpyFormat.format(Math.round(totalSpent))} 消化</p>
+        <p className="text-muted-foreground/50">予算 {jpyFormat.format(Math.round(totalBudget))}</p>
+      </div>
     </div>
   );
 }
@@ -624,6 +677,7 @@ export default function DashboardPage() {
   const [budget, setBudget] = useState<BudgetUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const initialized = useRef(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // 目標CPA（localStorage永続化）
@@ -647,7 +701,7 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(
     async (isRefresh = false) => {
-      if (isRefresh) setRefreshing(true);
+      if (isRefresh || initialized.current) setRefreshing(true);
       else setLoading(true);
       try {
         const [sRes, tRes, bRes] = await Promise.all([
@@ -665,6 +719,7 @@ export default function DashboardPage() {
         setTrend([]);
         setBudget(null);
       } finally {
+        initialized.current = true;
         setLoading(false);
         setRefreshing(false);
       }
@@ -712,11 +767,11 @@ export default function DashboardPage() {
         {/* ─── ヘッダー ─── */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold">ダッシュボード</h1>
+            <h1 className="text-2xl font-bold tracking-tight">ダッシュボード</h1>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-sm text-slate-500">{PERIOD_SUBTITLE[period]}の実績サマリー</p>
+              <p className="text-sm text-muted-foreground">{PERIOD_SUBTITLE[period]}の実績サマリー</p>
               {lastUpdated && (
-                <span className="text-xs text-slate-400 tabular-nums">
+                <span className="text-xs text-muted-foreground/50 tabular-nums">
                   · {formatLastUpdated(lastUpdated)}
                 </span>
               )}
@@ -774,7 +829,7 @@ export default function DashboardPage() {
               <div
                 key={i}
                 className={cn(
-                  'flex items-start gap-3 rounded-md px-4 py-3 text-sm border',
+                  'flex items-start gap-3 rounded-lg px-4 py-3 text-sm border',
                   a.type === 'warning'
                     ? 'bg-red-50 border-red-200 text-red-800'
                     : 'bg-blue-50 border-blue-200 text-blue-800'
@@ -794,7 +849,7 @@ export default function DashboardPage() {
 
         {/* ─── サンプルデータ通知 ─── */}
         {isMock && !loading && (
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-700 flex items-center gap-2">
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-700 flex items-center gap-2">
             <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
             API連携前のため、サンプルデータを表示しています
           </div>
@@ -803,7 +858,7 @@ export default function DashboardPage() {
         {/* ─── ファネルフロー ─── */}
         {loading ? (
           <Card>
-            <CardContent className="pt-6 text-center text-slate-400">読み込み中…</CardContent>
+            <CardContent className="pt-6 text-center text-muted-foreground">読み込み中…</CardContent>
           </Card>
         ) : (
           <FunnelFlow metrics={current} isMock={isMock} />
@@ -852,7 +907,7 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* ─── 予算消化率 ─── */}
+        {/* ─── 予算消化率（HeroUI Meter + ProgressCircle） ─── */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -864,54 +919,75 @@ export default function DashboardPage() {
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* 全体 */}
-            <BudgetBar
-              label="全媒体合計"
-              spent={displayBudget.totalSpent}
-              budget={displayBudget.totalBudget}
-              utilization={displayBudget.utilization}
-            />
-            {/* 媒体別 */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t">
-              {displayBudget.byPlatform.map((p) => (
-                <BudgetBar
-                  key={p.platform}
-                  label={PLATFORM_LABELS[p.platform] ?? p.platform}
-                  spent={p.spent}
-                  budget={p.budget}
-                  utilization={p.utilization}
+          <CardContent>
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* 全体消化率サークル */}
+              <div className="flex justify-center lg:justify-start lg:pr-6 lg:border-r lg:border-border/50">
+                <BudgetCircle
+                  utilization={displayBudget.utilization}
+                  totalSpent={displayBudget.totalSpent}
+                  totalBudget={displayBudget.totalBudget}
                 />
-              ))}
+              </div>
+
+              {/* 媒体別メーター */}
+              <div className="flex-1 space-y-5">
+                {/* 全媒体合計 */}
+                <BudgetMeter
+                  label="全媒体合計"
+                  spent={displayBudget.totalSpent}
+                  budget={displayBudget.totalBudget}
+                  utilization={displayBudget.utilization}
+                />
+                {/* 媒体別 */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-border/50">
+                  {displayBudget.byPlatform.map((p) => (
+                    <BudgetMeter
+                      key={p.platform}
+                      label={PLATFORM_LABELS[p.platform] ?? p.platform}
+                      spent={p.spent}
+                      budget={p.budget}
+                      utilization={p.utilization}
+                    />
+                  ))}
+                </div>
+                {displayBudget.totalBudget === 0 && (
+                  <p className="text-xs text-muted-foreground/60">
+                    キャンペーンに月次予算を設定すると消化率が表示されます
+                  </p>
+                )}
+              </div>
             </div>
-            {displayBudget.totalBudget === 0 && (
-              <p className="text-xs text-slate-400">
-                キャンペーンに月次予算を設定すると消化率が表示されます
-              </p>
-            )}
           </CardContent>
         </Card>
 
         {/* ─── チャート ─── */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           {/* 費用推移 */}
-          <Card className="lg:col-span-3">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">費用推移</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis
                     tick={{ fontSize: 11 }}
                     tickFormatter={(v) => jpyCompact.format(v)}
                     width={52}
+                    axisLine={false}
+                    tickLine={false}
                   />
                   <Tooltip
                     formatter={(v) => [jpyFormat.format(Number(v ?? 0)), '']}
                     labelFormatter={(l) => l}
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: '1px solid hsl(var(--border))',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
                   />
                   <Legend iconSize={10} />
                   {platform === 'all' ? (
@@ -923,7 +999,7 @@ export default function DashboardPage() {
                         name="Google"
                         fill={PLATFORM_COLORS.google}
                         stackId="s"
-                        radius={[2, 2, 0, 0]}
+                        radius={[3, 3, 0, 0]}
                       />
                     </>
                   ) : (
@@ -931,7 +1007,7 @@ export default function DashboardPage() {
                       dataKey={platform}
                       name={PLATFORM_LABELS[platform]}
                       fill={PLATFORM_COLORS[platform]}
-                      radius={[2, 2, 0, 0]}
+                      radius={[3, 3, 0, 0]}
                     />
                   )}
                 </BarChart>
@@ -939,13 +1015,14 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* CPA推移 */}
-          <Card className="lg:col-span-2">
+          {/* CPA推移・CV推移 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between">
                 CPA推移
                 {cpaTarget && (
-                  <span className="text-xs font-normal text-slate-400 tabular-nums">
+                  <span className="text-xs font-normal text-muted-foreground/60 tabular-nums">
                     目標 {jpyFormat.format(cpaTarget)}
                   </span>
                 )}
@@ -954,16 +1031,23 @@ export default function DashboardPage() {
             <CardContent>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis
                     tick={{ fontSize: 11 }}
                     tickFormatter={(v) => jpyCompact.format(v)}
                     width={52}
+                    axisLine={false}
+                    tickLine={false}
                   />
                   <Tooltip
                     formatter={(v) => [jpyFormat.format(Number(v ?? 0)), 'CPA']}
                     labelFormatter={(l) => l}
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: '1px solid hsl(var(--border))',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
                   />
                   {/* 目標ライン */}
                   {cpaTarget && (
@@ -971,7 +1055,7 @@ export default function DashboardPage() {
                       type="monotone"
                       dataKey="cpaTargetLine"
                       name="目標CPA"
-                      stroke="#d1d5db"
+                      stroke="hsl(var(--border))"
                       strokeWidth={1.5}
                       strokeDasharray="5 4"
                       dot={false}
@@ -990,6 +1074,47 @@ export default function DashboardPage() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
+
+          {/* CV推移 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">CV推移</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => numFormat.format(v)}
+                    width={36}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    formatter={(v) => [numFormat.format(Number(v ?? 0)), 'CV数']}
+                    labelFormatter={(l) => l}
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: '1px solid hsl(var(--border))',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="conversions"
+                    name="CV数"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#10b981' }}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          </div>
         </div>
 
         {/* ─── 媒体別サマリー（全媒体時のみ） ─── */}
@@ -999,48 +1124,50 @@ export default function DashboardPage() {
               <Card key={s.platform}>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <span
-                      className="w-3 h-3 rounded-full shrink-0"
-                      style={{ backgroundColor: PLATFORM_COLORS[s.platform] }}
-                      aria-hidden="true"
-                    />
-                    {PLATFORM_LABELS[s.platform]}
+                    <Chip size="sm" variant="soft" className="gap-1.5 font-semibold">
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: PLATFORM_COLORS[s.platform] }}
+                        aria-hidden="true"
+                      />
+                      <Chip.Label>{PLATFORM_LABELS[s.platform]}</Chip.Label>
+                    </Chip>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                     <div>
-                      <p className="text-slate-500">費用</p>
+                      <p className="text-muted-foreground text-xs mb-0.5">費用</p>
                       <p className="font-semibold tabular-nums">
                         {jpyFormat.format(Math.round(s.cost))}
                       </p>
                     </div>
                     <div>
-                      <p className="text-slate-500">CV数</p>
+                      <p className="text-muted-foreground text-xs mb-0.5">CV数</p>
                       <p className="font-semibold tabular-nums">
                         {numFormat.format(Math.round(s.conversions))}
                       </p>
                     </div>
                     <div>
-                      <p className="text-slate-500">CPA</p>
+                      <p className="text-muted-foreground text-xs mb-0.5">CPA</p>
                       <p className="font-semibold tabular-nums">
                         {s.cpa > 0 ? jpyFormat.format(Math.round(s.cpa)) : '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-slate-500">CVR</p>
+                      <p className="text-muted-foreground text-xs mb-0.5">CVR</p>
                       <p className="font-semibold tabular-nums">
                         {s.cvr > 0 ? pctFormat.format(s.cvr) : '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-slate-500">CTR</p>
+                      <p className="text-muted-foreground text-xs mb-0.5">CTR</p>
                       <p className="font-semibold tabular-nums">
                         {s.ctr > 0 ? pctFormat.format(s.ctr) : '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-slate-500">CPC</p>
+                      <p className="text-muted-foreground text-xs mb-0.5">CPC</p>
                       <p className="font-semibold tabular-nums">
                         {s.cpc > 0 ? jpyFormat.format(Math.round(s.cpc)) : '—'}
                       </p>

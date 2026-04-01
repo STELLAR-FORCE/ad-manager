@@ -68,6 +68,7 @@ export async function GET(request: Request) {
         yahoo: data.yahoo,
         bing: data.bing,
         cost: data.cost,
+        conversions: data.conversions,
         cpa: data.conversions > 0 ? Math.round(data.cost / data.conversions) : null,
       }));
 
