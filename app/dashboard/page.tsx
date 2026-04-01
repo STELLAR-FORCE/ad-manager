@@ -670,6 +670,7 @@ export default function DashboardPage() {
   const [platform, setPlatform] = useState<Platform>('all');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [compareTrend, setCompareTrend] = useState<TrendPoint[]>([]);
   const [budget, setBudget] = useState<BudgetUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -711,25 +712,28 @@ export default function DashboardPage() {
           summaryParams.set('compareStart', fmt(compare.start));
           summaryParams.set('compareEnd', fmt(compare.end));
         }
-        const trendParams = new URLSearchParams({
-          start: fmt(main.start),
-          end: fmt(main.end),
-          platform,
-        });
+        const trendParams = new URLSearchParams({ start: fmt(main.start), end: fmt(main.end), platform });
+        const cmpTrendParams = compareEnabled && compare
+          ? new URLSearchParams({ start: fmt(compare.start), end: fmt(compare.end), platform })
+          : null;
 
-        const [sRes, tRes, bRes] = await Promise.all([
+        const fetches: Promise<Response>[] = [
           fetch(`/api/dashboard/summary?${summaryParams}`),
           fetch(`/api/dashboard/trend?${trendParams}`),
           fetch('/api/dashboard/budget-usage'),
-        ]);
-        const [sData, tData, bData] = await Promise.all([sRes.json(), tRes.json(), bRes.json()]);
+          ...(cmpTrendParams ? [fetch(`/api/dashboard/trend?${cmpTrendParams}`)] : []),
+        ];
+        const responses = await Promise.all(fetches);
+        const [sData, tData, bData, cmpData] = await Promise.all(responses.map((r) => r.json()));
         setSummary(sData.current ? sData : null);
         setTrend(Array.isArray(tData) ? tData : []);
+        setCompareTrend(cmpData && Array.isArray(cmpData) ? cmpData : []);
         setBudget(bData.byPlatform ? bData : null);
         setLastUpdated(new Date());
       } catch {
         setSummary(null);
         setTrend([]);
+        setCompareTrend([]);
         setBudget(null);
       } finally {
         initialized.current = true;
@@ -753,12 +757,19 @@ export default function DashboardPage() {
   const deltaLabel = dateRange.compareEnabled ? '比較期間比' : '前期間比';
   const anomalies = isMock ? [] : buildAnomalies(current, previous);
 
-  // チャート用データ（日付ラベル + 目標ラインを埋め込む）
-  const chartData = displayTrend.map((d) => ({
-    ...d,
-    label: dateShort.format(new Date(d.date)),
-    cpaTargetLine: cpaTarget ?? undefined,
-  }));
+  // 比較トレンドをインデックス合わせでマージ
+  const showCompare = dateRange.compareEnabled && compareTrend.length > 0;
+  const chartData = displayTrend.map((d, i) => {
+    const cmp = compareTrend[i];
+    return {
+      ...d,
+      label: dateShort.format(new Date(d.date)),
+      cpaTargetLine: cpaTarget ?? undefined,
+      cmp_cpa: cmp?.cpa ?? null,
+      cmp_cv: cmp?.conversions ?? null,
+      cmp_date: cmp?.date ?? null,
+    };
+  });
 
 
   // 最終更新テキスト
@@ -1053,14 +1064,28 @@ export default function DashboardPage() {
                       if (!active || !payload?.length) return null;
                       const d = payload[0].payload as typeof chartData[0];
                       return (
-                        <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[160px]">
-                          <p className="font-medium text-foreground mb-2">{label}</p>
+                        <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
+                          <p className="font-medium text-foreground">{label}</p>
                           <div className="flex justify-between gap-4">
-                            <span className="text-muted-foreground">合計</span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#6366f1] shrink-0" />
+                              <span className="text-muted-foreground">表示期間</span>
+                            </span>
                             <span className="tabular-nums font-semibold">{d.cpa != null ? jpyFormat.format(d.cpa) : '—'}</span>
                           </div>
+                          {showCompare && (
+                            <div className="flex justify-between gap-4">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
+                                <span className="text-muted-foreground">
+                                  比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
+                                </span>
+                              </span>
+                              <span className="tabular-nums">{d.cmp_cpa != null ? jpyFormat.format(d.cmp_cpa) : '—'}</span>
+                            </div>
+                          )}
                           {platform === 'all' && (
-                            <>
+                            <div className="pt-1 border-t border-border/50 space-y-1.5">
                               {(['google', 'yahoo', 'bing'] as const).map((p) => (
                                 <div key={p} className="flex justify-between gap-4">
                                   <span className="flex items-center gap-1.5">
@@ -1070,7 +1095,7 @@ export default function DashboardPage() {
                                   <span className="tabular-nums">{d[`${p}_cpa`] != null ? jpyFormat.format(d[`${p}_cpa`]!) : '—'}</span>
                                 </div>
                               ))}
-                            </>
+                            </div>
                           )}
                           {cpaTarget && (
                             <div className="flex justify-between gap-4 pt-1 border-t border-border/50">
@@ -1094,10 +1119,22 @@ export default function DashboardPage() {
                       dot={false}
                     />
                   )}
+                  {showCompare && (
+                    <Line
+                      type="monotone"
+                      dataKey="cmp_cpa"
+                      name="比較期間"
+                      stroke="#f97316"
+                      strokeWidth={1.5}
+                      strokeDasharray="5 3"
+                      dot={false}
+                      connectNulls
+                    />
+                  )}
                   <Line
                     type="monotone"
                     dataKey="cpa"
-                    name="CPA"
+                    name="表示期間"
                     stroke="#6366f1"
                     strokeWidth={2}
                     dot={{ r: 3, fill: '#6366f1' }}
@@ -1130,14 +1167,28 @@ export default function DashboardPage() {
                       if (!active || !payload?.length) return null;
                       const d = payload[0].payload as typeof chartData[0];
                       return (
-                        <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[160px]">
-                          <p className="font-medium text-foreground mb-2">{label}</p>
+                        <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
+                          <p className="font-medium text-foreground">{label}</p>
                           <div className="flex justify-between gap-4">
-                            <span className="text-muted-foreground">合計</span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#10b981] shrink-0" />
+                              <span className="text-muted-foreground">表示期間</span>
+                            </span>
                             <span className="tabular-nums font-semibold">{numFormat.format(d.conversions)}</span>
                           </div>
+                          {showCompare && (
+                            <div className="flex justify-between gap-4">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
+                                <span className="text-muted-foreground">
+                                  比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
+                                </span>
+                              </span>
+                              <span className="tabular-nums">{d.cmp_cv != null ? numFormat.format(d.cmp_cv) : '—'}</span>
+                            </div>
+                          )}
                           {platform === 'all' && (
-                            <>
+                            <div className="pt-1 border-t border-border/50 space-y-1.5">
                               {(['google', 'yahoo', 'bing'] as const).map((p) => (
                                 <div key={p} className="flex justify-between gap-4">
                                   <span className="flex items-center gap-1.5">
@@ -1147,16 +1198,28 @@ export default function DashboardPage() {
                                   <span className="tabular-nums">{numFormat.format(d[`${p}_cv`])}</span>
                                 </div>
                               ))}
-                            </>
+                            </div>
                           )}
                         </div>
                       );
                     }}
                   />
+                  {showCompare && (
+                    <Line
+                      type="monotone"
+                      dataKey="cmp_cv"
+                      name="比較期間"
+                      stroke="#f97316"
+                      strokeWidth={1.5}
+                      strokeDasharray="5 3"
+                      dot={false}
+                      connectNulls
+                    />
+                  )}
                   <Line
                     type="monotone"
                     dataKey="conversions"
-                    name="CV数"
+                    name="表示期間"
                     stroke="#10b981"
                     strokeWidth={2}
                     dot={{ r: 3, fill: '#10b981' }}
