@@ -26,7 +26,9 @@ import {
   Pencil,
   Check,
   X,
+  Bell,
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   BarChart,
   Bar,
@@ -834,6 +836,35 @@ export default function DashboardPage() {
             </SelectContent>
           </Select>
 
+          {/* 通知ベル */}
+          {anomalies.length > 0 && (
+            <Popover>
+              <PopoverTrigger className="relative p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" aria-label={`通知 ${anomalies.length}件`}>
+                <Bell className="h-4 w-4" aria-hidden="true" />
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white tabular-nums">
+                  {anomalies.length}
+                </span>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-0">
+                <div className="px-4 py-3 border-b border-border">
+                  <p className="text-sm font-medium">要チェック</p>
+                </div>
+                <div className="divide-y divide-border">
+                  {anomalies.map((a, i) => (
+                    <div key={i} className="flex items-start gap-3 px-4 py-3 text-sm">
+                      {a.type === 'warning' ? (
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" aria-hidden="true" />
+                      ) : (
+                        <Info className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" aria-hidden="true" />
+                      )}
+                      <span className="text-muted-foreground leading-relaxed">{a.message}</span>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
           {/* 更新ボタン */}
           <Button
             variant="outline"
@@ -850,31 +881,6 @@ export default function DashboardPage() {
             {refreshing ? '更新中…' : 'データ更新'}
           </Button>
         </div>
-
-        {/* ─── 異常値バナー ─── */}
-        {anomalies.length > 0 && (
-          <div className="space-y-2">
-            {anomalies.map((a, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'flex items-start gap-3 rounded-lg px-4 py-3 text-sm border',
-                  a.type === 'warning'
-                    ? 'bg-red-50 border-red-200 text-red-800'
-                    : 'bg-blue-50 border-blue-200 text-blue-800'
-                )}
-                role="alert"
-              >
-                {a.type === 'warning' ? (
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
-                ) : (
-                  <Info className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
-                )}
-                {a.message}
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* ─── サンプルデータ通知 ─── */}
         {isMock && !loading && (

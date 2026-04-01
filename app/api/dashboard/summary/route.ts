@@ -72,12 +72,7 @@ export async function GET(request: Request) {
   const { start, end, prevStart, prevEnd } = getPeriodDates(period);
 
   const platformFilter = platformParam !== 'all' ? { platform: platformParam } : {};
-  const baseWhere = {
-    campaignId: { not: null },
-    adGroupId: null,
-    creativeId: null,
-    ...platformFilter,
-  };
+  const baseWhere = { ...platformFilter };
 
   try {
     const [currentRows, prevRows] = await Promise.all([
