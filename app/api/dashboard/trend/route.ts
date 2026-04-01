@@ -3,22 +3,15 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const period = searchParams.get('period') ?? '7d';
   const platformParam = searchParams.get('platform') ?? 'all';
 
-  const now = new Date();
-  let start: Date;
-  let end: Date = new Date(now);
-  if (period === 'month') {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else if (period === 'lastmonth') {
-    end = new Date(now.getFullYear(), now.getMonth(), 0);
-    start = new Date(end.getFullYear(), end.getMonth(), 1);
-  } else {
-    const days = period === '30d' ? 30 : period === '14d' ? 14 : 7;
-    start = new Date(now);
-    start.setDate(start.getDate() - days);
+  const startStr = searchParams.get('start');
+  const endStr   = searchParams.get('end');
+  if (!startStr || !endStr) {
+    return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
+  const start = new Date(startStr);
+  const end   = new Date(endStr + 'T23:59:59Z');
 
   const platformFilter = platformParam !== 'all' ? { platform: platformParam } : {};
 

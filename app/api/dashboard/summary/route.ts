@@ -1,41 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-type PeriodKey = '7d' | '14d' | '30d' | 'month' | 'lastmonth';
-
-function getPeriodDates(period: PeriodKey) {
-  const now = new Date();
-  let start: Date;
-  let end: Date;
-  let prevStart: Date;
-  let prevEnd: Date;
-
-  if (period === 'month') {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-    end = new Date(now);
-    const daysElapsed = now.getDate();
-    prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-    prevStart = new Date(prevEnd);
-    prevStart.setDate(prevEnd.getDate() - daysElapsed + 1);
-  } else if (period === 'lastmonth') {
-    end = new Date(now.getFullYear(), now.getMonth(), 0);
-    start = new Date(end.getFullYear(), end.getMonth(), 1);
-    prevEnd = new Date(start);
-    prevEnd.setDate(prevEnd.getDate() - 1);
-    prevStart = new Date(prevEnd.getFullYear(), prevEnd.getMonth(), 1);
-  } else {
-    const days = period === '30d' ? 30 : period === '14d' ? 14 : 7;
-    end = new Date(now);
-    start = new Date(now);
-    start.setDate(start.getDate() - days);
-    prevEnd = new Date(start);
-    prevStart = new Date(start);
-    prevStart.setDate(prevStart.getDate() - days);
-  }
-
-  return { start, end, prevStart, prevEnd };
-}
-
 type GroupByRow = {
   _sum: {
     impressions: number | null;
@@ -64,26 +29,53 @@ function aggregateMetrics(rows: GroupByRow[]) {
   };
 }
 
+function parseDate(s: string | null): Date | null {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** end を当日 23:59:59 UTC に揃える */
+function endOfDay(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const period = (searchParams.get('period') ?? '7d') as PeriodKey;
   const platformParam = searchParams.get('platform') ?? 'all';
 
-  const { start, end, prevStart, prevEnd } = getPeriodDates(period);
+  const start = parseDate(searchParams.get('start'));
+  const end   = parseDate(searchParams.get('end'));
+  if (!start || !end) {
+    return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
+  }
+
+  // 比較期間: 明示指定 or 自動（同じ日数分だけ前）
+  let prevStart: Date;
+  let prevEnd: Date;
+  const cs = parseDate(searchParams.get('compareStart'));
+  const ce = parseDate(searchParams.get('compareEnd'));
+  if (cs && ce) {
+    prevStart = cs;
+    prevEnd = endOfDay(ce);
+  } else {
+    const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
+    prevEnd = new Date(start.getTime() - 1);
+    prevStart = new Date(prevEnd.getTime() - days * 86_400_000);
+  }
 
   const platformFilter = platformParam !== 'all' ? { platform: platformParam } : {};
-  const baseWhere = { ...platformFilter };
 
   try {
     const [currentRows, prevRows] = await Promise.all([
       prisma.dailyMetric.groupBy({
         by: ['platform'],
-        where: { ...baseWhere, date: { gte: start, lte: end } },
+        where: { ...platformFilter, date: { gte: start, lte: endOfDay(end) } },
         _sum: { impressions: true, clicks: true, cost: true, conversions: true },
       }),
       prisma.dailyMetric.groupBy({
         by: ['platform'],
-        where: { ...baseWhere, date: { gte: prevStart, lte: prevEnd } },
+        where: { ...platformFilter, date: { gte: prevStart, lte: prevEnd } },
         _sum: { impressions: true, clicks: true, cost: true, conversions: true },
       }),
     ]);
@@ -95,7 +87,7 @@ export async function GET(request: Request) {
       ...aggregateMetrics([m]),
     }));
 
-    return NextResponse.json({ period, platform: platformParam, current, previous, byPlatform });
+    return NextResponse.json({ platform: platformParam, current, previous, byPlatform });
   } catch (error) {
     console.error('ダッシュボードサマリー取得エラー:', error);
     return NextResponse.json({ error: 'データの取得に失敗しました' }, { status: 500 });

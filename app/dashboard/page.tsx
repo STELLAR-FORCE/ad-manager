@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker';
 import {
   TrendingUp,
   TrendingDown,
@@ -46,7 +47,6 @@ import { cn } from '@/lib/utils';
 
 // ─── 型定義 ────────────────────────────────────────────────
 
-type Period = '7d' | '14d' | '30d' | 'month' | 'lastmonth';
 type Platform = 'all' | 'google' | 'yahoo' | 'bing';
 
 type Metrics = {
@@ -63,7 +63,6 @@ type Metrics = {
 type PlatformMetrics = Metrics & { platform: string };
 
 type SummaryData = {
-  period: Period;
   platform: Platform;
   current: Metrics;
   previous: Metrics;
@@ -116,29 +115,6 @@ const PLATFORM_COLORS: Record<string, string> = {
   bing: '#00897B',
 };
 
-const PERIOD_OPTIONS: { value: Period; label: string }[] = [
-  { value: '7d', label: '直近7日' },
-  { value: '14d', label: '直近14日' },
-  { value: '30d', label: '直近30日' },
-  { value: 'month', label: '今月' },
-  { value: 'lastmonth', label: '先月' },
-];
-
-const PERIOD_SUBTITLE: Record<Period, string> = {
-  '7d': '直近7日間',
-  '14d': '直近14日間',
-  '30d': '直近30日間',
-  month: '今月',
-  lastmonth: '先月',
-};
-
-const DELTA_LABEL: Record<Period, string> = {
-  '7d': '前7日比',
-  '14d': '前14日比',
-  '30d': '前30日比',
-  month: '前月比',
-  lastmonth: '前月比',
-};
 
 // ─── フォーマッター ─────────────────────────────────────────
 
@@ -174,7 +150,6 @@ const timeFormat = new Intl.DateTimeFormat('ja-JP', {
 // ─── モックデータ ───────────────────────────────────────────
 
 const MOCK_SUMMARY: SummaryData = {
-  period: '7d',
   platform: 'all',
   current: {
     impressions: 1_234_567,
@@ -244,22 +219,12 @@ const MOCK_BUDGET: BudgetUsage = {
   ],
 };
 
-function getMockTrendData(period: Period): TrendPoint[] {
-  const today = new Date('2026-03-27');
-  const days =
-    period === '14d'
-      ? 14
-      : period === '30d'
-        ? 30
-        : period === 'month'
-          ? 27
-          : period === 'lastmonth'
-            ? 28
-            : 7;
+function getMockTrendData(main: { start: Date; end: Date }): TrendPoint[] {
+  const msMs = main.start.getTime();
+  const days = Math.max(1, Math.round((main.end.getTime() - msMs) / 86_400_000) + 1);
 
   return Array.from({ length: days }, (_, i) => {
-    const date = new Date(today);
-    date.setDate(date.getDate() - (days - 1) + i);
+    const date = new Date(msMs + i * 86_400_000);
     const t = i / Math.max(days - 1, 1);
     const wave = Math.sin(i * 2.3) * 0.12 + Math.sin(i * 5.7) * 0.06;
     const google = Math.round((58 + wave * 58 + t * 25) * 1000);
@@ -687,8 +652,21 @@ function BudgetCircle({
 
 // ─── メインページ ───────────────────────────────────────────
 
+const TODAY = new Date();
+
+function defaultDateRange(): DateRangeValue {
+  // デフォルト：先月
+  const prevMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() - 1, 1);
+  const prevMonthEnd = new Date(TODAY.getFullYear(), TODAY.getMonth(), 0);
+  return {
+    main: { start: prevMonth, end: prevMonthEnd },
+    compareEnabled: false,
+    preset: 'lastmonth',
+  };
+}
+
 export default function DashboardPage() {
-  const [period, setPeriod] = useState<Period>('7d');
+  const [dateRange, setDateRange] = useState<DateRangeValue>(defaultDateRange);
   const [platform, setPlatform] = useState<Platform>('all');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
@@ -722,9 +700,26 @@ export default function DashboardPage() {
       if (isRefresh || initialized.current) setRefreshing(true);
       else setLoading(true);
       try {
+        const fmt = (d: Date) => d.toISOString().split('T')[0];
+        const { main, compare, compareEnabled } = dateRange;
+        const summaryParams = new URLSearchParams({
+          start: fmt(main.start),
+          end: fmt(main.end),
+          platform,
+        });
+        if (compareEnabled && compare) {
+          summaryParams.set('compareStart', fmt(compare.start));
+          summaryParams.set('compareEnd', fmt(compare.end));
+        }
+        const trendParams = new URLSearchParams({
+          start: fmt(main.start),
+          end: fmt(main.end),
+          platform,
+        });
+
         const [sRes, tRes, bRes] = await Promise.all([
-          fetch(`/api/dashboard/summary?period=${period}&platform=${platform}`),
-          fetch(`/api/dashboard/trend?period=${period}&platform=${platform}`),
+          fetch(`/api/dashboard/summary?${summaryParams}`),
+          fetch(`/api/dashboard/trend?${trendParams}`),
           fetch('/api/dashboard/budget-usage'),
         ]);
         const [sData, tData, bData] = await Promise.all([sRes.json(), tRes.json(), bRes.json()]);
@@ -742,7 +737,7 @@ export default function DashboardPage() {
         setRefreshing(false);
       }
     },
-    [period, platform]
+    [dateRange, platform]
   );
 
   useEffect(() => {
@@ -751,11 +746,11 @@ export default function DashboardPage() {
 
   const isMock = !summary?.current.impressions;
   const displaySummary = isMock ? MOCK_SUMMARY : summary!;
-  const displayTrend = trend.length > 0 ? trend : getMockTrendData(period);
+  const displayTrend = trend.length > 0 ? trend : getMockTrendData(dateRange.main);
   const displayBudget = budget?.byPlatform.length ? budget : MOCK_BUDGET;
 
   const { current, previous, byPlatform } = displaySummary;
-  const deltaLabel = DELTA_LABEL[period];
+  const deltaLabel = dateRange.compareEnabled ? '比較期間比' : '前期間比';
   const anomalies = isMock ? [] : buildAnomalies(current, previous);
 
   // チャート用データ（日付ラベル + 目標ラインを埋め込む）
@@ -765,13 +760,6 @@ export default function DashboardPage() {
     cpaTargetLine: cpaTarget ?? undefined,
   }));
 
-  // 表示期間の開始・終了日
-  const dateRangeText = (() => {
-    if (displayTrend.length === 0) return null;
-    const first = new Date(displayTrend[0].date);
-    const last = new Date(displayTrend[displayTrend.length - 1].date);
-    return `${dateLong.format(first)} 〜 ${dateLong.format(last)}`;
-  })();
 
   // 最終更新テキスト
   function formatLastUpdated(d: Date | null): string {
@@ -794,34 +782,19 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">ダッシュボード</h1>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
-              <p className="text-sm text-muted-foreground">{PERIOD_SUBTITLE[period]}の実績サマリー</p>
-              {dateRangeText && (
-                <span className="text-xs tabular-nums text-muted-foreground/70 bg-muted px-2 py-0.5 rounded-full">
-                  {dateRangeText}
-                </span>
-              )}
-              {lastUpdated && (
-                <span className="text-xs text-muted-foreground/50 tabular-nums">
-                  · {formatLastUpdated(lastUpdated)}
-                </span>
-              )}
-            </div>
+            {lastUpdated && (
+              <p className="text-xs text-muted-foreground/50 tabular-nums mt-0.5">
+                {formatLastUpdated(lastUpdated)}
+              </p>
+            )}
           </div>
 
-          {/* 期間プルダウン */}
-          <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PERIOD_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* 日付範囲ピッカー */}
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            today={TODAY}
+          />
 
           {/* 媒体プルダウン */}
           <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
@@ -904,7 +877,7 @@ export default function DashboardPage() {
           <KpiCard
             title="総費用"
             value={jpyFormat.format(Math.round(current.cost))}
-            sub={PERIOD_SUBTITLE[period] + '累計'}
+            sub="期間累計"
             icon={Wallet}
             delta={calcDelta(current.cost, previous.cost)}
             deltaLabel={deltaLabel}
