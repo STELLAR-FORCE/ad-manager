@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.datacamp.com)",
+      "WebFetch(domain:medium.com)",
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(npx next:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(npx tsx:*)",
+      "Skill(update-config)"
+    ]
+  }
+}
