@@ -13,12 +13,7 @@ export async function GET() {
       }),
       prisma.dailyMetric.groupBy({
         by: ['platform'],
-        where: {
-          date: { gte: monthStart },
-          campaignId: { not: null },
-          adGroupId: null,
-          creativeId: null,
-        },
+        where: { date: { gte: monthStart } },
         _sum: { cost: true },
       }),
     ]);

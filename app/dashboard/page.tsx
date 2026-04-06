@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker';
 import {
   TrendingUp,
   TrendingDown,
@@ -26,7 +27,9 @@ import {
   Pencil,
   Check,
   X,
+  Bell,
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   BarChart,
   Bar,
@@ -44,7 +47,6 @@ import { cn } from '@/lib/utils';
 
 // ─── 型定義 ────────────────────────────────────────────────
 
-type Period = '7d' | '14d' | '30d' | 'month' | 'lastmonth';
 type Platform = 'all' | 'google' | 'yahoo' | 'bing';
 
 type Metrics = {
@@ -61,7 +63,6 @@ type Metrics = {
 type PlatformMetrics = Metrics & { platform: string };
 
 type SummaryData = {
-  period: Period;
   platform: Platform;
   current: Metrics;
   previous: Metrics;
@@ -76,6 +77,12 @@ type TrendPoint = {
   cost: number;
   cpa: number | null;
   conversions: number;
+  google_cv: number;
+  yahoo_cv: number;
+  bing_cv: number;
+  google_cpa: number | null;
+  yahoo_cpa: number | null;
+  bing_cpa: number | null;
 };
 
 type BudgetPlatform = {
@@ -108,29 +115,6 @@ const PLATFORM_COLORS: Record<string, string> = {
   bing: '#00897B',
 };
 
-const PERIOD_OPTIONS: { value: Period; label: string }[] = [
-  { value: '7d', label: '直近7日' },
-  { value: '14d', label: '直近14日' },
-  { value: '30d', label: '直近30日' },
-  { value: 'month', label: '今月' },
-  { value: 'lastmonth', label: '先月' },
-];
-
-const PERIOD_SUBTITLE: Record<Period, string> = {
-  '7d': '直近7日間',
-  '14d': '直近14日間',
-  '30d': '直近30日間',
-  month: '今月',
-  lastmonth: '先月',
-};
-
-const DELTA_LABEL: Record<Period, string> = {
-  '7d': '前7日比',
-  '14d': '前14日比',
-  '30d': '前30日比',
-  month: '前月比',
-  lastmonth: '前月比',
-};
 
 // ─── フォーマッター ─────────────────────────────────────────
 
@@ -156,6 +140,7 @@ const pct1Format = new Intl.NumberFormat('ja-JP', {
   maximumFractionDigits: 1,
 });
 const dateShort = new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'numeric' });
+const dateLong = new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
 const timeFormat = new Intl.DateTimeFormat('ja-JP', {
   hour: '2-digit',
   minute: '2-digit',
@@ -165,7 +150,6 @@ const timeFormat = new Intl.DateTimeFormat('ja-JP', {
 // ─── モックデータ ───────────────────────────────────────────
 
 const MOCK_SUMMARY: SummaryData = {
-  period: '7d',
   platform: 'all',
   current: {
     impressions: 1_234_567,
@@ -235,22 +219,12 @@ const MOCK_BUDGET: BudgetUsage = {
   ],
 };
 
-function getMockTrendData(period: Period): TrendPoint[] {
-  const today = new Date('2026-03-27');
-  const days =
-    period === '14d'
-      ? 14
-      : period === '30d'
-        ? 30
-        : period === 'month'
-          ? 27
-          : period === 'lastmonth'
-            ? 28
-            : 7;
+function getMockTrendData(main: { start: Date; end: Date }): TrendPoint[] {
+  const msMs = main.start.getTime();
+  const days = Math.max(1, Math.round((main.end.getTime() - msMs) / 86_400_000) + 1);
 
   return Array.from({ length: days }, (_, i) => {
-    const date = new Date(today);
-    date.setDate(date.getDate() - (days - 1) + i);
+    const date = new Date(msMs + i * 86_400_000);
     const t = i / Math.max(days - 1, 1);
     const wave = Math.sin(i * 2.3) * 0.12 + Math.sin(i * 5.7) * 0.06;
     const google = Math.round((58 + wave * 58 + t * 25) * 1000);
@@ -258,6 +232,9 @@ function getMockTrendData(period: Period): TrendPoint[] {
     const bing = Math.round((14 + wave * 14 + t * 8) * 1000);
     const cost = google + yahoo + bing;
     const conversions = Math.max(1, Math.round(cost / 6100));
+    const google_cv = Math.max(0, Math.round(google / 6800));
+    const yahoo_cv = Math.max(0, Math.round(yahoo / 6500));
+    const bing_cv = Math.max(0, Math.round(bing / 7200));
     return {
       date: date.toISOString().split('T')[0],
       google,
@@ -266,6 +243,12 @@ function getMockTrendData(period: Period): TrendPoint[] {
       cost,
       conversions,
       cpa: Math.round(cost / conversions),
+      google_cv,
+      yahoo_cv,
+      bing_cv,
+      google_cpa: google_cv > 0 ? Math.round(google / google_cv) : null,
+      yahoo_cpa:  yahoo_cv  > 0 ? Math.round(yahoo  / yahoo_cv)  : null,
+      bing_cpa:   bing_cv   > 0 ? Math.round(bing   / bing_cv)   : null,
     };
   });
 }
@@ -277,20 +260,52 @@ function calcDelta(current: number, previous: number): number | null {
   return (current - previous) / previous;
 }
 
-function buildAnomalies(current: Metrics, previous: Metrics): Anomaly[] {
+function buildAnomalies(
+  current: Metrics,
+  previous: Metrics,
+  budget: BudgetUsage | null,
+  cpaTarget: number | null,
+): Anomaly[] {
   const list: Anomaly[] = [];
-  const costDelta = calcDelta(current.cost, previous.cost);
-  const cvDelta = calcDelta(current.conversions, previous.conversions);
-  const cpaDelta = calcDelta(current.cpa, previous.cpa);
 
-  if (costDelta !== null && costDelta > 0.3)
-    list.push({ type: 'warning', message: `費用が前期比 ${pctFormat.format(costDelta)} 急増しています` });
-  if (cvDelta !== null && cvDelta < -0.2)
-    list.push({ type: 'warning', message: `CV数が前期比 ${pctFormat.format(Math.abs(cvDelta))} 急落しています` });
+  const costDelta = calcDelta(current.cost, previous.cost);
+  const cvDelta   = calcDelta(current.conversions, previous.conversions);
+  const cpaDelta  = calcDelta(current.cpa, previous.cpa);
+  const ctrDelta  = calcDelta(current.ctr, previous.ctr);
+
+  // ── 警告 ─────────────────────────────────────────
+  // 目標CPA 20%超過
+  if (cpaTarget && current.cpa > 0 && current.cpa > cpaTarget * 1.2)
+    list.push({ type: 'warning', message: `CPA が目標値の ${pct1Format.format(current.cpa / cpaTarget)} に達しています（目標 ${jpyFormat.format(cpaTarget)}、実績 ${jpyFormat.format(Math.round(current.cpa))}）` });
+
+  // CPA 前期比 20%悪化
   if (cpaDelta !== null && cpaDelta > 0.2)
     list.push({ type: 'warning', message: `CPA が前期比 ${pctFormat.format(cpaDelta)} 悪化しています` });
+
+  // CV 前期比 30%急落
+  if (cvDelta !== null && cvDelta < -0.3)
+    list.push({ type: 'warning', message: `CV数が前期比 ${pctFormat.format(Math.abs(cvDelta))} 急落しています` });
+
+  // 予算超過
+  if (budget && budget.totalBudget > 0 && budget.utilization > 1)
+    list.push({ type: 'warning', message: `月次予算を超過しています（消化率 ${pct1Format.format(budget.utilization)}）` });
+
+  // ── 注意 ─────────────────────────────────────────
+  // 費用 前期比 30%急増
+  if (costDelta !== null && costDelta > 0.3)
+    list.push({ type: 'info', message: `費用が前期比 ${pctFormat.format(costDelta)} 急増しています` });
+
+  // 費用 前期比 30%急減（予算未消化の可能性）
   if (costDelta !== null && costDelta < -0.3)
     list.push({ type: 'info', message: `費用が前期比 ${pctFormat.format(Math.abs(costDelta))} 大幅減少しています（予算未消化の可能性）` });
+
+  // CTR 前期比 20%低下（クリエイティブ疲弊）
+  if (ctrDelta !== null && ctrDelta < -0.2)
+    list.push({ type: 'info', message: `CTR が前期比 ${pctFormat.format(Math.abs(ctrDelta))} 低下しています（クリエイティブ疲弊の可能性）` });
+
+  // 予算残り 10%未満
+  if (budget && budget.totalBudget > 0 && budget.utilization >= 0.9 && budget.utilization <= 1)
+    list.push({ type: 'info', message: `月次予算の残り ${pct1Format.format(1 - budget.utilization)} です（消化率 ${pct1Format.format(budget.utilization)}）` });
 
   return list;
 }
@@ -669,11 +684,25 @@ function BudgetCircle({
 
 // ─── メインページ ───────────────────────────────────────────
 
+const TODAY = new Date();
+
+function defaultDateRange(): DateRangeValue {
+  // デフォルト：先月
+  const prevMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() - 1, 1);
+  const prevMonthEnd = new Date(TODAY.getFullYear(), TODAY.getMonth(), 0);
+  return {
+    main: { start: prevMonth, end: prevMonthEnd },
+    compareEnabled: false,
+    preset: 'lastmonth',
+  };
+}
+
 export default function DashboardPage() {
-  const [period, setPeriod] = useState<Period>('7d');
+  const [dateRange, setDateRange] = useState<DateRangeValue>(defaultDateRange);
   const [platform, setPlatform] = useState<Platform>('all');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [compareTrend, setCompareTrend] = useState<TrendPoint[]>([]);
   const [budget, setBudget] = useState<BudgetUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -704,19 +733,39 @@ export default function DashboardPage() {
       if (isRefresh || initialized.current) setRefreshing(true);
       else setLoading(true);
       try {
-        const [sRes, tRes, bRes] = await Promise.all([
-          fetch(`/api/dashboard/summary?period=${period}&platform=${platform}`),
-          fetch(`/api/dashboard/trend?period=${period}&platform=${platform}`),
+        const fmt = (d: Date) => d.toISOString().split('T')[0];
+        const { main, compare, compareEnabled } = dateRange;
+        const summaryParams = new URLSearchParams({
+          start: fmt(main.start),
+          end: fmt(main.end),
+          platform,
+        });
+        if (compareEnabled && compare) {
+          summaryParams.set('compareStart', fmt(compare.start));
+          summaryParams.set('compareEnd', fmt(compare.end));
+        }
+        const trendParams = new URLSearchParams({ start: fmt(main.start), end: fmt(main.end), platform });
+        const cmpTrendParams = compareEnabled && compare
+          ? new URLSearchParams({ start: fmt(compare.start), end: fmt(compare.end), platform })
+          : null;
+
+        const fetches: Promise<Response>[] = [
+          fetch(`/api/dashboard/summary?${summaryParams}`),
+          fetch(`/api/dashboard/trend?${trendParams}`),
           fetch('/api/dashboard/budget-usage'),
-        ]);
-        const [sData, tData, bData] = await Promise.all([sRes.json(), tRes.json(), bRes.json()]);
+          ...(cmpTrendParams ? [fetch(`/api/dashboard/trend?${cmpTrendParams}`)] : []),
+        ];
+        const responses = await Promise.all(fetches);
+        const [sData, tData, bData, cmpData] = await Promise.all(responses.map((r) => r.json()));
         setSummary(sData.current ? sData : null);
         setTrend(Array.isArray(tData) ? tData : []);
+        setCompareTrend(cmpData && Array.isArray(cmpData) ? cmpData : []);
         setBudget(bData.byPlatform ? bData : null);
         setLastUpdated(new Date());
       } catch {
         setSummary(null);
         setTrend([]);
+        setCompareTrend([]);
         setBudget(null);
       } finally {
         initialized.current = true;
@@ -724,7 +773,7 @@ export default function DashboardPage() {
         setRefreshing(false);
       }
     },
-    [period, platform]
+    [dateRange, platform]
   );
 
   useEffect(() => {
@@ -733,19 +782,27 @@ export default function DashboardPage() {
 
   const isMock = !summary?.current.impressions;
   const displaySummary = isMock ? MOCK_SUMMARY : summary!;
-  const displayTrend = trend.length > 0 ? trend : getMockTrendData(period);
+  const displayTrend = trend.length > 0 ? trend : getMockTrendData(dateRange.main);
   const displayBudget = budget?.byPlatform.length ? budget : MOCK_BUDGET;
 
   const { current, previous, byPlatform } = displaySummary;
-  const deltaLabel = DELTA_LABEL[period];
-  const anomalies = isMock ? [] : buildAnomalies(current, previous);
+  const deltaLabel = dateRange.compareEnabled ? '比較期間比' : '前期間比';
+  const anomalies = isMock ? [] : buildAnomalies(current, previous, displayBudget, cpaTarget);
 
-  // チャート用データ（日付ラベル + 目標ラインを埋め込む）
-  const chartData = displayTrend.map((d) => ({
-    ...d,
-    label: dateShort.format(new Date(d.date)),
-    cpaTargetLine: cpaTarget ?? undefined,
-  }));
+  // 比較トレンドをインデックス合わせでマージ
+  const showCompare = dateRange.compareEnabled && compareTrend.length > 0;
+  const chartData = displayTrend.map((d, i) => {
+    const cmp = compareTrend[i];
+    return {
+      ...d,
+      label: dateShort.format(new Date(d.date)),
+      cpaTargetLine: cpaTarget ?? undefined,
+      cmp_cpa: cmp?.cpa ?? null,
+      cmp_cv: cmp?.conversions ?? null,
+      cmp_date: cmp?.date ?? null,
+    };
+  });
+
 
   // 最終更新テキスト
   function formatLastUpdated(d: Date | null): string {
@@ -768,29 +825,19 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">ダッシュボード</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-sm text-muted-foreground">{PERIOD_SUBTITLE[period]}の実績サマリー</p>
-              {lastUpdated && (
-                <span className="text-xs text-muted-foreground/50 tabular-nums">
-                  · {formatLastUpdated(lastUpdated)}
-                </span>
-              )}
-            </div>
+            {lastUpdated && (
+              <p className="text-xs text-muted-foreground/50 tabular-nums mt-0.5">
+                {formatLastUpdated(lastUpdated)}
+              </p>
+            )}
           </div>
 
-          {/* 期間プルダウン */}
-          <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PERIOD_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* 日付範囲ピッカー */}
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            today={TODAY}
+          />
 
           {/* 媒体プルダウン */}
           <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
@@ -804,6 +851,50 @@ export default function DashboardPage() {
               <SelectItem value="bing">Bing</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* 通知ベル（常時表示） */}
+          <Popover>
+            <PopoverTrigger
+              className="relative p-2 rounded-md hover:bg-accent transition-colors"
+              aria-label={anomalies.length > 0 ? `通知 ${anomalies.length}件` : '通知なし'}
+            >
+              <Bell
+                className={cn('h-4 w-4', anomalies.length > 0 ? 'text-foreground' : 'text-muted-foreground/50')}
+                aria-hidden="true"
+              />
+              {anomalies.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white tabular-nums">
+                  {anomalies.length}
+                </span>
+              )}
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 p-0">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-medium">アラート</p>
+                {anomalies.length > 0 && (
+                  <span className="text-xs text-muted-foreground">{anomalies.length}件</span>
+                )}
+              </div>
+              {anomalies.length > 0 ? (
+                <div className="divide-y divide-border">
+                  {anomalies.map((a, i) => (
+                    <div key={i} className="flex items-start gap-3 px-4 py-3 text-sm">
+                      {a.type === 'warning' ? (
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" aria-hidden="true" />
+                      ) : (
+                        <Info className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" aria-hidden="true" />
+                      )}
+                      <span className="text-muted-foreground leading-relaxed">{a.message}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                  現在アラートはありません
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
 
           {/* 更新ボタン */}
           <Button
@@ -821,31 +912,6 @@ export default function DashboardPage() {
             {refreshing ? '更新中…' : 'データ更新'}
           </Button>
         </div>
-
-        {/* ─── 異常値バナー ─── */}
-        {anomalies.length > 0 && (
-          <div className="space-y-2">
-            {anomalies.map((a, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'flex items-start gap-3 rounded-lg px-4 py-3 text-sm border',
-                  a.type === 'warning'
-                    ? 'bg-red-50 border-red-200 text-red-800'
-                    : 'bg-blue-50 border-blue-200 text-blue-800'
-                )}
-                role="alert"
-              >
-                {a.type === 'warning' ? (
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
-                ) : (
-                  <Info className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
-                )}
-                {a.message}
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* ─── サンプルデータ通知 ─── */}
         {isMock && !loading && (
@@ -869,7 +935,7 @@ export default function DashboardPage() {
           <KpiCard
             title="総費用"
             value={jpyFormat.format(Math.round(current.cost))}
-            sub={PERIOD_SUBTITLE[period] + '累計'}
+            sub="期間累計"
             icon={Wallet}
             delta={calcDelta(current.cost, previous.cost)}
             deltaLabel={deltaLabel}
@@ -1041,12 +1107,51 @@ export default function DashboardPage() {
                     tickLine={false}
                   />
                   <Tooltip
-                    formatter={(v) => [jpyFormat.format(Number(v ?? 0)), 'CPA']}
-                    labelFormatter={(l) => l}
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: '1px solid hsl(var(--border))',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload as typeof chartData[0];
+                      return (
+                        <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
+                          <p className="font-medium text-foreground">{label}</p>
+                          <div className="flex justify-between gap-4">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#6366f1] shrink-0" />
+                              <span className="text-muted-foreground">表示期間</span>
+                            </span>
+                            <span className="tabular-nums font-semibold">{d.cpa != null ? jpyFormat.format(d.cpa) : '—'}</span>
+                          </div>
+                          {showCompare && (
+                            <div className="flex justify-between gap-4">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
+                                <span className="text-muted-foreground">
+                                  比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
+                                </span>
+                              </span>
+                              <span className="tabular-nums">{d.cmp_cpa != null ? jpyFormat.format(d.cmp_cpa) : '—'}</span>
+                            </div>
+                          )}
+                          {platform === 'all' && (
+                            <div className="pt-1 border-t border-border/50 space-y-1.5">
+                              {(['google', 'yahoo', 'bing'] as const).map((p) => (
+                                <div key={p} className="flex justify-between gap-4">
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p] }} />
+                                    <span className="text-muted-foreground">{PLATFORM_LABELS[p]}</span>
+                                  </span>
+                                  <span className="tabular-nums">{d[`${p}_cpa`] != null ? jpyFormat.format(d[`${p}_cpa`]!) : '—'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {cpaTarget && (
+                            <div className="flex justify-between gap-4 pt-1 border-t border-border/50">
+                              <span className="text-muted-foreground">目標</span>
+                              <span className="tabular-nums">{jpyFormat.format(cpaTarget)}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
                     }}
                   />
                   {/* 目標ライン */}
@@ -1061,10 +1166,22 @@ export default function DashboardPage() {
                       dot={false}
                     />
                   )}
+                  {showCompare && (
+                    <Line
+                      type="monotone"
+                      dataKey="cmp_cpa"
+                      name="比較期間"
+                      stroke="#f97316"
+                      strokeWidth={1.5}
+                      strokeDasharray="5 3"
+                      dot={false}
+                      connectNulls
+                    />
+                  )}
                   <Line
                     type="monotone"
                     dataKey="cpa"
-                    name="CPA"
+                    name="表示期間"
                     stroke="#6366f1"
                     strokeWidth={2}
                     dot={{ r: 3, fill: '#6366f1' }}
@@ -1093,18 +1210,63 @@ export default function DashboardPage() {
                     tickLine={false}
                   />
                   <Tooltip
-                    formatter={(v) => [numFormat.format(Number(v ?? 0)), 'CV数']}
-                    labelFormatter={(l) => l}
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: '1px solid hsl(var(--border))',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload as typeof chartData[0];
+                      return (
+                        <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
+                          <p className="font-medium text-foreground">{label}</p>
+                          <div className="flex justify-between gap-4">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#10b981] shrink-0" />
+                              <span className="text-muted-foreground">表示期間</span>
+                            </span>
+                            <span className="tabular-nums font-semibold">{numFormat.format(d.conversions)}</span>
+                          </div>
+                          {showCompare && (
+                            <div className="flex justify-between gap-4">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
+                                <span className="text-muted-foreground">
+                                  比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
+                                </span>
+                              </span>
+                              <span className="tabular-nums">{d.cmp_cv != null ? numFormat.format(d.cmp_cv) : '—'}</span>
+                            </div>
+                          )}
+                          {platform === 'all' && (
+                            <div className="pt-1 border-t border-border/50 space-y-1.5">
+                              {(['google', 'yahoo', 'bing'] as const).map((p) => (
+                                <div key={p} className="flex justify-between gap-4">
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p] }} />
+                                    <span className="text-muted-foreground">{PLATFORM_LABELS[p]}</span>
+                                  </span>
+                                  <span className="tabular-nums">{numFormat.format(d[`${p}_cv`])}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
                     }}
                   />
+                  {showCompare && (
+                    <Line
+                      type="monotone"
+                      dataKey="cmp_cv"
+                      name="比較期間"
+                      stroke="#f97316"
+                      strokeWidth={1.5}
+                      strokeDasharray="5 3"
+                      dot={false}
+                      connectNulls
+                    />
+                  )}
                   <Line
                     type="monotone"
                     dataKey="conversions"
-                    name="CV数"
+                    name="表示期間"
                     stroke="#10b981"
                     strokeWidth={2}
                     dot={{ r: 3, fill: '#10b981' }}
