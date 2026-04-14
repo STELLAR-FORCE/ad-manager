@@ -1,0 +1,209 @@
+"""BigQuery クライアント.
+
+MERGE（upsert）パターンでデータを書き込む。
+ステージングテーブルにロード → MERGE → ステージング削除の3ステップ。
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any
+
+from google.cloud import bigquery
+from pydantic import BaseModel
+
+from src.bigquery.table_schemas import TABLE_DEFINITIONS
+from src.config import Settings
+from src.utils.logging import get_logger
+from src.utils.retry import with_retry
+
+logger = get_logger(__name__)
+
+
+class BigQueryClient:
+    """BigQuery 読み書きクライアント."""
+
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+        self._project = settings.gcp_project_id
+        self._dataset = settings.bq_dataset
+        self._location = settings.bq_location
+        self._client: bigquery.Client | None = None
+
+    def _get_client(self) -> bigquery.Client:
+        if self._client is None:
+            self._client = bigquery.Client(
+                project=self._project, location=self._location
+            )
+        return self._client
+
+    def _table_ref(self, table_name: str) -> str:
+        """完全修飾テーブル名を返す."""
+        return f"`{self._project}.{self._dataset}.{table_name}`"
+
+    def _staging_table_ref(self, table_name: str) -> str:
+        """ステージングテーブルの完全修飾名を返す."""
+        return f"`{self._project}.{self._dataset}.{table_name}_staging`"
+
+    # ── MERGE (upsert) ────────────────────────────────────────────
+
+    @with_retry(max_attempts=3, retryable_exceptions=(Exception,))
+    def upsert(
+        self,
+        table_name: str,
+        rows: list[BaseModel],
+        add_synced_at: bool = True,
+    ) -> None:
+        """Pydantic モデルのリストをステージング経由で MERGE する.
+
+        Args:
+            table_name: テーブル名（例: "campaigns"）
+            rows: 書き込むデータ（Pydantic モデルのリスト）
+            add_synced_at: synced_at カラムを自動追加するか
+        """
+        if not rows:
+            logger.info("%s: 書き込むデータがありません", table_name)
+            return
+
+        if self._settings.dry_run:
+            logger.info("[DRY RUN] %s: %d 行をスキップしました", table_name, len(rows))
+            return
+
+        table_def = TABLE_DEFINITIONS.get(table_name)
+        if not table_def:
+            raise ValueError(f"未定義のテーブル: {table_name}")
+
+        merge_keys = table_def.get("merge_keys")
+        if not merge_keys:
+            # merge_keys がない場合は INSERT のみ（sync_logs 等）
+            self._insert_rows(table_name, rows, add_synced_at)
+            return
+
+        client = self._get_client()
+        now = datetime.now(timezone.utc).isoformat()
+        staging = f"{self._dataset}.{table_name}_staging"
+        target = self._table_ref(table_name)
+        staging_ref = self._staging_table_ref(table_name)
+
+        # 1. ステージングテーブルにデータをロード
+        row_dicts = self._to_row_dicts(rows, add_synced_at, now)
+        schema = table_def["schema"]
+
+        # ステージングテーブルを作成（WRITE_TRUNCATE で上書き）
+        job_config = bigquery.LoadJobConfig(
+            schema=schema,
+            write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        )
+
+        staging_table = bigquery.TableReference.from_string(
+            f"{self._project}.{staging}", default_project=self._project
+        )
+        job = client.load_table_from_json(
+            row_dicts, staging_table, job_config=job_config
+        )
+        job.result()  # 完了を待つ
+
+        # 2. MERGE クエリを実行
+        # 全カラム名を取得（merge_keys 以外が UPDATE 対象）
+        all_columns = [field.name for field in schema]
+        update_columns = [c for c in all_columns if c not in merge_keys]
+
+        on_clause = " AND ".join(f"T.{k} = S.{k}" for k in merge_keys)
+        update_set = ", ".join(f"T.{c} = S.{c}" for c in update_columns)
+        insert_cols = ", ".join(all_columns)
+        insert_vals = ", ".join(f"S.{c}" for c in all_columns)
+
+        merge_sql = f"""
+            MERGE {target} T
+            USING {staging_ref} S
+            ON {on_clause}
+            WHEN MATCHED THEN
+                UPDATE SET {update_set}
+            WHEN NOT MATCHED THEN
+                INSERT ({insert_cols})
+                VALUES ({insert_vals})
+        """
+
+        query_job = client.query(merge_sql)
+        query_job.result()
+
+        # 3. ステージングテーブルを削除
+        client.delete_table(staging_table, not_found_ok=True)
+
+        logger.info("%s: %d 行を MERGE しました", table_name, len(rows))
+
+    # ── INSERT（追記のみ） ────────────────────────────────────────
+
+    def _insert_rows(
+        self,
+        table_name: str,
+        rows: list[BaseModel],
+        add_synced_at: bool,
+    ) -> None:
+        """行を INSERT で追記する（sync_logs 等 MERGE 不要なテーブル用）."""
+        if self._settings.dry_run:
+            logger.info("[DRY RUN] %s: %d 行の INSERT をスキップ", table_name, len(rows))
+            return
+
+        client = self._get_client()
+        table_ref = f"{self._project}.{self._dataset}.{table_name}"
+        now = datetime.now(timezone.utc).isoformat()
+        row_dicts = self._to_row_dicts(rows, add_synced_at, now)
+
+        errors = client.insert_rows_json(table_ref, row_dicts)
+        if errors:
+            logger.error("%s: INSERT エラー: %s", table_name, errors)
+            raise RuntimeError(f"BigQuery INSERT エラー: {errors}")
+
+        logger.info("%s: %d 行を INSERT しました", table_name, len(rows))
+
+    # ── ヘルパー ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _to_row_dicts(
+        rows: list[BaseModel],
+        add_synced_at: bool,
+        now: str,
+    ) -> list[dict[str, Any]]:
+        """Pydantic モデルのリストを BQ ロード用の dict リストに変換する."""
+        result = []
+        for row in rows:
+            d = row.model_dump(mode="json")
+            if add_synced_at and "synced_at" not in d:
+                d["synced_at"] = now
+            result.append(d)
+        return result
+
+    # ── sync_logs 専用ショートカット ───────────────────────────────
+
+    def insert_sync_log(self, sync_log: BaseModel) -> None:
+        """SyncLog を1行 INSERT する."""
+        self._insert_rows("sync_logs", [sync_log], add_synced_at=False)
+
+    def update_sync_log_status(
+        self,
+        sync_log_id: str,
+        status: str,
+        message: str | None = None,
+    ) -> None:
+        """SyncLog のステータスを UPDATE する."""
+        if self._settings.dry_run:
+            logger.info("[DRY RUN] sync_log %s → %s", sync_log_id, status)
+            return
+
+        client = self._get_client()
+        now = datetime.now(timezone.utc).isoformat()
+        target = self._table_ref("sync_logs")
+
+        message_clause = f", message = '{message}'" if message else ""
+
+        query = f"""
+            UPDATE {target}
+            SET status = '{status}',
+                finished_at = TIMESTAMP('{now}')
+                {message_clause}
+            WHERE id = '{sync_log_id}'
+        """
+        job = client.query(query)
+        job.result()
+        logger.info("sync_log %s → %s", sync_log_id, status)
