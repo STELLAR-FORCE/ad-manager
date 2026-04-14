@@ -1,16 +1,57 @@
 'use client';
 
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Toaster } from 'sonner';
 
+type SidebarContextValue = {
+  collapsed: boolean;
+  setCollapsed: (v: boolean) => void;
+  /** 初回読み込み完了後にtrue — アニメーションはこれがtrueの時だけ有効にする */
+  ready: boolean;
+};
+
+const SidebarContext = createContext<SidebarContextValue>({
+  collapsed: false,
+  setCollapsed: () => {},
+  ready: false,
+});
+
+export function useSidebarCollapsed() {
+  return useContext(SidebarContext);
+}
+
 export function MainLayout({ children }: { children: React.ReactNode }) {
+  // 初回は localStorage から同期的に読む（SSR時は false）
+  const [collapsed, setCollapsed] = useState(false);
+  const [ready, setReady] = useState(false);
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    if (!initialized.current) {
+      initialized.current = true;
+      const stored = localStorage.getItem('sidebar_collapsed');
+      if (stored === 'true') setCollapsed(true);
+      // 次フレームでアニメーション有効化（初期状態の適用後）
+      requestAnimationFrame(() => setReady(true));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (initialized.current) {
+      localStorage.setItem('sidebar_collapsed', String(collapsed));
+    }
+  }, [collapsed]);
+
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-6">{children}</div>
-      </main>
-      <Toaster richColors position="top-right" />
-    </div>
+    <SidebarContext.Provider value={{ collapsed, setCollapsed, ready }}>
+      <div className="flex min-h-screen bg-slate-50">
+        <Sidebar />
+        <main className="flex-1 overflow-auto">
+          <div className="p-6">{children}</div>
+        </main>
+        <Toaster richColors position="top-right" />
+      </div>
+    </SidebarContext.Provider>
   );
 }

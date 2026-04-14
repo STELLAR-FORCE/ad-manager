@@ -1,6 +1,6 @@
 # Ad Manager 進捗メモ
 
-## 現在の状態（2026-03-27）
+## 現在の状態（2026-04-09）
 
 ### 完了済み
 - [x] Next.js 16 + TypeScript + Tailwind プロジェクト作成
@@ -26,10 +26,51 @@
 - [x] AIアドバイザー画面（`app/ai-advisor/page.tsx`）・API
 - [x] Badge カスタムバリアント追加（success / warning / info / size="sm"）
 - [x] キャンペーン画面にモックデータ fallback 追加（青バナー・Skeleton・fmtNum 統一）
+- [x] キャンペーン階層ドリルダウンUI（Issue #8）
+  - キャンペーン → 広告グループ一覧（`app/campaigns/[id]/page.tsx`）
+  - 広告グループ詳細（`app/campaigns/[id]/[adGroupId]/page.tsx`）
+    - 検索: 広告テーブル（RSA見出し・説明文）+ キーワードテーブル（マッチタイプ・品質スコア・IS）
+    - ディスプレイ: 広告テーブル + クリエイティブギャラリー（カード形式）
+  - パンくずナビゲーション（shadcn/ui breadcrumb）
+  - Google / Yahoo! / Bing × 検索 / ディスプレイの実CSVデータからモックデータ構築（`lib/campaign-mock-data.ts`）
+- [x] クロスキャンペーンのフラット一覧ページ
+  - 広告グループ一覧（`app/ad-groups/page.tsx`）— 媒体・種別・キャンペーンフィルター
+  - 広告一覧（`app/ads/page.tsx`）— 媒体・種別フィルター、親キャンペーン・広告グループ表示
+  - キーワード一覧（`app/keywords/page.tsx`）— 媒体フィルター、品質スコア・マッチタイプ表示
+  - サイドバーに3メニュー追加（広告グループ・広告・キーワード）
+- [x] ファネルフロー刷新（Issue #5）
+  - SVG台形 → ベジェ曲線グラデーションのエリアチャート風デザイン
+  - ホバーでセクションハイライト＋詳細ツールチップ
+  - CTR/CVR を指標の間に配置、数字サイズ統一
+- [x] ダッシュボード キャンペーン種別フィルタ（Issue #9）
+  - 「検索 / ディスプレイ / すべて」の種別セレクター追加
+  - 固定モックデータ → `campaign-mock-data.ts` の実データから動的集計に変更
+  - API（`/api/dashboard/summary`）も adType パラメータ対応
+- [x] サイドバー折りたたみ機能
+  - アイコンのみモードへのトグル（`PanelLeftClose` / `PanelLeftOpen`）
+  - localStorage で状態永続化、ページ遷移時のフラッシュ防止
+  - `overflow-hidden` + `opacity` トランジションで滑らかなアニメーション
 - [x] shadcn/UI 品質改善（HIGH）
   - `cn()` を `@/lib/utils` に統一（dashboard）
   - Sidebar のハードコードカラーを CSS 変数（sidebar-*）に置き換え
   - Badge に `size` variant 追加・Sidebar の BETA バッジを対応
+
+### ページ構成
+| パス | 内容 |
+|------|------|
+| `/dashboard` | KPIサマリー・媒体別実績 |
+| `/campaigns` | キャンペーン一覧（媒体・種別・ステータスフィルター） |
+| `/campaigns/[id]` | 広告グループ一覧（ドリルダウン） |
+| `/campaigns/[id]/[adGroupId]` | 広告グループ詳細（広告・キーワード・クリエイティブタブ） |
+| `/ad-groups` | 全キャンペーン横断 広告グループ一覧 |
+| `/ads` | 全キャンペーン横断 広告一覧 |
+| `/keywords` | 全検索キャンペーン横断 キーワード一覧 |
+| `/creatives` | クリエイティブ管理 |
+| `/budget` | 予算管理 |
+| `/search-terms` | 検索語句分析 |
+| `/history` | 変更履歴 |
+| `/sync` | データ同期 |
+| `/ai-advisor` | AIアドバイザー |
 
 ### DBスキーマの内容（`prisma/schema.prisma`）
 - `Campaign` - キャンペーン（媒体・広告種別・予算）
@@ -55,10 +96,16 @@
 - [ ] `…`（U+2026）の省略記号を全ページで統一確認
 - [ ] `data-*` attribute の命名規則を CLAUDE.md に追記
 
+### ETLパイプライン（Issue #11）
+- [x] フェーズ1: 骨格 + Google Ads クライアント（`etl/src/platforms/google_ads.py`）
+- [x] フェーズ2: Yahoo!広告クライアント（`etl/src/platforms/yahoo_ads.py`）
+- [x] フェーズ3: Bing Ads クライアント（`etl/src/platforms/bing_ads.py`）
+- [ ] フェーズ4: 本番デプロイ（gcloud CLI → BQテーブル作成 → クレデンシャル設定 → ドライラン → Cloud Run）
+  - → 詳細手順は Issue #11 を参照
+
 ### 機能追加（今後）
-- [ ] Google Ads API / Yahoo! 広告 API / Bing Ads API 実連携
 - [ ] Claude API 連携（AIアドバイザーのチャット機能）
-- [ ] 本番DB移行（SQLite → Supabase）
+- [ ] 本番データソース移行（SQLite → BigQuery）— Issue #7
 
 ---
 
@@ -79,7 +126,7 @@ npm run dev
 - shadcn/ui は **New York スタイル**
 - トースト通知は `sonner` を使う（`MainLayout` に `<Toaster />` 組み込み済み）
 - Next.js 16 の Route Handler では `params` が Promise → `await params` が必要
-- 本番移行時は SQLite → Supabase（Prisma の datasource を変えるだけ）
+- 本番データソースは BigQuery を予定（ETL/ELTツール or 自作パイプラインで広告APIからデータ取り込み）
 
 ## デザインガイドライン
 - コンポーネント: shadcn/ui（New Yorkスタイル）

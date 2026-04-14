@@ -43,6 +43,7 @@ function endOfDay(d: Date): Date {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const platformParam = searchParams.get('platform') ?? 'all';
+  const adTypeParam = searchParams.get('adType') ?? 'all';
 
   const start = parseDate(searchParams.get('start'));
   const end   = parseDate(searchParams.get('end'));
@@ -65,17 +66,20 @@ export async function GET(request: Request) {
   }
 
   const platformFilter = platformParam !== 'all' ? { platform: platformParam } : {};
+  const adTypeFilter = adTypeParam !== 'all' ? { campaign: { adType: adTypeParam } } : {};
 
   try {
+    const whereBase = { ...platformFilter, ...adTypeFilter };
+
     const [currentRows, prevRows] = await Promise.all([
       prisma.dailyMetric.groupBy({
         by: ['platform'],
-        where: { ...platformFilter, date: { gte: start, lte: endOfDay(end) } },
+        where: { ...whereBase, date: { gte: start, lte: endOfDay(end) } },
         _sum: { impressions: true, clicks: true, cost: true, conversions: true },
       }),
       prisma.dailyMetric.groupBy({
         by: ['platform'],
-        where: { ...platformFilter, date: { gte: prevStart, lte: prevEnd } },
+        where: { ...whereBase, date: { gte: prevStart, lte: prevEnd } },
         _sum: { impressions: true, clicks: true, cost: true, conversions: true },
       }),
     ]);

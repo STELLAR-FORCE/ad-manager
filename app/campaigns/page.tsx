@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -21,11 +22,10 @@ import {
 } from '@/components/ui/select';
 import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CAMPAIGNS, type CampaignData, type CampaignStatus, type Platform, type AdType } from '@/lib/campaign-mock-data';
 
-// ─── 型定義 ────────────────────────────────────────────────────
+// ─── 定数 ──────────────────────────────────────────────────────
 
-type CampaignStatus = 'active' | 'active_limited' | 'paused' | 'ended';
-type Platform = 'google' | 'yahoo' | 'bing';
 type SortKey =
   | 'name'
   | 'dailyBudget'
@@ -37,26 +37,6 @@ type SortKey =
   | 'cpc'
   | 'conversions'
   | 'cpa';
-
-type Campaign = {
-  id: string;
-  name: string;
-  platform: Platform;
-  type: string;
-  status: CampaignStatus;
-  dailyBudget: number | null;
-  bidStrategy: string;
-  optimizationScore: number | null;
-  impressions: number;
-  clicks: number;
-  ctr: number;
-  cost: number;
-  cpc: number;
-  conversions: number;
-  cpa: number | null;
-};
-
-// ─── 定数 ──────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<CampaignStatus, { label: string; dot: string }> = {
   active:         { label: '有効',          dot: 'bg-green-500' },
@@ -70,62 +50,6 @@ const PLATFORM_CONFIG: Record<Platform, { label: string; className: string }> = 
   yahoo:  { label: 'Yahoo!',  className: 'bg-red-100 text-red-700' },
   bing:   { label: 'Bing',    className: 'bg-teal-100 text-teal-700' },
 };
-
-// ─── モックデータ（各媒体CSVより、2026年3月実績）─────────────────
-// ※ Bingのみ 3/25〜3/31（7日間）、Google/Yahoo!は 3/1〜3/31
-
-function c(
-  id: string,
-  name: string,
-  platform: Platform,
-  type: string,
-  status: CampaignStatus,
-  dailyBudget: number | null,
-  bidStrategy: string,
-  optimizationScore: number | null,
-  impressions: number,
-  clicks: number,
-  ctr: number,
-  cost: number,
-  cpc: number,
-  conversions: number,
-  cpa: number | null,
-): Campaign {
-  return { id, name, platform, type, status, dailyBudget, bidStrategy, optimizationScore, impressions, clicks, ctr, cost, cpc, conversions, cpa };
-}
-
-const MOCK_CAMPAIGNS: Campaign[] = [
-  // ── Google（3/1〜3/31） ──────────────────────────────────────
-  c('g1',  'K:コア LP【monthly-order】',          'google', '検索',                  'active_limited', 40000,  '目標CPA',      64.74, 26472,   2371,  0.0896, 1662719, 701,  172,  9667),
-  c('g2',  'デマンドジェン',                       'google', 'デマンドジェネレーション', 'active',         5000,   '目標CPC',      96.83, 2488012, 22474, 0.0109, 147158,  5,    0,    null),
-  c('g3',  'K：指名',                              'google', '検索',                  'active_limited', 2000,   '拡張CPC',      59.26, 456,     38,    0.0833, 13257,   349,  5,    2651),
-  c('g4',  '新規業種トライアル（新卒研修切り口）',  'google', '検索',                  'active_limited', 5000,   '目標CPA',      58.89, 1312,    120,   0.0915, 87411,   728,  9,    9712),
-  c('g5',  'K：コア LP2 RE #2',                   'google', '検索',                  'paused',         75000,  '目標CPA',      null,  0, 0, 0, 0, 0, 0, null),
-  c('g6',  '手動入札',                             'google', '検索',                  'paused',         60000,  '手動CPC',      null,  0, 0, 0, 0, 0, 0, null),
-  c('g7',  'P-MAX',                               'google', 'P-MAX',                'paused',         30000,  '目標CPA',      null,  0, 0, 0, 0, 0, 0, null),
-  c('g8',  'K：P-MAX',                            'google', 'P-MAX',                'paused',         15000,  '目標CPA',      null,  0, 0, 0, 0, 0, 0, null),
-  c('g9',  'K：コア LP2 RE_クリック最大化',         'google', '検索',                  'paused',         20000,  'クリック最大化', null,  0, 0, 0, 0, 0, 0, null),
-  c('g10', 'Leads-Display-1',                     'google', 'ディスプレイ',           'paused',         5000,   '手動CPC',      null,  0, 0, 0, 0, 0, 0, null),
-  c('g11', 'K：指名 LPテスト_202409',               'google', '検索',                  'ended',          2000,   '拡張CPC',      null,  0, 0, 0, 0, 0, 0, null),
-  c('g12', 'K：コア (LP2) LPテスト_202409',         'google', '検索',                  'ended',          10000,  '目標CPA',      null,  0, 0, 0, 0, 0, 0, null),
-
-  // ── Yahoo!（3/1〜3/31） ─────────────────────────────────────
-  c('y1',  'K：コア 【monthly-order】',             'yahoo',  '検索',                  'active_limited', 20000,  '目標CPA',      null,  96546, 3417, 0.0354, 1363586, 399,  134,  10176),
-  c('y2',  '新規業種トライアル',                    'yahoo',  '検索',                  'active',         5000,   '目標CPA',      null,  1014,  43,   0.0424, 11618,   270,  1,    11618),
-  c('y3',  'K：指名',                              'yahoo',  '検索',                  'active',         2000,   '手動CPC',      null,  79,    6,    0.0759, 850,     142,  0,    null),
-  c('y4',  'K：コア 【standard/express】',          'yahoo',  '検索',                  'paused',         20000,  'CV最大化',     null,  0, 0, 0, 0, 0, 0, null),
-  c('y5',  '手動入札',                             'yahoo',  '検索',                  'paused',         85000,  '手動CPC',      null,  0, 0, 0, 0, 0, 0, null),
-  c('y6',  'K：コア LP2 RE_クリック最大化',          'yahoo',  '検索',                  'paused',         50000,  'クリック最大化', null,  0, 0, 0, 0, 0, 0, null),
-  c('y7',  'K：コア LP2 RE',                       'yahoo',  '検索',                  'paused',         40000,  '目標CPA',      null,  0, 0, 0, 0, 0, 0, null),
-  c('y8',  '検証KW',                              'yahoo',  '検索',                  'paused',         10000,  '手動CPC',      null,  0, 0, 0, 0, 0, 0, null),
-
-  // ── Bing（3/25〜3/31・7日間） ────────────────────────────────
-  // 検索キャンペーンの表示回数・クリックはCSV上非公開のため合計から比例配分した推計値
-  c('b1',  'K：コア【monthly-order】',              'bing',   '検索',                  'active_limited', 40000,  'CV最大化',     55.4,  9375,   1028,  0.1097, 495194, 481,  49,   10106),
-  c('b2',  'リタゲ 20250722',                      'bing',   'オーディエンス',          'active_limited', 3000,   '拡張CPC',      100,   264186, 2030,  0.0077, 24160,  12,   0,    null),
-  c('b3',  'K：指名',                              'bing',   '検索',                  'active',         2000,   '拡張CPC',      93.8,  100,    11,    0.11,   643,    58,   1,    643),
-  c('b4',  '新規業種トライアル',                    'bing',   '検索',                  'active_limited', 5000,   'CV最大化',     100,   92,     10,    0.1087, 24927,  2493, 1,    24927),
-];
 
 // ─── フォーマット関数 ───────────────────────────────────────────
 
@@ -183,6 +107,7 @@ function SortHeader({
 // ─── ページコンポーネント ───────────────────────────────────────
 
 export default function CampaignsPage() {
+  const [adTypeFilter, setAdTypeFilter] = useState<AdType | 'all'>('all');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [statusFilter,   setStatusFilter]   = useState<string>('all');
   const [sort, setSort] = useState<{ col: SortKey; dir: 'asc' | 'desc' }>({
@@ -199,8 +124,11 @@ export default function CampaignsPage() {
   };
 
   const filtered = useMemo(() => {
-    let data = MOCK_CAMPAIGNS;
+    let data: CampaignData[] = CAMPAIGNS;
 
+    if (adTypeFilter !== 'all') {
+      data = data.filter((c) => c.adType === adTypeFilter);
+    }
     if (platformFilter !== 'all') {
       data = data.filter((c) => c.platform === platformFilter);
     }
@@ -220,7 +148,7 @@ export default function CampaignsPage() {
       const bv = (b[sort.col] as number | null) ?? (sort.dir === 'asc' ? Infinity : -Infinity);
       return sort.dir === 'asc' ? av - bv : bv - av;
     });
-  }, [platformFilter, statusFilter, sort]);
+  }, [adTypeFilter, platformFilter, statusFilter, sort]);
 
   const totals = useMemo(() => {
     const t = { impressions: 0, clicks: 0, cost: 0, conversions: 0 };
@@ -250,7 +178,7 @@ export default function CampaignsPage() {
           <div>
             <h1 className="text-2xl font-bold">キャンペーン</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              2026年3月2日〜2026年3月31日
+              2026年3月1日〜2026年3月31日
             </p>
           </div>
         </div>
@@ -260,12 +188,28 @@ export default function CampaignsPage() {
           <InfoIcon className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
           <span>
             サンプルデータを表示しています。API連携後に実データが反映されます。
-            <span className="ml-2 opacity-75">※ Bingのみデータ期間が3月25日〜31日（7日間）のため他媒体と数値の単純比較はできません。</span>
           </span>
         </div>
 
         {/* フィルター */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* 検索/ディスプレイ切替 */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="filter-adtype" className="text-sm text-muted-foreground whitespace-nowrap">
+              種別
+            </label>
+            <Select value={adTypeFilter} onValueChange={(v) => setAdTypeFilter(v as AdType | 'all')}>
+              <SelectTrigger id="filter-adtype" className="h-8 w-36 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべて</SelectItem>
+                <SelectItem value="search">検索</SelectItem>
+                <SelectItem value="display">ディスプレイ</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="flex items-center gap-2">
             <label htmlFor="filter-platform" className="text-sm text-muted-foreground whitespace-nowrap">
               媒体
@@ -344,9 +288,14 @@ export default function CampaignsPage() {
                         />
                       </TableCell>
 
-                      {/* キャンペーン名 */}
+                      {/* キャンペーン名（ドリルダウンリンク） */}
                       <TableCell className="font-medium max-w-xs">
-                        <div className="truncate" title={c.name}>{c.name}</div>
+                        <Link
+                          href={`/campaigns/${c.id}`}
+                          className="hover:underline text-foreground"
+                        >
+                          <div className="truncate" title={c.name}>{c.name}</div>
+                        </Link>
                         <div className="text-xs text-muted-foreground">{statusLabel}</div>
                       </TableCell>
 

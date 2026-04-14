@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,8 +31,6 @@ import {
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-  BarChart,
-  Bar,
   LineChart,
   Line,
   XAxis,
@@ -40,10 +38,14 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
-import { Meter, Label, ProgressCircle, Chip } from '@heroui/react';
+import { Chip } from '@heroui/react';
 import { cn } from '@/lib/utils';
+import {
+  aggregateCampaigns,
+  aggregateCampaignsByPlatform,
+  type AdType,
+} from '@/lib/campaign-mock-data';
 
 // ─── 型定義 ────────────────────────────────────────────────
 
@@ -85,18 +87,11 @@ type TrendPoint = {
   bing_cpa: number | null;
 };
 
-type BudgetPlatform = {
-  platform: string;
-  budget: number;
-  spent: number;
-  utilization: number;
-};
-
 type BudgetUsage = {
   totalBudget: number;
   totalSpent: number;
   utilization: number;
-  byPlatform: BudgetPlatform[];
+  byPlatform: { platform: string; budget: number; spent: number; utilization: number }[];
 };
 
 type Anomaly = { type: 'warning' | 'info'; message: string };
@@ -149,75 +144,7 @@ const timeFormat = new Intl.DateTimeFormat('ja-JP', {
 
 // ─── モックデータ ───────────────────────────────────────────
 
-const MOCK_SUMMARY: SummaryData = {
-  platform: 'all',
-  current: {
-    impressions: 1_234_567,
-    clicks: 18_234,
-    cost: 1_245_000,
-    conversions: 215,
-    ctr: 0.01477,
-    cpc: 68.3,
-    cpa: 5790,
-    cvr: 0.0118,
-  },
-  previous: {
-    impressions: 1_102_345,
-    clicks: 16_543,
-    cost: 1_123_000,
-    conversions: 189,
-    ctr: 0.01501,
-    cpc: 67.9,
-    cpa: 5942,
-    cvr: 0.01142,
-  },
-  byPlatform: [
-    {
-      platform: 'google',
-      impressions: 756_234,
-      clicks: 11_234,
-      cost: 756_000,
-      conversions: 132,
-      ctr: 0.01486,
-      cpc: 67.3,
-      cpa: 5727,
-      cvr: 0.01175,
-    },
-    {
-      platform: 'yahoo',
-      impressions: 378_456,
-      clicks: 5_234,
-      cost: 356_000,
-      conversions: 63,
-      ctr: 0.01383,
-      cpc: 68.0,
-      cpa: 5651,
-      cvr: 0.01204,
-    },
-    {
-      platform: 'bing',
-      impressions: 99_877,
-      clicks: 1_766,
-      cost: 133_000,
-      conversions: 20,
-      ctr: 0.01768,
-      cpc: 75.3,
-      cpa: 6650,
-      cvr: 0.01133,
-    },
-  ],
-};
-
-const MOCK_BUDGET: BudgetUsage = {
-  totalBudget: 2_000_000,
-  totalSpent: 1_245_000,
-  utilization: 0.6225,
-  byPlatform: [
-    { platform: 'google', budget: 1_200_000, spent: 756_000, utilization: 0.63 },
-    { platform: 'yahoo', budget: 600_000, spent: 356_000, utilization: 0.593 },
-    { platform: 'bing', budget: 200_000, spent: 133_000, utilization: 0.665 },
-  ],
-};
+// MOCK_SUMMARY は削除 — campaign-mock-data.ts の aggregateCampaigns() で動的生成
 
 function getMockTrendData(main: { start: Date; end: Date }): TrendPoint[] {
   const msMs = main.start.getTime();
@@ -505,10 +432,91 @@ function KpiCard({
 
 function FunnelFlow({ metrics, isMock }: { metrics: Metrics; isMock: boolean }) {
   const { impressions, clicks, cost, conversions, ctr, cvr, cpc, cpa } = metrics;
+  const [hovered, setHovered] = useState<number | null>(null);
+
+  // 各ステージの高さ比率（対数スケール、最小15%保証）
+  const logMax = Math.log10(Math.max(impressions, 1));
+  const ratio = (val: number) => {
+    if (logMax === 0) return 1;
+    return Math.max(Math.log10(Math.max(val, 1)) / logMax, 0.15);
+  };
+
+  const heights = [1, ratio(clicks), ratio(conversions)];
+
+  // SVG パラメータ（縦をコンパクトに）
+  const W = 400;
+  const H = 90;
+  const padTop = 6;
+  const baseY = H - 2;
+
+  // 各ステージのX位置（3等分）
+  const xs = [0, W / 3, (W * 2) / 3, W];
+
+  // 各ステージのY座標（上辺）
+  const topY = (r: number) => baseY - (baseY - padTop) * r;
+
+  // ベジェ曲線で滑らかな上辺パスを生成
+  const pts = heights.map((r, i) => ({ x: xs[i], y: topY(r) }));
+  pts.push({ x: W, y: topY(heights[heights.length - 1]) });
+
+  let topPath = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const curr = pts[i];
+    const next = pts[i + 1];
+    const cpx = (curr.x + next.x) / 2;
+    topPath += ` C${cpx},${curr.y} ${cpx},${next.y} ${next.x},${next.y}`;
+  }
+  const fillPath = `${topPath} L${W},${baseY} L0,${baseY} Z`;
+
+  // 各セクションのクリップパス（ホバー用に領域を分割）
+  const sectionClips = [0, 1, 2].map((i) => {
+    const x1 = xs[i];
+    const x2 = xs[i + 1];
+    return `M${x1},0 L${x2},0 L${x2},${H} L${x1},${H} Z`;
+  });
+
+  const stages = [
+    {
+      label: '表示数',
+      value: numFormat.format(impressions),
+      sub: `費用 ${jpyFormat.format(Math.round(cost))}`,
+    },
+    {
+      label: 'クリック数',
+      value: numFormat.format(clicks),
+      sub: `CPC ${cpc > 0 ? jpyFormat.format(Math.round(cpc)) : '—'}`,
+    },
+    {
+      label: 'CV数',
+      value: numFormat.format(Math.round(conversions)),
+      sub: `CPA ${cpa > 0 ? jpyFormat.format(Math.round(cpa)) : '—'}`,
+    },
+  ];
+
+  // ホバー時の詳細情報
+  const details = [
+    [
+      { label: '表示回数', value: numFormat.format(impressions) },
+      { label: '費用', value: jpyFormat.format(Math.round(cost)) },
+      { label: 'CTR', value: pctFormat.format(ctr) },
+    ],
+    [
+      { label: 'クリック数', value: numFormat.format(clicks) },
+      { label: '平均CPC', value: cpc > 0 ? jpyFormat.format(Math.round(cpc)) : '—' },
+      { label: 'CTR', value: pctFormat.format(ctr) },
+      { label: 'CVR', value: pctFormat.format(cvr) },
+    ],
+    [
+      { label: 'CV数', value: numFormat.format(Math.round(conversions)) },
+      { label: 'CPA', value: cpa > 0 ? jpyFormat.format(Math.round(cpa)) : '—' },
+      { label: 'CVR', value: pctFormat.format(cvr) },
+      { label: '費用', value: jpyFormat.format(Math.round(cost)) },
+    ],
+  ];
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
           表示 → クリック → CV フロー
           {isMock && (
@@ -518,169 +526,133 @@ function FunnelFlow({ metrics, isMock }: { metrics: Metrics; isMock: boolean }) 
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-3">
-          {/* 表示数 */}
-          <div className="rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 px-5 py-5 text-center space-y-3">
-            <p className="text-xs font-medium text-muted-foreground tracking-wide uppercase">表示数</p>
-            <p className="text-3xl font-bold tabular-nums leading-none">
-              {numFormat.format(impressions)}
-            </p>
-            <div className="border-t border-border/40 pt-2.5 space-y-1">
-              <p className="text-xs text-muted-foreground">費用</p>
-              <p className="text-sm font-semibold tabular-nums">{jpyFormat.format(Math.round(cost))}</p>
+      <CardContent className="space-y-3">
+        {/* SVG ファネル曲線 */}
+        <div className="relative w-full">
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className="w-full"
+            preserveAspectRatio="xMidYMid meet"
+            onMouseLeave={() => setHovered(null)}
+          >
+            <defs>
+              <linearGradient id="funnel-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#7c3aed" />
+                <stop offset="50%" stopColor="#6366f1" />
+                <stop offset="100%" stopColor="#818cf8" />
+              </linearGradient>
+              <linearGradient id="funnel-grad-fade" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="white" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="white" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+
+            {/* メインのファネル塗り */}
+            <path d={fillPath} fill="url(#funnel-grad)" opacity="0.85" />
+            <path d={fillPath} fill="url(#funnel-grad-fade)" />
+
+            {/* ホバーハイライト用セクション */}
+            {sectionClips.map((clip, i) => (
+              <g key={i}>
+                <clipPath id={`funnel-section-${i}`}>
+                  <path d={clip} />
+                </clipPath>
+                <rect
+                  x={xs[i]}
+                  y={0}
+                  width={xs[i + 1] - xs[i]}
+                  height={H}
+                  fill="white"
+                  opacity={hovered === i ? 0.15 : 0}
+                  clipPath={`url(#funnel-section-${i})`}
+                  className="transition-opacity duration-150"
+                  onMouseEnter={() => setHovered(i)}
+                  style={{ cursor: 'default' }}
+                />
+              </g>
+            ))}
+
+            {/* ステージ区切り線（白い実線） */}
+            {[1, 2].map((i) => (
+              <line
+                key={i}
+                x1={xs[i]}
+                y1={padTop - 2}
+                x2={xs[i]}
+                y2={baseY}
+                stroke="white"
+                strokeOpacity="0.6"
+                strokeWidth="1.5"
+              />
+            ))}
+          </svg>
+
+          {/* ホバーツールチップ（グラフ下に表示） */}
+          {hovered !== null && (
+            <div
+              className="absolute z-10 rounded-lg border bg-popover px-3 py-2 text-popover-foreground shadow-md"
+              style={{
+                left: `${((xs[hovered] + xs[hovered + 1]) / 2 / W) * 100}%`,
+                bottom: '-8px',
+                transform: 'translate(-50%, 100%)',
+              }}
+            >
+              <p className="text-xs font-semibold mb-1">{stages[hovered].label}</p>
+              <div className="space-y-0.5">
+                {details[hovered].map((d) => (
+                  <div key={d.label} className="flex items-center justify-between gap-4 text-xs">
+                    <span className="text-muted-foreground">{d.label}</span>
+                    <span className="font-medium tabular-nums">{d.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* CTR → */}
-          <div className="flex flex-col items-center gap-1 px-1">
-            <span className="text-sm font-bold tabular-nums text-blue-600">{pctFormat.format(ctr)}</span>
-            <span className="text-[10px] font-medium text-muted-foreground tracking-widest">CTR</span>
-            <ArrowRight className="h-5 w-5 text-muted-foreground/40 mt-0.5" aria-hidden="true" />
-          </div>
+        {/* ステージ数値 + 変換率（指標の間に配置） */}
+        <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-x-2 gap-y-0">
+          {stages.map((s, i) => {
+            const rates = [
+              { label: 'CTR', value: pctFormat.format(ctr) },
+              { label: 'CVR', value: pctFormat.format(cvr) },
+            ];
 
-          {/* クリック数 */}
-          <div className="rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 px-5 py-5 text-center space-y-3">
-            <p className="text-xs font-medium text-blue-500 tracking-wide uppercase">クリック数</p>
-            <p className="text-3xl font-bold tabular-nums leading-none text-blue-700">
-              {numFormat.format(clicks)}
-            </p>
-            <div className="border-t border-blue-100 pt-2.5 space-y-1">
-              <p className="text-xs text-blue-400">CPC</p>
-              <p className="text-sm font-semibold tabular-nums text-blue-700">
-                {cpc > 0 ? jpyFormat.format(Math.round(cpc)) : '—'}
-              </p>
-            </div>
-          </div>
+            return (
+              <React.Fragment key={s.label}>
+                {/* 指標カード */}
+                <div
+                  className={cn(
+                    'text-center rounded-md px-2 py-1.5 transition-colors duration-150',
+                    hovered === i && 'bg-muted/50',
+                  )}
+                  onMouseEnter={() => setHovered(i)}
+                  onMouseLeave={() => setHovered(null)}
+                >
+                  <p className="text-2xl font-bold tabular-nums tracking-tight">{s.value}</p>
+                  <p className="text-sm font-medium text-muted-foreground">{s.label}</p>
+                  <p className="text-xs text-muted-foreground/70 tabular-nums mt-0.5">{s.sub}</p>
+                </div>
 
-          {/* CVR → */}
-          <div className="flex flex-col items-center gap-1 px-1">
-            <span className="text-sm font-bold tabular-nums text-green-600">{pctFormat.format(cvr)}</span>
-            <span className="text-[10px] font-medium text-muted-foreground tracking-widest">CVR</span>
-            <ArrowRight className="h-5 w-5 text-muted-foreground/40 mt-0.5" aria-hidden="true" />
-          </div>
-
-          {/* CV数 */}
-          <div className="rounded-xl bg-gradient-to-br from-green-100 to-green-50 px-5 py-5 text-center space-y-3">
-            <p className="text-xs font-medium text-green-600 tracking-wide uppercase">CV数</p>
-            <p className="text-3xl font-bold tabular-nums leading-none text-green-700">
-              {numFormat.format(Math.round(conversions))}
-            </p>
-            <div className="border-t border-green-100 pt-2.5 space-y-1">
-              <p className="text-xs text-green-500">CPA</p>
-              <p className="text-sm font-semibold tabular-nums text-green-700">
-                {cpa > 0 ? jpyFormat.format(Math.round(cpa)) : '—'}
-              </p>
-            </div>
-          </div>
+                {/* 変換率（指標の間） */}
+                {i < 2 && (
+                  <div className="flex flex-col items-center gap-0.5 px-1">
+                    <ArrowRight className="size-3.5 text-muted-foreground/40" aria-hidden="true" />
+                    <p className="text-2xl font-bold tabular-nums tracking-tight text-violet-600 dark:text-violet-400">
+                      {rates[i].value}
+                    </p>
+                    <p className="text-sm font-medium text-muted-foreground">{rates[i].label}</p>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-/** HeroUI Meter を使った予算バー */
-function BudgetMeter({
-  spent,
-  budget,
-  utilization,
-  label,
-}: {
-  spent: number;
-  budget: number;
-  utilization: number;
-  label: string;
-}) {
-  const color =
-    utilization >= 0.9
-      ? 'danger'
-      : utilization >= 0.75
-        ? 'warning'
-        : 'accent';
-
-  const spentText = jpyFormat.format(Math.round(spent));
-  const budgetText = budget > 0 ? jpyFormat.format(Math.round(budget)) : null;
-  const pctText = budget > 0 ? pct1Format.format(utilization) : null;
-
-  return (
-    <Meter
-      aria-label={`${label} 予算消化率`}
-      value={Math.round(utilization * 100)}
-      minValue={0}
-      maxValue={100}
-      color={color as 'accent' | 'warning' | 'danger'}
-      className="w-full"
-    >
-      <div className="flex items-center justify-between mb-1.5">
-        <Label className="text-xs font-medium text-foreground">{label}</Label>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {spentText}
-          {budgetText && <span className="text-muted-foreground/50"> / {budgetText}</span>}
-          {pctText && (
-            <span
-              className={cn(
-                'ml-1.5 font-semibold',
-                utilization >= 0.9
-                  ? 'text-red-600'
-                  : utilization >= 0.75
-                    ? 'text-amber-600'
-                    : 'text-foreground'
-              )}
-            >
-              {pctText}
-            </span>
-          )}
-        </span>
-      </div>
-      <Meter.Track>
-        <Meter.Fill />
-      </Meter.Track>
-    </Meter>
-  );
-}
-
-/** HeroUI ProgressCircle を使った全体消化率 */
-function BudgetCircle({
-  utilization,
-  totalSpent,
-  totalBudget,
-}: {
-  utilization: number;
-  totalSpent: number;
-  totalBudget: number;
-}) {
-  const pct = Math.round(utilization * 100);
-  const color =
-    utilization >= 0.9
-      ? 'danger'
-      : utilization >= 0.75
-        ? 'warning'
-        : 'success';
-
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <ProgressCircle
-        aria-label="全体予算消化率"
-        value={pct}
-        size="lg"
-        color={color as 'success' | 'warning' | 'danger'}
-      >
-        <ProgressCircle.Track>
-          <ProgressCircle.TrackCircle />
-          <ProgressCircle.FillCircle />
-        </ProgressCircle.Track>
-      </ProgressCircle>
-      <div className="text-center">
-        <p className="text-2xl font-bold tabular-nums">{pct1Format.format(utilization)}</p>
-        <p className="text-xs text-muted-foreground">消化率</p>
-      </div>
-      <div className="text-center text-xs text-muted-foreground tabular-nums space-y-0.5">
-        <p>{jpyFormat.format(Math.round(totalSpent))} 消化</p>
-        <p className="text-muted-foreground/50">予算 {jpyFormat.format(Math.round(totalBudget))}</p>
-      </div>
-    </div>
-  );
-}
 
 // ─── メインページ ───────────────────────────────────────────
 
@@ -700,6 +672,7 @@ function defaultDateRange(): DateRangeValue {
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeValue>(defaultDateRange);
   const [platform, setPlatform] = useState<Platform>('all');
+  const [adType, setAdType] = useState<AdType | 'all'>('all');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [compareTrend, setCompareTrend] = useState<TrendPoint[]>([]);
@@ -739,6 +712,7 @@ export default function DashboardPage() {
           start: fmt(main.start),
           end: fmt(main.end),
           platform,
+          adType,
         });
         if (compareEnabled && compare) {
           summaryParams.set('compareStart', fmt(compare.start));
@@ -773,7 +747,7 @@ export default function DashboardPage() {
         setRefreshing(false);
       }
     },
-    [dateRange, platform]
+    [dateRange, platform, adType]
   );
 
   useEffect(() => {
@@ -781,13 +755,32 @@ export default function DashboardPage() {
   }, [fetchData]);
 
   const isMock = !summary?.current.impressions;
-  const displaySummary = isMock ? MOCK_SUMMARY : summary!;
+  // モック時はcampaign-mock-dataからadType対応で集計
+  const mockSummary: SummaryData = React.useMemo(() => {
+    const curr = aggregateCampaigns({ platform, adType });
+    // 前期間はダミーで10%減
+    const prev = {
+      impressions: Math.round(curr.impressions * 0.9),
+      clicks: Math.round(curr.clicks * 0.9),
+      cost: Math.round(curr.cost * 0.92),
+      conversions: Math.round(curr.conversions * 0.88),
+      ctr: curr.ctr * 0.98,
+      cpc: curr.cpc * 1.02,
+      cpa: curr.cpa * 1.05,
+      cvr: curr.cvr * 0.97,
+    };
+    return {
+      platform,
+      current: curr,
+      previous: prev,
+      byPlatform: aggregateCampaignsByPlatform({ adType }),
+    };
+  }, [platform, adType]);
+  const displaySummary = isMock ? mockSummary : summary!;
   const displayTrend = trend.length > 0 ? trend : getMockTrendData(dateRange.main);
-  const displayBudget = budget?.byPlatform.length ? budget : MOCK_BUDGET;
-
   const { current, previous, byPlatform } = displaySummary;
   const deltaLabel = dateRange.compareEnabled ? '比較期間比' : '前期間比';
-  const anomalies = isMock ? [] : buildAnomalies(current, previous, displayBudget, cpaTarget);
+  const anomalies = isMock ? [] : buildAnomalies(current, previous, budget, cpaTarget);
 
   // 比較トレンドをインデックス合わせでマージ
   const showCompare = dateRange.compareEnabled && compareTrend.length > 0;
@@ -849,6 +842,18 @@ export default function DashboardPage() {
               <SelectItem value="google">Google</SelectItem>
               <SelectItem value="yahoo">Yahoo!</SelectItem>
               <SelectItem value="bing">Bing</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* 種別プルダウン */}
+          <Select value={adType} onValueChange={(v) => setAdType(v as AdType | 'all')}>
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">すべての種別</SelectItem>
+              <SelectItem value="search">検索</SelectItem>
+              <SelectItem value="display">ディスプレイ</SelectItem>
             </SelectContent>
           </Select>
 
@@ -973,114 +978,8 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* ─── 予算消化率（HeroUI Meter + ProgressCircle） ─── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              予算消化率（当月）
-              {isMock && (
-                <Badge variant="secondary" className="text-xs font-normal">
-                  サンプル
-                </Badge>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col lg:flex-row gap-6">
-              {/* 全体消化率サークル */}
-              <div className="flex justify-center lg:justify-start lg:pr-6 lg:border-r lg:border-border/50">
-                <BudgetCircle
-                  utilization={displayBudget.utilization}
-                  totalSpent={displayBudget.totalSpent}
-                  totalBudget={displayBudget.totalBudget}
-                />
-              </div>
-
-              {/* 媒体別メーター */}
-              <div className="flex-1 space-y-5">
-                {/* 全媒体合計 */}
-                <BudgetMeter
-                  label="全媒体合計"
-                  spent={displayBudget.totalSpent}
-                  budget={displayBudget.totalBudget}
-                  utilization={displayBudget.utilization}
-                />
-                {/* 媒体別 */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-border/50">
-                  {displayBudget.byPlatform.map((p) => (
-                    <BudgetMeter
-                      key={p.platform}
-                      label={PLATFORM_LABELS[p.platform] ?? p.platform}
-                      spent={p.spent}
-                      budget={p.budget}
-                      utilization={p.utilization}
-                    />
-                  ))}
-                </div>
-                {displayBudget.totalBudget === 0 && (
-                  <p className="text-xs text-muted-foreground/60">
-                    キャンペーンに月次予算を設定すると消化率が表示されます
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* ─── チャート ─── */}
         <div className="grid grid-cols-1 gap-4">
-          {/* 費用推移 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">費用推移</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => jpyCompact.format(v)}
-                    width={52}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    formatter={(v) => [jpyFormat.format(Number(v ?? 0)), '']}
-                    labelFormatter={(l) => l}
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: '1px solid hsl(var(--border))',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                    }}
-                  />
-                  <Legend iconSize={10} />
-                  {platform === 'all' ? (
-                    <>
-                      <Bar dataKey="bing" name="Bing" fill={PLATFORM_COLORS.bing} stackId="s" />
-                      <Bar dataKey="yahoo" name="Yahoo!" fill={PLATFORM_COLORS.yahoo} stackId="s" />
-                      <Bar
-                        dataKey="google"
-                        name="Google"
-                        fill={PLATFORM_COLORS.google}
-                        stackId="s"
-                        radius={[3, 3, 0, 0]}
-                      />
-                    </>
-                  ) : (
-                    <Bar
-                      dataKey={platform}
-                      name={PLATFORM_LABELS[platform]}
-                      fill={PLATFORM_COLORS[platform]}
-                      radius={[3, 3, 0, 0]}
-                    />
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
           {/* CPA推移・CV推移 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
@@ -1282,7 +1181,7 @@ export default function DashboardPage() {
         {/* ─── 媒体別サマリー（全媒体時のみ） ─── */}
         {platform === 'all' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {(isMock ? MOCK_SUMMARY.byPlatform : byPlatform).map((s) => (
+            {(isMock ? mockSummary.byPlatform : byPlatform).map((s) => (
               <Card key={s.platform}>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
