@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+import google.auth
 from google.cloud import bigquery
 from pydantic import BaseModel
 
@@ -18,6 +19,38 @@ from src.utils.logging import get_logger
 from src.utils.retry import with_retry
 
 logger = get_logger(__name__)
+
+
+def _get_credentials():
+    """認証情報を取得する（ADC → gcloud SDK の順にフォールバック）."""
+    try:
+        credentials, project = google.auth.default()
+        return credentials, project
+    except google.auth.exceptions.DefaultCredentialsError:
+        pass
+
+    # ADC が無い場合、gcloud CLI の認証情報を使う
+    try:
+        from google.auth import _cloud_sdk
+        credentials = _cloud_sdk.get_application_default_credentials()
+        return credentials, None
+    except Exception:
+        pass
+
+    # 最終フォールバック: gcloud のアクセストークンを直接利用
+    import subprocess
+    from google.oauth2.credentials import Credentials as OAuth2Credentials
+    result = subprocess.run(
+        ["gcloud", "auth", "print-access-token"],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return OAuth2Credentials(token=result.stdout.strip()), None
+
+    raise RuntimeError(
+        "GCP 認証情報が見つかりません。"
+        "'gcloud auth login' または 'gcloud auth application-default login' を実行してください。"
+    )
 
 
 class BigQueryClient:
@@ -32,8 +65,11 @@ class BigQueryClient:
 
     def _get_client(self) -> bigquery.Client:
         if self._client is None:
+            credentials, _ = _get_credentials()
             self._client = bigquery.Client(
-                project=self._project, location=self._location
+                project=self._project,
+                location=self._location,
+                credentials=credentials,
             )
         return self._client
 

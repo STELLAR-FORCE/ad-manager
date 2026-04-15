@@ -38,11 +38,20 @@ DISPLAY_API_BASE = "https://ads-display.yahooapis.jp/api/v19"
 # ── ステータスマッピング ──────────────────────────────────────────
 
 _STATUS_MAP = {
+    # v18 DISTRIBUTION_STATUS 値
+    "SERVING": "active",
+    "ENDED": "ended",
+    "PENDING": "paused",
+    "STOP": "paused",
+    # ディスプレイ広告
+    "ACTIVE": "active",
+    # EN 表示名
+    "ON": "active",
+    "OFF": "paused",
+    # 旧互換
     "ENABLED": "active",
     "PAUSED": "paused",
     "REMOVED": "ended",
-    # ディスプレイ広告
-    "ACTIVE": "active",
 }
 
 _BID_STRATEGY_MAP = {
@@ -53,24 +62,38 @@ _BID_STRATEGY_MAP = {
     "MANUAL_CPC": "手動CPC",
     "ENHANCED_CPC": "拡張CPC",
     "TARGET_SPEND": "予算内で最大化",
+    # EN 表示名（reportLanguage=EN 時の CSV 値）
+    "Maximize Conversions": "CV最大化",
+    "Maximize Clicks": "クリック最大化",
+    "Target CPA": "目標CPA",
+    "Target ROAS": "目標ROAS",
+    "Manual CPC": "手動CPC",
+    "Enhanced CPC": "拡張CPC",
+    "Target Spend": "予算内で最大化",
 }
 
 _MATCH_TYPE_MAP = {
     "EXACT": "完全一致",
     "PHRASE": "フレーズ一致",
     "BROAD": "部分一致",
+    # EN 表示名
+    "Exact match": "完全一致",
+    "Phrase match": "フレーズ一致",
+    "Broad match": "部分一致",
 }
 
 # ── レポートフィールド定義 ────────────────────────────────────────
 
 # 検索広告レポート
+# v18 フィールド名
+# https://ads-developers.yahoo.co.jp/reference/ads-search-api/v18/
 SEARCH_CAMPAIGN_REPORT_FIELDS = [
     "CAMPAIGN_ID",
     "CAMPAIGN_NAME",
     "CAMPAIGN_TYPE",
-    "CAMPAIGN_STATUS",
-    "DAILY_BUDGET",
-    "BIDDING_STRATEGY_TYPE",
+    "CAMPAIGN_DISTRIBUTION_STATUS",
+    "DAILY_SPENDING_LIMIT",
+    "BID_STRATEGY_TYPE",
     "DAY",
     "IMPS",
     "CLICKS",
@@ -82,17 +105,14 @@ SEARCH_ADGROUP_REPORT_FIELDS = [
     "CAMPAIGN_ID",
     "ADGROUP_ID",
     "ADGROUP_NAME",
-    "ADGROUP_STATUS",
-    "ADGROUP_BID_STRATEGY_TYPE",
-    "TARGET_CPA",
-    "QUALITY_SCORE",
+    "ADGROUP_DISTRIBUTION_SETTINGS",
     "DAY",
     "IMPS",
     "CLICKS",
     "COST",
     "CONVERSIONS",
-    "TOP_IMPR_RATE",
-    "ABS_TOP_IMPR_RATE",
+    "TOP_IMPRESSION_PERCENTAGE",
+    "ABSOLUTE_TOP_IMPRESSION_PERCENTAGE",
 ]
 
 SEARCH_AD_REPORT_FIELDS = [
@@ -100,12 +120,12 @@ SEARCH_AD_REPORT_FIELDS = [
     "AD_ID",
     "AD_NAME",
     "AD_TYPE",
-    "AD_STATUS",
+    "AD_DISTRIBUTION_SETTINGS",
     "TITLE1",
     "TITLE2",
     "TITLE3",
-    "DESC1",
-    "DESC2",
+    "DESCRIPTION1",
+    "DESCRIPTION2",
     "FINAL_URL",
     "IMPS",
     "CLICKS",
@@ -117,15 +137,15 @@ SEARCH_KEYWORD_REPORT_FIELDS = [
     "ADGROUP_ID",
     "KEYWORD_ID",
     "KEYWORD",
-    "MATCH_TYPE",
-    "KEYWORD_STATUS",
-    "QUALITY_SCORE",
+    "KEYWORD_MATCH_TYPE",
+    "KEYWORD_DISTRIBUTION_SETTINGS",
+    "QUALITY_INDEX",
     "IMPS",
     "CLICKS",
     "COST",
     "CONVERSIONS",
-    "TOP_IMPR_RATE",
-    "ABS_TOP_IMPR_RATE",
+    "TOP_IMPRESSION_PERCENTAGE",
+    "ABSOLUTE_TOP_IMPRESSION_PERCENTAGE",
 ]
 
 SEARCH_DAILY_REPORT_FIELDS = [
@@ -140,7 +160,7 @@ SEARCH_DAILY_REPORT_FIELDS = [
 SEARCH_QUERY_REPORT_FIELDS = [
     "CAMPAIGN_ID",
     "CAMPAIGN_NAME",
-    "QUERY",
+    "SEARCH_QUERY",
     "DAY",
     "IMPS",
     "CLICKS",
@@ -149,13 +169,56 @@ SEARCH_QUERY_REPORT_FIELDS = [
 ]
 
 
+# ── CSV ヘッダー（EN表示名）→ API フィールド名マッピング ──────────
+
+_CSV_EN_HEADER_TO_FIELD: dict[str, str] = {
+    "CampaignID": "CAMPAIGN_ID",
+    "Campaign name": "CAMPAIGN_NAME",
+    "Campaign type": "CAMPAIGN_TYPE",
+    "Distribution Status": "CAMPAIGN_DISTRIBUTION_STATUS",
+    "Distribution Settings": "DISTRIBUTION_SETTINGS",
+    "Daily Spending Limit": "DAILY_SPENDING_LIMIT",
+    "Bid strategy": "BID_STRATEGY_TYPE",
+    "Day": "DAY",
+    "Impressions": "IMPS",
+    "Clicks": "CLICKS",
+    "Cost": "COST",
+    "Conversions": "CONVERSIONS",
+    "Ad group ID": "ADGROUP_ID",
+    "Ad group name": "ADGROUP_NAME",
+    "Search top impression rate": "TOP_IMPRESSION_PERCENTAGE",
+    "Search absolute top impression rate": "ABSOLUTE_TOP_IMPRESSION_PERCENTAGE",
+    "Ad ID": "AD_ID",
+    "Ad Name": "AD_NAME",
+    "Ad Type": "AD_TYPE",
+    "Title1": "TITLE1",
+    "Title2": "TITLE2",
+    "Title3": "TITLE3",
+    "Description 1": "DESCRIPTION1",
+    "Description 2": "DESCRIPTION2",
+    "Final URL": "FINAL_URL",
+    "Keyword ID": "KEYWORD_ID",
+    "Keyword": "KEYWORD",
+    "Match Type": "KEYWORD_MATCH_TYPE",
+    "Quality index": "QUALITY_INDEX",
+    "Search Query": "SEARCH_QUERY",
+}
+
+
 class YahooAdsClient(AdPlatformClient):
     """Yahoo!広告 API クライアント."""
 
     def __init__(self, settings: Settings, oauth_manager: OAuthManager) -> None:
         self._settings = settings
         self._oauth = oauth_manager
-        self._account_id = settings.yahoo_ads_account_id
+        # MCC ベースアカウントID（x-z-base-account-id ヘッダー用）
+        self._base_account_id = settings.yahoo_ads_base_account_id
+        # 検索・ディスプレイ別のアカウントID（リクエストボディ用）
+        self._search_account_id = (
+            settings.yahoo_ads_search_account_id
+            or settings.yahoo_ads_account_id
+        )
+        self._display_account_id = settings.yahoo_ads_display_account_id
         self._access_token: str | None = None
 
     @property
@@ -165,13 +228,26 @@ class YahooAdsClient(AdPlatformClient):
     def authenticate(self) -> None:
         """OAuth2 アクセストークンを取得する."""
         self._access_token = self._oauth.get_yahoo_access_token()
-        logger.info("Yahoo!広告 API に認証しました (account_id=%s)", self._account_id)
+        logger.info(
+            "Yahoo!広告 API に認証しました (search=%s, display=%s)",
+            self._search_account_id,
+            self._display_account_id or "未設定",
+        )
 
-    def _headers(self) -> dict[str, str]:
-        return {
+    def _account_id_for(self, base_url: str) -> str:
+        """API ベース URL に対応するアカウントIDを返す."""
+        if base_url == DISPLAY_API_BASE and self._display_account_id:
+            return self._display_account_id
+        return self._search_account_id
+
+    def _headers(self, base_url: str | None = None) -> dict[str, str]:
+        headers = {
             "Authorization": f"Bearer {self._access_token}",
             "Content-Type": "application/json",
         }
+        if self._base_account_id:
+            headers["x-z-base-account-id"] = self._base_account_id
+        return headers
 
     # ── 汎用 API 呼び出し ────────────────────────────────────────
 
@@ -182,7 +258,7 @@ class YahooAdsClient(AdPlatformClient):
         response = httpx.post(
             url,
             json=body,
-            headers=self._headers(),
+            headers=self._headers(base_url),
             timeout=60,
         )
         response.raise_for_status()
@@ -194,7 +270,7 @@ class YahooAdsClient(AdPlatformClient):
         response = httpx.post(
             url,
             json=body,
-            headers=self._headers(),
+            headers=self._headers(base_url),
             timeout=120,
         )
         response.raise_for_status()
@@ -213,13 +289,19 @@ class YahooAdsClient(AdPlatformClient):
     ) -> str:
         """レポートジョブを作成し、完了を待ち、CSV テキストを返す."""
         # 1. レポートジョブ作成
+        acct_id = int(self._account_id_for(base_url))
+        import time
+        report_name = f"etl_{report_type}_{int(time.time())}"
         operand: dict = {
-            "accountId": int(self._account_id),
+            "accountId": acct_id,
+            "reportName": report_name,
             "fields": fields,
             "reportType": report_type,
             "reportDateRangeType": date_range_type,
             "reportDownloadFormat": "CSV",
             "reportDownloadEncode": "UTF8",
+            "reportLanguage": "EN",
+            "reportSkipReportSummary": "TRUE",
         }
 
         if date_range_type == "CUSTOM_DATE" and start_date and end_date:
@@ -229,14 +311,19 @@ class YahooAdsClient(AdPlatformClient):
             }
 
         add_body = {
-            "accountId": int(self._account_id),
+            "accountId": acct_id,
             "operand": [operand],
         }
 
         result = self._post(base_url, "ReportDefinitionService", "add", add_body)
+        logger.debug("Yahoo! レポートジョブ作成レスポンス: %s", result)
         values = result.get("rval", {}).get("values", [])
         if not values or not values[0].get("operationSucceeded"):
             errors = values[0].get("errors", []) if values else []
+            logger.error(
+                "Yahoo! レポートジョブ作成に失敗 (rval=%s)",
+                result.get("rval"),
+            )
             raise RuntimeError(f"Yahoo! レポートジョブ作成に失敗: {errors}")
 
         report_job_id = values[0]["reportDefinition"]["reportJobId"]
@@ -245,7 +332,7 @@ class YahooAdsClient(AdPlatformClient):
         # 2. ポーリングで完了を待つ
         def check_status() -> str:
             get_body = {
-                "accountId": int(self._account_id),
+                "accountId": acct_id,
                 "reportJobIds": [report_job_id],
             }
             resp = self._post(
@@ -267,7 +354,7 @@ class YahooAdsClient(AdPlatformClient):
 
         # 3. ダウンロード
         download_body = {
-            "accountId": int(self._account_id),
+            "accountId": acct_id,
             "reportJobId": report_job_id,
         }
         csv_text = self._post_download(
@@ -306,6 +393,14 @@ class YahooAdsClient(AdPlatformClient):
 
         if len(data_lines) < 2:
             return []
+
+        # ヘッダー行の表示名を API フィールド名にリマップ
+        header_line = data_lines[0]
+        headers = next(csv.reader(io.StringIO(header_line)))
+        mapped_headers = [
+            _CSV_EN_HEADER_TO_FIELD.get(h.strip(), h.strip()) for h in headers
+        ]
+        data_lines[0] = ",".join(mapped_headers)
 
         reader = csv.DictReader(io.StringIO("\n".join(data_lines)))
         return list(reader)
@@ -367,12 +462,12 @@ class YahooAdsClient(AdPlatformClient):
                 ad_type="display" if is_display else "search",
                 type="ディスプレイ" if is_display else "検索",
                 status=_STATUS_MAP.get(
-                    r.get("CAMPAIGN_STATUS", ""), "active"
+                    r.get("CAMPAIGN_DISTRIBUTION_STATUS", ""), "active"
                 ),
-                daily_budget=self._safe_float(r.get("DAILY_BUDGET")) or None,
+                daily_budget=self._safe_float(r.get("DAILY_SPENDING_LIMIT")) or None,
                 monthly_budget=None,
                 bid_strategy=_BID_STRATEGY_MAP.get(
-                    r.get("BIDDING_STRATEGY_TYPE", ""), r.get("BIDDING_STRATEGY_TYPE")
+                    r.get("BID_STRATEGY_TYPE", ""), r.get("BIDDING_STRATEGY_TYPE")
                 ),
                 optimization_score=None,  # Yahoo! にはない
             )
@@ -396,7 +491,7 @@ class YahooAdsClient(AdPlatformClient):
                     platform="yahoo",
                     ad_type="display",
                     type="ディスプレイ",
-                    status=_STATUS_MAP.get(r.get("CAMPAIGN_STATUS", ""), "active"),
+                    status=_STATUS_MAP.get(r.get("CAMPAIGN_DISTRIBUTION_STATUS", ""), "active"),
                     daily_budget=None,
                     monthly_budget=None,
                     bid_strategy=None,
@@ -433,17 +528,17 @@ class YahooAdsClient(AdPlatformClient):
             conversions = self._safe_int(r.get("CONVERSIONS"))
             derived = compute_metrics(impressions, clicks, cost, conversions)
 
-            bid_type = r.get("ADGROUP_BID_STRATEGY_TYPE", "")
+            bid_type = r.get("BID_STRATEGY_TYPE", "")
 
             seen[agid] = AdGroupRow(
                 id=agid,
                 campaign_id=r.get("CAMPAIGN_ID", ""),
                 name=r.get("ADGROUP_NAME", ""),
-                status=_STATUS_MAP.get(r.get("ADGROUP_STATUS", ""), "active"),
+                status=_STATUS_MAP.get(r.get("DISTRIBUTION_SETTINGS", ""), "active"),
                 type="標準",
                 bid_strategy=_BID_STRATEGY_MAP.get(bid_type, bid_type) or None,
-                target_cpa=self._safe_float(r.get("TARGET_CPA")) or None,
-                quality_score=self._safe_float(r.get("QUALITY_SCORE")) or None,
+                target_cpa=None,  # v18 ADGROUP レポートに TARGET_CPA フィールドなし
+                quality_score=self._safe_float(r.get("QUALITY_INDEX")) or None,
                 impressions=impressions,
                 clicks=clicks,
                 ctr=derived["ctr"],
@@ -452,8 +547,8 @@ class YahooAdsClient(AdPlatformClient):
                 conversions=conversions,
                 cvr=derived["cvr"],
                 cpa=derived["cpa"] if conversions > 0 else None,
-                top_impr_rate=self._safe_rate(r.get("TOP_IMPR_RATE")),
-                abs_top_impr_rate=self._safe_rate(r.get("ABS_TOP_IMPR_RATE")),
+                top_impr_rate=self._safe_rate(r.get("TOP_IMPRESSION_PERCENTAGE")),
+                abs_top_impr_rate=self._safe_rate(r.get("ABSOLUTE_TOP_IMPRESSION_PERCENTAGE")),
             )
 
         ad_groups = list(seen.values())
@@ -491,13 +586,13 @@ class YahooAdsClient(AdPlatformClient):
                 id=ad_id,
                 ad_group_id=r.get("ADGROUP_ID", ""),
                 name=r.get("AD_NAME", f"広告 {ad_id}"),
-                status=_STATUS_MAP.get(r.get("AD_STATUS", ""), "active"),
+                status=_STATUS_MAP.get(r.get("DISTRIBUTION_SETTINGS", ""), "active"),
                 ad_format=ad_format,
                 headline_1=r.get("TITLE1") or None,
                 headline_2=r.get("TITLE2") or None,
                 headline_3=r.get("TITLE3") or None,
-                description_1=r.get("DESC1") or None,
-                description_2=r.get("DESC2") or None,
+                description_1=r.get("DESCRIPTION1") or None,
+                description_2=r.get("DESCRIPTION2") or None,
                 final_url=r.get("FINAL_URL") or None,
                 impressions=impressions,
                 clicks=clicks,
@@ -536,15 +631,15 @@ class YahooAdsClient(AdPlatformClient):
             conversions = self._safe_int(r.get("CONVERSIONS"))
             derived = compute_metrics(impressions, clicks, cost, conversions)
 
-            match_type = r.get("MATCH_TYPE", "")
+            match_type = r.get("KEYWORD_MATCH_TYPE", "")
 
             seen[kw_id] = KeywordRow(
                 id=kw_id,
                 ad_group_id=r.get("ADGROUP_ID", ""),
                 keyword=r.get("KEYWORD", ""),
                 match_type=_MATCH_TYPE_MAP.get(match_type, match_type),
-                status=_STATUS_MAP.get(r.get("KEYWORD_STATUS", ""), "active"),
-                quality_score=self._safe_float(r.get("QUALITY_SCORE")) or None,
+                status=_STATUS_MAP.get(r.get("DISTRIBUTION_SETTINGS", ""), "active"),
+                quality_score=self._safe_float(r.get("QUALITY_INDEX")) or None,
                 impressions=impressions,
                 clicks=clicks,
                 ctr=derived["ctr"],
@@ -553,8 +648,8 @@ class YahooAdsClient(AdPlatformClient):
                 conversions=conversions,
                 cvr=derived["cvr"],
                 cpa=derived["cpa"] if conversions > 0 else None,
-                top_impr_rate=self._safe_rate(r.get("TOP_IMPR_RATE")),
-                abs_top_impr_rate=self._safe_rate(r.get("ABS_TOP_IMPR_RATE")),
+                top_impr_rate=self._safe_rate(r.get("TOP_IMPRESSION_PERCENTAGE")),
+                abs_top_impr_rate=self._safe_rate(r.get("ABSOLUTE_TOP_IMPRESSION_PERCENTAGE")),
             )
 
         keywords = list(seen.values())
@@ -654,7 +749,7 @@ class YahooAdsClient(AdPlatformClient):
         terms = []
         for r in rows:
             day_str = r.get("DAY", "")
-            query = r.get("QUERY", "")
+            query = r.get("SEARCH_QUERY", "")
             if not day_str or not query:
                 continue
 

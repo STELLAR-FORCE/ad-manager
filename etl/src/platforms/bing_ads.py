@@ -18,12 +18,9 @@ import os
 import tempfile
 from datetime import date
 
-from bingads import (
-    AuthorizationData,
-    OAuthWebAuthCodeGrant,
-    ServiceClient,
-)
-from bingads.reporting import ReportingDownloadParameters, ReportingServiceManager
+from bingads.authorization import AuthorizationData, OAuthWebAuthCodeGrant
+from bingads.service_client import ServiceClient
+from bingads.v13.reporting import ReportingDownloadParameters, ReportingServiceManager
 
 from src.auth.oauth import OAuthManager
 from src.config import Settings
@@ -182,6 +179,8 @@ class BingAdsClient(AdPlatformClient):
         time = self._reporting_service.factory.create("ReportTime")
         if predefined:
             time.PredefinedTime = predefined
+            time.CustomDateRangeStart = None
+            time.CustomDateRangeEnd = None
         elif start_date and end_date:
             time.PredefinedTime = None
             start = self._reporting_service.factory.create("Date")
@@ -259,14 +258,13 @@ class BingAdsClient(AdPlatformClient):
             "CampaignName",
             "CampaignStatus",
             "CampaignType",
-            "DailyBudget",
             "QualityScore",
             "Impressions",
             "Clicks",
             "Spend",
             "ConversionsQualified",
         ]
-        request.Time = self._create_time(predefined="LastThirtyDays")
+        request.Time = self._create_time(predefined="Last30Days")
         request.Scope = self._create_scope()
 
         rows = self._download_report(request)
@@ -285,7 +283,7 @@ class BingAdsClient(AdPlatformClient):
                 ad_type=_AD_TYPE_MAP.get(campaign_type, "search"),
                 type=_CAMPAIGN_TYPE_MAP.get(campaign_type, campaign_type),
                 status=_STATUS_MAP.get(r.get("CampaignStatus", ""), "active"),
-                daily_budget=self._safe_float(r.get("DailyBudget")) or None,
+                daily_budget=None,  # CampaignPerformanceReport に予算カラムなし
                 monthly_budget=None,
                 bid_strategy=None,  # Campaign レポートには BidStrategyType がない
                 optimization_score=self._safe_float(r.get("QualityScore")) or None,
@@ -311,8 +309,7 @@ class BingAdsClient(AdPlatformClient):
             "CampaignId",
             "AdGroupId",
             "AdGroupName",
-            "AdGroupStatus",
-            "BidStrategyType",
+            "Status",
             "QualityScore",
             "Impressions",
             "Clicks",
@@ -321,7 +318,7 @@ class BingAdsClient(AdPlatformClient):
             "TopImpressionRatePercent",
             "AbsoluteTopImpressionRatePercent",
         ]
-        request.Time = self._create_time(predefined="LastThirtyDays")
+        request.Time = self._create_time(predefined="Last30Days")
         request.Scope = self._create_adgroup_scope()
 
         rows = self._download_report(request)
@@ -338,15 +335,13 @@ class BingAdsClient(AdPlatformClient):
             conversions = self._safe_int(r.get("ConversionsQualified"))
             derived = compute_metrics(impressions, clicks, cost, conversions)
 
-            bid_type = r.get("BidStrategyType", "")
-
             seen[agid] = AdGroupRow(
                 id=agid,
                 campaign_id=r.get("CampaignId", ""),
                 name=r.get("AdGroupName", ""),
-                status=_STATUS_MAP.get(r.get("AdGroupStatus", ""), "active"),
+                status=_STATUS_MAP.get(r.get("Status", ""), "active"),
                 type="標準",
-                bid_strategy=_BID_STRATEGY_MAP.get(bid_type, bid_type) or None,
+                bid_strategy=None,
                 target_cpa=None,
                 quality_score=self._safe_float(r.get("QualityScore")) or None,
                 impressions=impressions,
@@ -396,7 +391,7 @@ class BingAdsClient(AdPlatformClient):
             "Spend",
             "ConversionsQualified",
         ]
-        request.Time = self._create_time(predefined="LastThirtyDays")
+        request.Time = self._create_time(predefined="Last30Days")
         request.Scope = self._create_adgroup_scope()
 
         rows = self._download_report(request)
@@ -473,7 +468,7 @@ class BingAdsClient(AdPlatformClient):
             "TopImpressionRatePercent",
             "AbsoluteTopImpressionRatePercent",
         ]
-        request.Time = self._create_time(predefined="LastThirtyDays")
+        request.Time = self._create_time(predefined="Last30Days")
         request.Scope = self._create_adgroup_scope()
 
         rows = self._download_report(request)

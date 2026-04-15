@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from google.cloud import bigquery
 
+from src.bigquery.client import _get_credentials
 from src.bigquery.table_schemas import TABLE_DEFINITIONS
 from src.config import get_settings
 from src.utils.logging import get_logger, setup_logging
@@ -28,8 +29,11 @@ def main() -> None:
     settings = get_settings()
     setup_logging(settings.log_level)
 
+    credentials, _ = _get_credentials()
     client = bigquery.Client(
-        project=settings.gcp_project_id, location=settings.bq_location
+        project=settings.gcp_project_id,
+        location=settings.bq_location,
+        credentials=credentials,
     )
 
     dataset_id = f"{settings.gcp_project_id}.{settings.bq_dataset}"
