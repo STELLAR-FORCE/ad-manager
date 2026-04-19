@@ -16,7 +16,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { InfoIcon, ArrowUpIcon, ArrowDownIcon, MinusIcon } from 'lucide-react'
+import { InfoIcon, ArrowUpIcon, ArrowDownIcon, MinusIcon, SearchXIcon } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 interface SearchTerm {
   id: string
@@ -209,6 +210,12 @@ export default function SearchTermsPage() {
               <div className="space-y-2 p-4">
                 {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
               </div>
+            ) : terms.length === 0 ? (
+              <EmptyState
+                icon={SearchXIcon}
+                title="該当する検索語句がありません"
+                description="フィルター条件を変更してお試しください"
+              />
             ) : (
               <Table>
                 <TableHeader>
@@ -272,13 +279,6 @@ export default function SearchTermsPage() {
                     )
                   })}
 
-                  {terms.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
-                        データがありません
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             )}

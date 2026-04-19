@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon, SearchXIcon } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
 import {
   KEYWORDS,
@@ -241,6 +242,13 @@ export default function KeywordsListPage() {
         {/* テーブル */}
         <Card>
           <CardContent className="p-0">
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon={SearchXIcon}
+                title="該当するキーワードがありません"
+                description="フィルター条件を変更してお試しください"
+              />
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -388,6 +396,7 @@ export default function KeywordsListPage() {
                 </TableRow>
               </TableFooter>
             </Table>
+            )}
           </CardContent>
         </Card>
       </div>
