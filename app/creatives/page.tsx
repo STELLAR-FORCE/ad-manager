@@ -18,7 +18,8 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog'
-import { PlusIcon, PauseIcon, PlayIcon, Trash2Icon, InfoIcon } from 'lucide-react'
+import { PlusIcon, PauseIcon, PlayIcon, Trash2Icon, InfoIcon, SearchXIcon } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 interface Creative {
   id: string
@@ -321,9 +322,12 @@ export default function CreativesPage() {
               })}
 
           {!loading && creatives.length === 0 && (
-            <div className="col-span-full flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
-              <PlusIcon className="size-8 opacity-40" aria-hidden="true" />
-              <p className="text-sm">条件に合うクリエイティブがありません</p>
+            <div className="col-span-full">
+              <EmptyState
+                icon={SearchXIcon}
+                title="該当するクリエイティブがありません"
+                description="フィルター条件を変更してお試しください"
+              />
             </div>
           )}
         </div>

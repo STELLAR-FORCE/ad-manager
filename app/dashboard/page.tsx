@@ -39,7 +39,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Chip } from '@heroui/react';
+import { Chip, Meter } from '@heroui/react';
+import { CountingNumber } from '@/components/animate-ui/counting-number';
 import { cn } from '@/lib/utils';
 import {
   aggregateCampaigns,
@@ -300,6 +301,10 @@ function TargetBadge({
 function KpiCard({
   title,
   value,
+  rawValue,
+  format,
+  decimalPlaces,
+  fallback,
   sub,
   icon: Icon,
   delta,
@@ -311,7 +316,11 @@ function KpiCard({
   onSetTarget,
 }: {
   title: string;
-  value: string;
+  value?: string;
+  rawValue?: number | null;
+  format?: (v: number) => string;
+  decimalPlaces?: number;
+  fallback?: string;
   sub?: string;
   icon: React.ElementType;
   delta?: number | null;
@@ -348,7 +357,18 @@ function KpiCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold mt-1 tabular-nums tracking-tight">{value}</p>
+            <p className="text-2xl font-bold mt-1 tabular-nums tracking-tight">
+              {rawValue != null && format ? (
+                <CountingNumber
+                  number={rawValue}
+                  format={format}
+                  decimalPlaces={decimalPlaces ?? 0}
+                  transition={{ stiffness: 120, damping: 30 }}
+                />
+              ) : (
+                value ?? fallback ?? '—'
+              )}
+            </p>
 
             {/* 目標比表示 */}
             {onSetTarget && (
@@ -939,7 +959,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             title="総費用"
-            value={jpyFormat.format(Math.round(current.cost))}
+            rawValue={Math.round(current.cost)}
+            format={(v) => jpyFormat.format(v)}
             sub="期間累計"
             icon={Wallet}
             delta={calcDelta(current.cost, previous.cost)}
@@ -947,7 +968,8 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="CV数"
-            value={numFormat.format(Math.round(current.conversions))}
+            rawValue={Math.round(current.conversions)}
+            format={(v) => numFormat.format(v)}
             icon={Target}
             delta={calcDelta(current.conversions, previous.conversions)}
             deltaLabel={deltaLabel}
@@ -958,7 +980,9 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="CPA"
-            value={current.cpa > 0 ? jpyFormat.format(Math.round(current.cpa)) : '—'}
+            rawValue={current.cpa > 0 ? Math.round(current.cpa) : null}
+            format={(v) => jpyFormat.format(v)}
+            fallback="—"
             icon={TrendingUp}
             delta={calcDelta(current.cpa, previous.cpa)}
             lowerIsBetter
@@ -970,7 +994,10 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="CVR"
-            value={current.cvr > 0 ? pctFormat.format(current.cvr) : '—'}
+            rawValue={current.cvr > 0 ? current.cvr : null}
+            format={(v) => pctFormat.format(v)}
+            decimalPlaces={4}
+            fallback="—"
             sub="クリック→CV率"
             icon={MousePointerClick}
             delta={calcDelta(current.cvr, previous.cvr)}
@@ -1181,7 +1208,12 @@ export default function DashboardPage() {
         {/* ─── 媒体別サマリー（全媒体時のみ） ─── */}
         {platform === 'all' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {(isMock ? mockSummary.byPlatform : byPlatform).map((s) => (
+            {(isMock ? mockSummary.byPlatform : byPlatform).map((s) => {
+              const budgetRow = budget?.byPlatform.find((b) => b.platform === s.platform);
+              const utilPct = budgetRow ? budgetRow.utilization * 100 : null;
+              const meterColor: 'success' | 'warning' | 'danger' =
+                utilPct == null ? 'success' : utilPct > 100 ? 'danger' : utilPct > 80 ? 'warning' : 'success';
+              return (
               <Card key={s.platform}>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -1234,9 +1266,34 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
+                  {budgetRow && utilPct != null && (
+                    <div className="mt-4 pt-3 border-t border-border/50 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">予算消化率</span>
+                        <span className="tabular-nums font-medium">
+                          {pct1Format.format(budgetRow.utilization)}
+                          <span className="text-muted-foreground/60 ml-1">
+                            （{jpyCompact.format(budgetRow.spent)} / {jpyCompact.format(budgetRow.budget)}）
+                          </span>
+                        </span>
+                      </div>
+                      <Meter
+                        aria-label={`${PLATFORM_LABELS[s.platform]} 予算消化率`}
+                        value={Math.min(100, utilPct)}
+                        maxValue={100}
+                        size="sm"
+                        color={meterColor}
+                        className="w-full"
+                      >
+                        <Meter.Track>
+                          <Meter.Fill />
+                        </Meter.Track>
+                      </Meter>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            ))}
+            );})}
           </div>
         )}
       </div>
