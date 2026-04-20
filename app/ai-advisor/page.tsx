@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@/lib/toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -70,7 +70,7 @@ export default function AiAdvisorPage() {
         const insData = await insRes.json()
         setInsights(Array.isArray(insData) ? insData : [])
       } catch {
-        toast.error('インサイトの取得に失敗しました')
+        notify.error('インサイトの取得に失敗しました')
       } finally {
         setLoading(false)
       }
@@ -87,7 +87,7 @@ export default function AiAdvisorPage() {
     if (!content) return
     setMessages((m) => [...m, { role: 'user', content }])
     setChatInput('')
-    toast.error('Claude API未連携のため、現在使用できません')
+    notify.error('Claude API未連携のため、現在使用できません')
     setTimeout(() => {
       setMessages((m) => [
         ...m,

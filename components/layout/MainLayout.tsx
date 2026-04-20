@@ -53,7 +53,13 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             <PageTransition>{children}</PageTransition>
           </div>
         </main>
-        <Toaster richColors position="top-right" />
+        <Toaster
+          richColors
+          closeButton
+          position="top-right"
+          duration={4000}
+          toastOptions={{ classNames: { toast: 'rounded-lg' } }}
+        />
       </div>
     </SidebarContext.Provider>
   );

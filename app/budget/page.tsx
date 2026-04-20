@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@/lib/toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -101,7 +101,7 @@ export default function BudgetPage() {
         setIsMock(true)
       }
     } catch {
-      toast.error('データの取得に失敗しました')
+      notify.error('データの取得に失敗しました')
       setCampaigns(MOCK_CAMPAIGNS)
       setIsMock(true)
     } finally {
@@ -143,7 +143,7 @@ export default function BudgetPage() {
   const saveEdit = async (id: string) => {
     const val = parseFloat(editValue)
     if (isNaN(val) || val < 0) {
-      toast.error('有効な金額を入力してください')
+      notify.error('有効な金額を入力してください')
       return
     }
     try {
@@ -153,11 +153,11 @@ export default function BudgetPage() {
         body: JSON.stringify({ monthlyBudget: val }),
       })
       if (!res.ok) throw new Error()
-      toast.success('予算を更新しました')
+      notify.success('予算を更新しました')
       cancelEdit()
       fetchData(month)
     } catch {
-      toast.error('予算の更新に失敗しました')
+      notify.error('予算の更新に失敗しました')
     }
   }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -124,7 +124,7 @@ export default function HistoryPage() {
         setIsMock(true)
       }
     } catch {
-      toast.error('データの取得に失敗しました')
+      notify.error('データの取得に失敗しました')
       setHistories(MOCK_HISTORIES)
       setIsMock(true)
     } finally {
