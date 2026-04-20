@@ -1,4 +1,3 @@
-import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -15,7 +14,6 @@ const BODY_ROWS = 8;
 
 export default function Loading() {
   return (
-    <MainLayout>
       <div
         className="space-y-4"
         role="status"
@@ -97,6 +95,5 @@ export default function Loading() {
 
         <span className="sr-only">読み込み中…</span>
       </div>
-    </MainLayout>
   );
 }

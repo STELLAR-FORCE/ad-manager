@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { MainLayout } from '@/components/layout/MainLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -107,7 +106,6 @@ export default function AiAdvisorPage() {
   }
 
   return (
-    <MainLayout>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
@@ -287,6 +285,5 @@ export default function AiAdvisorPage() {
           </div>
         </div>
       </div>
-    </MainLayout>
   )
 }

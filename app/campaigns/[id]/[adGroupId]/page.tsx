@@ -2,7 +2,6 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Breadcrumb,
@@ -311,9 +310,7 @@ export default function AdGroupDetailPage({
 
   if (!campaign || !adGroup) {
     return (
-      <MainLayout>
         <div className="p-8 text-center text-muted-foreground">広告グループが見つかりません</div>
-      </MainLayout>
     );
   }
 
@@ -322,7 +319,6 @@ export default function AdGroupDetailPage({
   const platformCfg = PLATFORM_CONFIG[campaign.platform];
 
   return (
-    <MainLayout>
       <div className="space-y-4">
         {/* パンくず */}
         <Breadcrumb>
@@ -428,6 +424,5 @@ export default function AdGroupDetailPage({
           )}
         </Tabs>
       </div>
-    </MainLayout>
   );
 }

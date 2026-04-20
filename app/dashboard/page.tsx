@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -646,7 +645,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <MainLayout>
+    <>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:p-2">
         メインコンテンツへスキップ
       </a>
@@ -1146,6 +1145,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-    </MainLayout>
+    </>
   );
 }

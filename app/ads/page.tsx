@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
@@ -193,7 +192,6 @@ export default function AdsListPage() {
   }, [filtered]);
 
   return (
-    <MainLayout>
       <div className="space-y-4">
         {/* ヘッダー */}
         <div>
@@ -387,6 +385,5 @@ export default function AdsListPage() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
   );
 }

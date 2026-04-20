@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Toaster } from 'sonner';
+import { PageTransition } from '@/components/animate-ui/page-transition';
 
 type SidebarContextValue = {
   collapsed: boolean;
@@ -48,7 +49,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen items-start bg-slate-50">
         <Sidebar />
         <main className="flex-1 min-w-0">
-          <div className="p-6">{children}</div>
+          <div className="p-6">
+            <PageTransition>{children}</PageTransition>
+          </div>
         </main>
         <Toaster richColors position="top-right" />
       </div>

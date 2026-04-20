@@ -2,7 +2,6 @@
 
 import { use, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Breadcrumb,
@@ -146,16 +145,13 @@ export default function AdGroupsPage({
 
   if (!campaign) {
     return (
-      <MainLayout>
         <div className="p-8 text-center text-muted-foreground">キャンペーンが見つかりません</div>
-      </MainLayout>
     );
   }
 
   const platformCfg = PLATFORM_CONFIG[campaign.platform];
 
   return (
-    <MainLayout>
       <div className="space-y-4">
         {/* パンくず */}
         <Breadcrumb>
@@ -342,6 +338,5 @@ export default function AdGroupsPage({
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
   );
 }
