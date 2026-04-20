@@ -45,9 +45,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarContext.Provider value={{ collapsed, setCollapsed, ready }}>
-      <div className="flex min-h-screen bg-slate-50">
+      <div className="flex min-h-screen items-start bg-slate-50">
         <Sidebar />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 min-w-0">
           <div className="p-6">{children}</div>
         </main>
         <Toaster richColors position="top-right" />
