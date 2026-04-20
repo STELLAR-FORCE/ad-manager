@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@/lib/toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -115,7 +115,7 @@ export default function CreativesPage() {
         setIsMock(true)
       }
     } catch {
-      toast.error('データの取得に失敗しました')
+      notify.error('データの取得に失敗しました')
       setCreatives(MOCK_CREATIVES)
       setIsMock(true)
     } finally {
@@ -136,10 +136,10 @@ export default function CreativesPage() {
         body: JSON.stringify({ status: newStatus }),
       })
       if (!res.ok) throw new Error()
-      toast.success(newStatus === 'active' ? '配信を再開しました' : '配信を停止しました')
+      notify.success(newStatus === 'active' ? '配信を再開しました' : '配信を停止しました')
       fetchData()
     } catch {
-      toast.error('ステータスの変更に失敗しました')
+      notify.error('ステータスの変更に失敗しました')
     }
   }
 
@@ -148,17 +148,17 @@ export default function CreativesPage() {
     try {
       const res = await fetch(`/api/creatives/${deleteId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
-      toast.success('クリエイティブを削除しました')
+      notify.success('クリエイティブを削除しました')
       setDeleteId(null)
       fetchData()
     } catch {
-      toast.error('削除に失敗しました')
+      notify.error('削除に失敗しました')
     }
   }
 
   const handleCreate = async () => {
     if (!form.name || !form.adGroupId) {
-      toast.error('名前と広告グループIDは必須です')
+      notify.error('名前と広告グループIDは必須です')
       return
     }
     setSubmitting(true)
@@ -169,12 +169,12 @@ export default function CreativesPage() {
         body: JSON.stringify(form),
       })
       if (!res.ok) throw new Error()
-      toast.success('クリエイティブを作成しました')
+      notify.success('クリエイティブを作成しました')
       setNewDialogOpen(false)
       setForm({ name: '', type: 'text', adGroupId: '', headline1: '', headline2: '', headline3: '', description1: '', description2: '' })
       fetchData()
     } catch {
-      toast.error('作成に失敗しました')
+      notify.error('作成に失敗しました')
     } finally {
       setSubmitting(false)
     }

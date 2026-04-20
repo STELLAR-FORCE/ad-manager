@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { toast } from 'sonner'
+import { notify } from '@/lib/toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -95,7 +95,7 @@ export default function SearchTermsPage() {
         setIsMock(true)
       }
     } catch {
-      toast.error('データの取得に失敗しました')
+      notify.error('データの取得に失敗しました')
       setTerms(MOCK_TERMS)
       setIsMock(true)
     } finally {
@@ -125,10 +125,10 @@ export default function SearchTermsPage() {
         body: JSON.stringify({ isExcluded: newVal }),
       })
       if (!res.ok) throw new Error()
-      toast.success(newVal ? '除外候補に設定しました' : '除外を解除しました')
+      notify.success(newVal ? '除外候補に設定しました' : '除外を解除しました')
       fetchData()
     } catch {
-      toast.error('更新に失敗しました')
+      notify.error('更新に失敗しました')
     }
   }
 
