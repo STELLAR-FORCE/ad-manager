@@ -38,7 +38,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Chip, Meter } from '@heroui/react';
+import { Chip, Meter, ProgressCircle } from '@heroui/react';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
 import { FunnelFlow } from '@/components/dashboard/funnel-flow';
 import { cn } from '@/lib/utils';
@@ -298,6 +298,13 @@ function TargetBadge({
   );
 }
 
+type KpiProgress = {
+  /** 0–100 の達成率・消化率（100超は100に丸めて表示） */
+  value: number;
+  color: 'accent' | 'success' | 'warning' | 'danger' | 'default';
+  label: string;
+};
+
 function KpiCard({
   title,
   value,
@@ -314,6 +321,7 @@ function KpiCard({
   targetFormat,
   actual,
   onSetTarget,
+  progress,
 }: {
   title: string;
   value?: string;
@@ -330,10 +338,23 @@ function KpiCard({
   targetFormat?: (v: number) => string;
   actual?: number;
   onSetTarget?: (val: number | null) => void;
+  progress?: KpiProgress | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 初回マウントで 0 → target にアニメーション（CSS transition: stroke-dashoffset を活用）
+  const [ringValue, setRingValue] = useState(0);
+  const targetRing = progress ? Math.max(0, Math.min(progress.value, 100)) : 0;
+  useEffect(() => {
+    if (!progress) {
+      setRingValue(0);
+      return;
+    }
+    const raf = requestAnimationFrame(() => setRingValue(targetRing));
+    return () => cancelAnimationFrame(raf);
+  }, [progress, targetRing]);
 
   function startEdit() {
     setInputVal(target ? String(target) : '');
@@ -435,9 +456,28 @@ function KpiCard({
               <p className="text-xs text-muted-foreground/60 mt-1">{sub}</p>
             )}
           </div>
-          <div className="p-2 rounded-lg bg-primary/8 shrink-0">
-            <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
-          </div>
+          {progress ? (
+            <div className="relative grid place-items-center size-11 shrink-0">
+              <ProgressCircle
+                value={ringValue}
+                maxValue={100}
+                color={progress.color}
+                size="lg"
+                aria-label={progress.label}
+                className="absolute inset-0"
+              >
+                <ProgressCircle.Track>
+                  <ProgressCircle.TrackCircle />
+                  <ProgressCircle.FillCircle />
+                </ProgressCircle.Track>
+              </ProgressCircle>
+              <Icon className="h-4 w-4 text-primary relative" aria-hidden="true" />
+            </div>
+          ) : (
+            <div className="p-2 rounded-lg bg-primary/8 shrink-0">
+              <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+            </div>
+          )}
         </div>
         {delta != null && (
           <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-border/50">
@@ -743,6 +783,16 @@ export default function DashboardPage() {
             icon={Wallet}
             delta={calcDelta(current.cost, previous.cost)}
             deltaLabel={deltaLabel}
+            progress={(() => {
+              if (!budget?.totalBudget) return null;
+              const rawPct = (budget.totalSpent / budget.totalBudget) * 100;
+              const color: KpiProgress['color'] = rawPct >= 100 ? 'danger' : rawPct >= 80 ? 'warning' : 'success';
+              return {
+                value: rawPct,
+                color,
+                label: `予算消化率 ${pct1Format.format(budget.totalSpent / budget.totalBudget)}`,
+              };
+            })()}
           />
           <KpiCard
             title="CV数"
@@ -755,6 +805,15 @@ export default function DashboardPage() {
             targetFormat={(v) => numFormat.format(v) + '件'}
             actual={current.conversions}
             onSetTarget={handleSetCvTarget}
+            progress={(() => {
+              if (!cvTarget || cvTarget <= 0) return null;
+              const rawPct = (current.conversions / cvTarget) * 100;
+              return {
+                value: rawPct,
+                color: rawPct >= 100 ? 'success' : 'accent',
+                label: `CV目標達成率 ${pct1Format.format(current.conversions / cvTarget)}`,
+              };
+            })()}
           />
           <KpiCard
             title="CPA"
@@ -769,6 +828,18 @@ export default function DashboardPage() {
             targetFormat={(v) => jpyFormat.format(v)}
             actual={current.cpa}
             onSetTarget={handleSetCpaTarget}
+            progress={(() => {
+              if (!cpaTarget || cpaTarget <= 0 || current.cpa <= 0) return null;
+              const ratio = cpaTarget / current.cpa;
+              const rawPct = ratio * 100;
+              const color: KpiProgress['color'] =
+                current.cpa <= cpaTarget ? 'success' : current.cpa <= cpaTarget * 1.2 ? 'warning' : 'danger';
+              return {
+                value: rawPct,
+                color,
+                label: `CPA目標達成率 ${pct1Format.format(ratio)}`,
+              };
+            })()}
           />
           <KpiCard
             title="CVR"
