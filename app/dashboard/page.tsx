@@ -645,11 +645,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <>
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:p-2">
-        メインコンテンツへスキップ
-      </a>
-      <div id="main-content" className="space-y-6">
+      <div className="space-y-6">
 
         {/* ─── ヘッダー ─── */}
         <div className="flex flex-wrap items-center gap-3">
@@ -1145,6 +1141,5 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-    </>
   );
 }

@@ -161,12 +161,7 @@ export default function CampaignsPage() {
   }, [filtered]);
 
   return (
-    <>
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:p-2">
-        メインコンテンツへスキップ
-      </a>
-
-      <div id="main-content" className="space-y-4">
+      <div className="space-y-4">
         {/* ページヘッダー */}
         <div className="flex items-start justify-between">
           <div>
@@ -396,6 +391,5 @@ export default function CampaignsPage() {
           </CardContent>
         </Card>
       </div>
-    </>
   );
 }
