@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon, SearchXIcon } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StatusChip } from '@/components/ui/status-chip';
 import { cn } from '@/lib/utils';
 import {
   KEYWORDS,
@@ -277,15 +278,9 @@ export default function KeywordsListPage() {
 
                   return (
                     <TableRow key={kw.id} className="text-sm">
-                      {/* ステータスドット */}
+                      {/* ステータス */}
                       <TableCell className="pl-4">
-                        <span
-                          className={cn(
-                            'inline-block h-2 w-2 rounded-full',
-                            kw.status === 'active' ? 'bg-green-500' : kw.status === 'limited' ? 'bg-yellow-400' : 'bg-gray-400',
-                          )}
-                          aria-label={`ステータス: ${kw.status}`}
-                        />
+                        <StatusChip status={kw.status} />
                       </TableCell>
 
                       {/* キーワード */}

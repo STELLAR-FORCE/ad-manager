@@ -22,8 +22,9 @@ import {
 } from '@/components/ui/select';
 import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon, SearchXIcon } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StatusChip } from '@/components/ui/status-chip';
 import { cn } from '@/lib/utils';
-import { CAMPAIGNS, type CampaignData, type CampaignStatus, type Platform, type AdType } from '@/lib/campaign-mock-data';
+import { CAMPAIGNS, type CampaignData, type Platform, type AdType } from '@/lib/campaign-mock-data';
 
 // ─── 定数 ──────────────────────────────────────────────────────
 
@@ -38,13 +39,6 @@ type SortKey =
   | 'cpc'
   | 'conversions'
   | 'cpa';
-
-const STATUS_CONFIG: Record<CampaignStatus, { label: string; dot: string }> = {
-  active:         { label: '有効',          dot: 'bg-green-500' },
-  active_limited: { label: '有効（制限付き）', dot: 'bg-yellow-400' },
-  paused:         { label: '一時停止',       dot: 'bg-gray-400' },
-  ended:          { label: '終了',           dot: 'bg-gray-300' },
-};
 
 const PLATFORM_CONFIG: Record<Platform, { label: string; className: string }> = {
   google: { label: 'Google',  className: 'bg-blue-100 text-blue-700' },
@@ -282,18 +276,13 @@ export default function CampaignsPage() {
 
               <TableBody>
                 {filtered.map((c) => {
-                  const { dot, label: statusLabel } = STATUS_CONFIG[c.status];
                   const { label: platformLabel, className: platformClass } = PLATFORM_CONFIG[c.platform];
 
                   return (
                     <TableRow key={c.id} className="text-sm">
-                      {/* ステータスドット */}
+                      {/* ステータス */}
                       <TableCell className="pl-4">
-                        <span
-                          className={cn('inline-block h-2 w-2 rounded-full', dot)}
-                          title={statusLabel}
-                          aria-label={`ステータス: ${statusLabel}`}
-                        />
+                        <StatusChip status={c.status} />
                       </TableCell>
 
                       {/* キャンペーン名（ドリルダウンリンク） */}
@@ -304,7 +293,6 @@ export default function CampaignsPage() {
                         >
                           <div className="truncate" title={c.name}>{c.name}</div>
                         </Link>
-                        <div className="text-xs text-muted-foreground">{statusLabel}</div>
                       </TableCell>
 
                       {/* 媒体 */}

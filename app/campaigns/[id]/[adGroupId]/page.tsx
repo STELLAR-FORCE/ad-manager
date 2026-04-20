@@ -22,6 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { InfoIcon, ImageIcon } from 'lucide-react';
+import { StatusChip, StatusDot } from '@/components/ui/status-chip';
 import { cn } from '@/lib/utils';
 import {
   getCampaign,
@@ -85,10 +86,7 @@ function SearchAdsTable({ ads }: { ads: AdData[] }) {
             {ads.map((ad) => (
               <TableRow key={ad.id} className="text-sm">
                 <TableCell className="pl-4">
-                  <span
-                    className={cn('inline-block h-2 w-2 rounded-full', ad.status === 'active' ? 'bg-green-500' : 'bg-gray-400')}
-                    aria-label={`ステータス: ${ad.status === 'active' ? '有効' : '一時停止'}`}
-                  />
+                  <StatusChip status={ad.status} />
                 </TableCell>
                 <TableCell>
                   <div className="space-y-0.5">
@@ -141,12 +139,9 @@ function CreativeGallery({ ads }: { ads: AdData[] }) {
             </div>
           </div>
           <CardContent className="p-3 space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium truncate" title={ad.name}>{ad.name}</p>
-              <span className={cn(
-                'inline-block h-2 w-2 rounded-full shrink-0 ml-2',
-                ad.status === 'active' ? 'bg-green-500' : 'bg-gray-400',
-              )} aria-label={`ステータス: ${ad.status === 'active' ? '有効' : '一時停止'}`} />
+              <StatusDot status={ad.status} className="ml-2" />
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
@@ -209,10 +204,7 @@ function DisplayAdsTable({ ads }: { ads: AdData[] }) {
             {ads.map((ad) => (
               <TableRow key={ad.id} className="text-sm">
                 <TableCell className="pl-4">
-                  <span
-                    className={cn('inline-block h-2 w-2 rounded-full', ad.status === 'active' ? 'bg-green-500' : 'bg-gray-400')}
-                    aria-label={`ステータス: ${ad.status === 'active' ? '有効' : '一時停止'}`}
-                  />
+                  <StatusChip status={ad.status} />
                 </TableCell>
                 <TableCell className="font-medium">
                   <div className="truncate max-w-xs" title={ad.name}>{ad.name}</div>
@@ -272,13 +264,7 @@ function KeywordsTable({ keywords }: { keywords: KeywordData[] }) {
               return (
                 <TableRow key={kw.id} className="text-sm">
                   <TableCell className="pl-4">
-                    <span
-                      className={cn(
-                        'inline-block h-2 w-2 rounded-full',
-                        kw.status === 'active' ? 'bg-green-500' : kw.status === 'limited' ? 'bg-yellow-400' : 'bg-gray-400',
-                      )}
-                      aria-label={`ステータス: ${kw.status}`}
-                    />
+                    <StatusChip status={kw.status} />
                   </TableCell>
                   <TableCell className="font-medium">{kw.keyword}</TableCell>
                   <TableCell>
