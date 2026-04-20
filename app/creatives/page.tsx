@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { PlusIcon, PauseIcon, PlayIcon, Trash2Icon, InfoIcon, SearchXIcon } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { StatusChip } from '@/components/ui/status-chip'
 
 interface Creative {
   id: string
@@ -50,11 +51,6 @@ const PLATFORM_COLORS: Record<string, string> = {
 }
 const PLATFORM_LABELS: Record<string, string> = { google: 'Google', yahoo: 'Yahoo!', bing: 'Bing' }
 const STATUS_LABELS: Record<string, string> = { active: '配信中', paused: '停止中', removed: '削除済' }
-const STATUS_VARIANTS: Record<string, 'success' | 'warning' | 'secondary'> = {
-  active: 'success',
-  paused: 'warning',
-  removed: 'secondary',
-}
 
 const MOCK_CREATIVES: Creative[] = [
   { id: 'mc1', name: '春季キャンペーン メインバナー', type: 'responsive', status: 'active', headline1: '春の特大セール開催中', headline2: '最大50%OFF！今すぐチェック', headline3: '期間限定・数量限定', description1: '春の新生活を応援。人気商品が大幅値引き。', description2: '送料無料キャンペーン実施中！', adGroup: { id: 'ag1', name: '春季グループ', campaign: { platform: 'google', name: 'ブランド訴求' } } },
@@ -240,7 +236,6 @@ export default function CreativesPage() {
             ? [0, 1, 2, 3, 4, 5].map((i) => <CreativeSkeleton key={i} />)
             : creatives.map((c) => {
                 const platform = c.adGroup?.campaign?.platform ?? ''
-                const sv = STATUS_VARIANTS[c.status] ?? 'outline'
                 return (
                   <Card key={c.id} className="flex flex-col">
                     <CardHeader className="pb-2">
@@ -261,9 +256,7 @@ export default function CreativesPage() {
                           <Badge variant={TYPE_VARIANTS[c.type] ?? 'secondary'} className="text-xs">
                             {TYPE_LABELS[c.type] ?? c.type}
                           </Badge>
-                          <Badge variant={sv} className="text-xs">
-                            {STATUS_LABELS[c.status] ?? c.status}
-                          </Badge>
+                          <StatusChip status={c.status} label={STATUS_LABELS[c.status] ?? c.status} />
                         </div>
                       </div>
                       {c.adGroup && (

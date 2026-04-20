@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon, SearchXIcon } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StatusChip } from '@/components/ui/status-chip';
 import { cn } from '@/lib/utils';
 import {
   ADS,
@@ -277,16 +278,9 @@ export default function AdsListPage() {
 
                   return (
                     <TableRow key={ad.id} className="text-sm">
-                      {/* ステータスドット */}
+                      {/* ステータス */}
                       <TableCell className="pl-4">
-                        <span
-                          className={cn(
-                            'inline-block h-2 w-2 rounded-full',
-                            ad.status === 'active' ? 'bg-green-500' : 'bg-gray-400',
-                          )}
-                          title={ad.status === 'active' ? '有効' : '一時停止'}
-                          aria-label={`ステータス: ${ad.status === 'active' ? '有効' : '一時停止'}`}
-                        />
+                        <StatusChip status={ad.status} />
                       </TableCell>
 
                       {/* 広告名 */}

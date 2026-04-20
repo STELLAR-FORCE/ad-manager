@@ -22,6 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon } from 'lucide-react';
+import { StatusChip } from '@/components/ui/status-chip';
 import { cn } from '@/lib/utils';
 import {
   getCampaign,
@@ -224,16 +225,9 @@ export default function AdGroupsPage({
               <TableBody>
                 {sorted.map((ag) => (
                   <TableRow key={ag.id} className="text-sm">
-                    {/* ステータスドット */}
+                    {/* ステータス */}
                     <TableCell className="pl-4">
-                      <span
-                        className={cn(
-                          'inline-block h-2 w-2 rounded-full',
-                          ag.status === 'active' ? 'bg-green-500' : 'bg-gray-400',
-                        )}
-                        title={ag.status === 'active' ? '有効' : '一時停止'}
-                        aria-label={`ステータス: ${ag.status === 'active' ? '有効' : '一時停止'}`}
-                      />
+                      <StatusChip status={ag.status} />
                     </TableCell>
 
                     {/* 広告グループ名（ドリルダウンリンク） */}

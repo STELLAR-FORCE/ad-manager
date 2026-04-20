@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/table'
 import { InfoIcon, CheckIcon, XIcon } from 'lucide-react'
 import { Meter } from '@heroui/react'
+import { StatusChip } from '@/components/ui/status-chip'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 }).format(n)
@@ -49,10 +50,10 @@ const AD_TYPE_LABELS: Record<string, string> = {
   display: 'ディスプレイ',
 }
 
-const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'warning' | 'outline' | 'secondary' }> = {
-  active: { label: '配信中', variant: 'success' },
-  paused: { label: '停止中', variant: 'warning' },
-  ended: { label: '終了', variant: 'secondary' },
+const STATUS_LABELS: Record<string, string> = {
+  active: '配信中',
+  paused: '停止中',
+  ended: '終了',
 }
 
 const MOCK_CAMPAIGNS: CampaignBudget[] = [
@@ -304,7 +305,7 @@ export default function BudgetPage() {
                 </TableHeader>
                 <TableBody>
                   {campaigns.map((c) => {
-                    const st = STATUS_LABELS[c.status] ?? { label: c.status, variant: 'outline' as const }
+                    const statusLabel = STATUS_LABELS[c.status] ?? c.status
                     return (
                       <TableRow key={c.id}>
                         <TableCell className="font-medium max-w-[200px] truncate" title={c.name}>
@@ -382,7 +383,7 @@ export default function BudgetPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={st.variant}>{st.label}</Badge>
+                          <StatusChip status={c.status} label={statusLabel} />
                         </TableCell>
                       </TableRow>
                     )
