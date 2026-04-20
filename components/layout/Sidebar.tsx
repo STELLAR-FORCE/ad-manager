@@ -128,7 +128,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'min-h-screen bg-sidebar text-sidebar-foreground flex flex-col overflow-hidden',
+        'sticky top-0 h-screen shrink-0 bg-sidebar text-sidebar-foreground flex flex-col overflow-hidden',
         collapsed ? 'w-16' : 'w-60',
         animate && 'transition-[width] duration-300 ease-in-out',
       )}
