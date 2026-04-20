@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { MainLayout } from '@/components/layout/MainLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -152,7 +151,6 @@ export default function SearchTermsPage() {
   )
 
   return (
-    <MainLayout>
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -285,6 +283,5 @@ export default function SearchTermsPage() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
   )
 }

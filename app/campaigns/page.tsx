@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
@@ -162,7 +161,7 @@ export default function CampaignsPage() {
   }, [filtered]);
 
   return (
-    <MainLayout>
+    <>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:p-2">
         メインコンテンツへスキップ
       </a>
@@ -397,6 +396,6 @@ export default function CampaignsPage() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+    </>
   );
 }

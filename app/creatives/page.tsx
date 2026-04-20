@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { MainLayout } from '@/components/layout/MainLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -182,7 +181,7 @@ export default function CreativesPage() {
   }
 
   return (
-    <MainLayout>
+    <>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -414,6 +413,6 @@ export default function CreativesPage() {
           <DialogClose onClick={() => setNewDialogOpen(false)} />
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </>
   )
 }
