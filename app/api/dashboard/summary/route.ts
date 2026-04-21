@@ -1,24 +1,23 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { query, table } from '@/lib/bigquery';
 
-type GroupByRow = {
-  _sum: {
-    impressions: number | null;
-    clicks: number | null;
-    cost: number | null;
-    conversions: number | null;
-  };
+type PlatformAggregateRow = {
+  platform: string;
+  impressions: number | null;
+  clicks: number | null;
+  cost: number | null;
+  conversions: number | null;
 };
 
-function aggregateMetrics(rows: GroupByRow[]) {
+function aggregateMetrics(rows: PlatformAggregateRow[]) {
   const totals = rows.reduce(
     (acc, m) => ({
-      impressions: acc.impressions + (m._sum.impressions ?? 0),
-      clicks: acc.clicks + (m._sum.clicks ?? 0),
-      cost: acc.cost + (m._sum.cost ?? 0),
-      conversions: acc.conversions + (m._sum.conversions ?? 0),
+      impressions: acc.impressions + Number(m.impressions ?? 0),
+      clicks: acc.clicks + Number(m.clicks ?? 0),
+      cost: acc.cost + Number(m.cost ?? 0),
+      conversions: acc.conversions + Number(m.conversions ?? 0),
     }),
-    { impressions: 0, clicks: 0, cost: 0, conversions: 0 }
+    { impressions: 0, clicks: 0, cost: 0, conversions: 0 },
   );
   return {
     ...totals,
@@ -29,15 +28,23 @@ function aggregateMetrics(rows: GroupByRow[]) {
   };
 }
 
-function parseDate(s: string | null): Date | null {
+function parseDate(s: string | null): string | null {
   if (!s) return null;
   const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
 }
 
-/** end を当日 23:59:59 UTC に揃える */
-function endOfDay(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function dateDiffDays(a: string, b: string): number {
+  const da = new Date(a + 'T00:00:00Z').getTime();
+  const db = new Date(b + 'T00:00:00Z').getTime();
+  return Math.round((db - da) / 86_400_000);
 }
 
 export async function GET(request: Request) {
@@ -46,41 +53,59 @@ export async function GET(request: Request) {
   const adTypeParam = searchParams.get('adType') ?? 'all';
 
   const start = parseDate(searchParams.get('start'));
-  const end   = parseDate(searchParams.get('end'));
+  const end = parseDate(searchParams.get('end'));
   if (!start || !end) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
-  // 比較期間: 明示指定 or 自動（同じ日数分だけ前）
-  let prevStart: Date;
-  let prevEnd: Date;
+  let prevStart: string;
+  let prevEnd: string;
   const cs = parseDate(searchParams.get('compareStart'));
   const ce = parseDate(searchParams.get('compareEnd'));
   if (cs && ce) {
     prevStart = cs;
-    prevEnd = endOfDay(ce);
+    prevEnd = ce;
   } else {
-    const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
-    prevEnd = new Date(start.getTime() - 1);
-    prevStart = new Date(prevEnd.getTime() - days * 86_400_000);
+    const days = dateDiffDays(start, end);
+    prevEnd = shiftDate(start, -1);
+    prevStart = shiftDate(prevEnd, -days);
   }
 
-  const platformFilter = platformParam !== 'all' ? { platform: platformParam } : {};
-  const adTypeFilter = adTypeParam !== 'all' ? { campaign: { adType: adTypeParam } } : {};
-
   try {
-    const whereBase = { ...platformFilter, ...adTypeFilter };
+    const adTypeJoin =
+      adTypeParam !== 'all'
+        ? `JOIN ${table('adm_campaigns')} c ON c.id = m.campaign_id AND c.platform = m.platform`
+        : '';
+    const adTypeFilter = adTypeParam !== 'all' ? `AND c.ad_type = @adType` : '';
+    const platformFilter = platformParam !== 'all' ? `AND m.platform = @platform` : '';
+
+    const sql = `
+      SELECT
+        m.platform AS platform,
+        SUM(m.impressions) AS impressions,
+        SUM(m.clicks) AS clicks,
+        SUM(m.cost) AS cost,
+        SUM(m.conversions) AS conversions
+      FROM ${table('adm_daily_metrics')} m
+      ${adTypeJoin}
+      WHERE m.date BETWEEN DATE(@start) AND DATE(@end)
+        ${platformFilter}
+        ${adTypeFilter}
+      GROUP BY m.platform
+    `;
 
     const [currentRows, prevRows] = await Promise.all([
-      prisma.dailyMetric.groupBy({
-        by: ['platform'],
-        where: { ...whereBase, date: { gte: start, lte: endOfDay(end) } },
-        _sum: { impressions: true, clicks: true, cost: true, conversions: true },
+      query<PlatformAggregateRow>(sql, {
+        start,
+        end,
+        ...(platformParam !== 'all' ? { platform: platformParam } : {}),
+        ...(adTypeParam !== 'all' ? { adType: adTypeParam } : {}),
       }),
-      prisma.dailyMetric.groupBy({
-        by: ['platform'],
-        where: { ...whereBase, date: { gte: prevStart, lte: prevEnd } },
-        _sum: { impressions: true, clicks: true, cost: true, conversions: true },
+      query<PlatformAggregateRow>(sql, {
+        start: prevStart,
+        end: prevEnd,
+        ...(platformParam !== 'all' ? { platform: platformParam } : {}),
+        ...(adTypeParam !== 'all' ? { adType: adTypeParam } : {}),
       }),
     ]);
 

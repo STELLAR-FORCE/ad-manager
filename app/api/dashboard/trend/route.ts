@@ -1,29 +1,48 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { query, table } from '@/lib/bigquery';
+
+type TrendRow = {
+  date: { value: string } | string;
+  platform: string;
+  cost: number | null;
+  conversions: number | null;
+};
+
+function normalizeDate(v: TrendRow['date']): string {
+  if (typeof v === 'string') return v.slice(0, 10);
+  return v.value.slice(0, 10);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const platformParam = searchParams.get('platform') ?? 'all';
 
   const startStr = searchParams.get('start');
-  const endStr   = searchParams.get('end');
+  const endStr = searchParams.get('end');
   if (!startStr || !endStr) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
-  const start = new Date(startStr);
-  const end   = new Date(endStr + 'T23:59:59Z');
 
-  const platformFilter = platformParam !== 'all' ? { platform: platformParam } : {};
+  const platformFilter = platformParam !== 'all' ? 'AND platform = @platform' : '';
 
   try {
-    const rows = await prisma.dailyMetric.groupBy({
-      by: ['date', 'platform'],
-      where: {
-        date: { gte: start, lte: end },
-        ...platformFilter,
-      },
-      _sum: { cost: true, conversions: true },
-      orderBy: { date: 'asc' },
+    const sql = `
+      SELECT
+        date,
+        platform,
+        SUM(cost) AS cost,
+        SUM(conversions) AS conversions
+      FROM ${table('adm_daily_metrics')}
+      WHERE date BETWEEN DATE(@start) AND DATE(@end)
+        ${platformFilter}
+      GROUP BY date, platform
+      ORDER BY date ASC
+    `;
+
+    const rows = await query<TrendRow>(sql, {
+      start: startStr,
+      end: endStr,
+      ...(platformParam !== 'all' ? { platform: platformParam } : {}),
     });
 
     const byDate = new Map<
@@ -36,14 +55,14 @@ export async function GET(request: Request) {
     >();
 
     for (const row of rows) {
-      const dateStr = new Date(row.date).toISOString().split('T')[0];
+      const dateStr = normalizeDate(row.date);
       const existing = byDate.get(dateStr) ?? {
         google: 0, yahoo: 0, bing: 0,
         cost: 0, conversions: 0,
         google_cv: 0, yahoo_cv: 0, bing_cv: 0,
       };
-      const c = row._sum.cost ?? 0;
-      const cv = row._sum.conversions ?? 0;
+      const c = Number(row.cost ?? 0);
+      const cv = Number(row.conversions ?? 0);
       existing.cost += c;
       existing.conversions += cv;
       if (row.platform === 'google') { existing.google += c; existing.google_cv += cv; }
