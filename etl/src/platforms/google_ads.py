@@ -482,22 +482,46 @@ class GoogleAdsClient_(AdPlatformClient):
                 AND '{_format_date(end_date)}'
         """
         rows = self._search(query)
-        terms = []
+
+        # search_term_view は (search_term × ad_group) 粒度で返るため、
+        # MERGE キー (date, campaign_id, search_term) に合わせてここで集約する
+        aggregated: dict[tuple[str, str, str], dict] = {}
         for row in rows:
-            m = row.metrics
-            impressions = m.impressions
-            clicks = m.clicks
-            cost = _micros_to_jpy(m.cost_micros)
-            conversions = int(m.conversions)
+            key = (
+                row.segments.date,
+                str(row.campaign.id),
+                row.search_term_view.search_term,
+            )
+            entry = aggregated.setdefault(
+                key,
+                {
+                    "campaign_name": row.campaign.name,
+                    "impressions": 0,
+                    "clicks": 0,
+                    "cost_micros": 0,
+                    "conversions": 0.0,
+                },
+            )
+            entry["impressions"] += row.metrics.impressions
+            entry["clicks"] += row.metrics.clicks
+            entry["cost_micros"] += row.metrics.cost_micros
+            entry["conversions"] += row.metrics.conversions
+
+        terms = []
+        for (seg_date, campaign_id, search_term), entry in aggregated.items():
+            impressions = entry["impressions"]
+            clicks = entry["clicks"]
+            cost = _micros_to_jpy(entry["cost_micros"])
+            conversions = int(entry["conversions"])
             derived = compute_metrics(impressions, clicks, cost, conversions)
 
             terms.append(
                 SearchTermRow(
-                    date=date.fromisoformat(row.segments.date),
+                    date=date.fromisoformat(seg_date),
                     platform="google",
-                    campaign_id=str(row.campaign.id),
-                    campaign_name=row.campaign.name,
-                    search_term=row.search_term_view.search_term,
+                    campaign_id=campaign_id,
+                    campaign_name=entry["campaign_name"],
+                    search_term=search_term,
                     impressions=impressions,
                     clicks=clicks,
                     cost=cost,

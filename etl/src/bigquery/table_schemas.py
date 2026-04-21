@@ -186,39 +186,39 @@ SYNC_LOGS_SCHEMA = [
 # ── テーブル定義の一覧 ────────────────────────────────────────────
 
 TABLE_DEFINITIONS: dict[str, dict] = {
-    "campaigns": {
+    "adm_campaigns": {
         "schema": CAMPAIGNS_SCHEMA,
         "merge_keys": CAMPAIGNS_MERGE_KEYS,
     },
-    "ad_groups": {
+    "adm_ad_groups": {
         "schema": AD_GROUPS_SCHEMA,
         "merge_keys": AD_GROUPS_MERGE_KEYS,
     },
-    "ads": {
+    "adm_ads": {
         "schema": ADS_SCHEMA,
         "merge_keys": ADS_MERGE_KEYS,
     },
-    "keywords": {
+    "adm_keywords": {
         "schema": KEYWORDS_SCHEMA,
         "merge_keys": KEYWORDS_MERGE_KEYS,
     },
-    "daily_metrics": {
+    "adm_daily_metrics": {
         "schema": DAILY_METRICS_SCHEMA,
         "merge_keys": DAILY_METRICS_MERGE_KEYS,
         "partitioning": DAILY_METRICS_PARTITIONING,
         "clustering": DAILY_METRICS_CLUSTERING,
     },
-    "search_term_reports": {
+    "adm_search_term_reports": {
         "schema": SEARCH_TERM_REPORTS_SCHEMA,
         "merge_keys": SEARCH_TERM_REPORTS_MERGE_KEYS,
         "partitioning": SEARCH_TERM_REPORTS_PARTITIONING,
         "clustering": SEARCH_TERM_REPORTS_CLUSTERING,
     },
-    "budget_logs": {
+    "adm_budget_logs": {
         "schema": BUDGET_LOGS_SCHEMA,
         "merge_keys": BUDGET_LOGS_MERGE_KEYS,
     },
-    "sync_logs": {
+    "adm_sync_logs": {
         "schema": SYNC_LOGS_SCHEMA,
     },
 }

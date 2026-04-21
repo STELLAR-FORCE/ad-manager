@@ -61,27 +61,27 @@ def _sync_platform(
 
     # 2. キャンペーン
     campaigns = client.fetch_campaigns()
-    bq.upsert("campaigns", campaigns)
+    bq.upsert("adm_campaigns", campaigns)
 
     # 3. 広告グループ
     ad_groups = client.fetch_ad_groups()
-    bq.upsert("ad_groups", ad_groups)
+    bq.upsert("adm_ad_groups", ad_groups)
 
     # 4. 広告
     ads = client.fetch_ads()
-    bq.upsert("ads", ads)
+    bq.upsert("adm_ads", ads)
 
     # 5. キーワード
     keywords = client.fetch_keywords()
-    bq.upsert("keywords", keywords)
+    bq.upsert("adm_keywords", keywords)
 
     # 6. 日次指標
     daily_metrics = client.fetch_daily_metrics(start_date, end_date)
-    bq.upsert("daily_metrics", daily_metrics, add_synced_at=False)
+    bq.upsert("adm_daily_metrics", daily_metrics, add_synced_at=False)
 
     # 7. 検索語句レポート
     search_terms = client.fetch_search_term_report(start_date, end_date)
-    bq.upsert("search_term_reports", search_terms, add_synced_at=False)
+    bq.upsert("adm_search_term_reports", search_terms, add_synced_at=False)
 
     # 8. 予算ログ（当月分を daily_metrics から集計）
     _sync_budget_logs(campaigns, daily_metrics, bq)
@@ -119,7 +119,7 @@ def _sync_budget_logs(campaigns, daily_metrics, bq: BigQueryClient) -> None:
         )
 
     if budget_logs:
-        bq.upsert("budget_logs", budget_logs, add_synced_at=False)
+        bq.upsert("adm_budget_logs", budget_logs, add_synced_at=False)
 
 
 def main() -> None:

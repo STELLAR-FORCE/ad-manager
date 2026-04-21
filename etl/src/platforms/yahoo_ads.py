@@ -172,6 +172,7 @@ SEARCH_QUERY_REPORT_FIELDS = [
 # ── CSV ヘッダー（EN表示名）→ API フィールド名マッピング ──────────
 
 _CSV_EN_HEADER_TO_FIELD: dict[str, str] = {
+    # 検索広告（v18）EN ヘッダー
     "CampaignID": "CAMPAIGN_ID",
     "Campaign name": "CAMPAIGN_NAME",
     "Campaign type": "CAMPAIGN_TYPE",
@@ -202,6 +203,16 @@ _CSV_EN_HEADER_TO_FIELD: dict[str, str] = {
     "Match Type": "KEYWORD_MATCH_TYPE",
     "Quality index": "QUALITY_INDEX",
     "Search Query": "SEARCH_QUERY",
+    # ディスプレイ広告（v19）EN ヘッダー
+    "Campaign ID": "CAMPAIGN_ID",
+    "Campaign Name": "CAMPAIGN_NAME",
+    "Campaign Type": "CAMPAIGN_TYPE",
+    "Daily": "DAY",
+    "Ad Group ID": "ADGROUP_ID",
+    "Ad Group Name": "ADGROUP_NAME",
+    "Display URL": "DISPLAY_URL",
+    "Tracking URL": "TRACKING_URL",
+    "Impression Share": "IMPRESSION_SHARE",
 }
 
 
@@ -261,6 +272,11 @@ class YahooAdsClient(AdPlatformClient):
             headers=self._headers(base_url),
             timeout=60,
         )
+        if response.status_code >= 400:
+            logger.error(
+                "Yahoo! API エラー: %s %s → %d\nリクエストボディ: %s\nレスポンスボディ: %s",
+                "POST", url, response.status_code, body, response.text,
+            )
         response.raise_for_status()
         return response.json()
 
@@ -292,17 +308,20 @@ class YahooAdsClient(AdPlatformClient):
         acct_id = int(self._account_id_for(base_url))
         import time
         report_name = f"etl_{report_type}_{int(time.time())}"
+        is_display = base_url == DISPLAY_API_BASE
         operand: dict = {
             "accountId": acct_id,
             "reportName": report_name,
             "fields": fields,
-            "reportType": report_type,
             "reportDateRangeType": date_range_type,
             "reportDownloadFormat": "CSV",
             "reportDownloadEncode": "UTF8",
             "reportLanguage": "EN",
             "reportSkipReportSummary": "TRUE",
         }
+        # Display Ads API v19 には reportType フィールドがない
+        if not is_display:
+            operand["reportType"] = report_type
 
         if date_range_type == "CUSTOM_DATE" and start_date and end_date:
             operand["dateRange"] = {
@@ -387,7 +406,7 @@ class YahooAdsClient(AdPlatformClient):
         data_lines = []
         for line in lines[header_idx:]:
             stripped = line.strip()
-            if not stripped or stripped.startswith("--") or stripped.startswith("合計"):
+            if not stripped or stripped.startswith("--") or stripped.startswith("合計") or stripped.startswith("Total"):
                 continue
             data_lines.append(stripped)
 
@@ -473,11 +492,12 @@ class YahooAdsClient(AdPlatformClient):
             )
 
         # ディスプレイ広告のキャンペーンも取得
+        # Display Ads API v19: reportType 不要、CAMPAIGN_STATUS フィールドなし
         try:
             display_csv = self._request_report(
                 base_url=DISPLAY_API_BASE,
-                fields=["CAMPAIGN_ID", "CAMPAIGN_NAME", "CAMPAIGN_STATUS", "DAY", "IMPS", "CLICKS", "COST", "CONVERSIONS"],
-                report_type="CAMPAIGN",
+                fields=["CAMPAIGN_ID", "CAMPAIGN_NAME", "DAY", "IMPS", "CLICKS", "COST", "CONVERSIONS"],
+                report_type="AD",
                 date_range_type="LAST_30_DAYS",
             )
             display_rows = self._parse_csv(display_csv)
@@ -491,7 +511,7 @@ class YahooAdsClient(AdPlatformClient):
                     platform="yahoo",
                     ad_type="display",
                     type="ディスプレイ",
-                    status=_STATUS_MAP.get(r.get("CAMPAIGN_DISTRIBUTION_STATUS", ""), "active"),
+                    status="active",
                     daily_budget=None,
                     monthly_budget=None,
                     bid_strategy=None,
@@ -673,13 +693,13 @@ class YahooAdsClient(AdPlatformClient):
         )
         search_rows = self._parse_csv(search_csv)
 
-        # ディスプレイ広告
+        # ディスプレイ広告（Display Ads API v19: reportType 不要）
         display_rows: list[dict[str, str]] = []
         try:
             display_csv = self._request_report(
                 base_url=DISPLAY_API_BASE,
                 fields=["CAMPAIGN_ID", "DAY", "IMPS", "CLICKS", "COST", "CONVERSIONS"],
-                report_type="CAMPAIGN",
+                report_type="AD",
                 date_range_type="CUSTOM_DATE",
                 start_date=start_date,
                 end_date=end_date,

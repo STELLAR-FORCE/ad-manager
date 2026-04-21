@@ -93,7 +93,7 @@ class BigQueryClient:
         """Pydantic モデルのリストをステージング経由で MERGE する.
 
         Args:
-            table_name: テーブル名（例: "campaigns"）
+            table_name: テーブル名（例: "adm_campaigns"）
             rows: 書き込むデータ（Pydantic モデルのリスト）
             add_synced_at: synced_at カラムを自動追加するか
         """
@@ -213,8 +213,21 @@ class BigQueryClient:
     # ── sync_logs 専用ショートカット ───────────────────────────────
 
     def insert_sync_log(self, sync_log: BaseModel) -> None:
-        """SyncLog を1行 INSERT する."""
-        self._insert_rows("sync_logs", [sync_log], add_synced_at=False)
+        """SyncLog を1行 INSERT する（DRY_RUN 時はスキップ）."""
+        if self._settings.dry_run:
+            logger.info("[DRY RUN] adm_sync_logs: 1 行の INSERT をスキップ")
+            return
+        # load_table_from_json を使う（streaming buffer 制約を回避）
+        client = self._get_client()
+        table_ref = f"{self._project}.{self._dataset}.adm_sync_logs"
+        job_config = bigquery.LoadJobConfig(
+            schema=TABLE_DEFINITIONS["adm_sync_logs"]["schema"],
+            write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        )
+        row = sync_log.model_dump(mode="json")
+        job = client.load_table_from_json([row], table_ref, job_config=job_config)
+        job.result()
+        logger.info("adm_sync_logs: 1 行を INSERT しました")
 
     def update_sync_log_status(
         self,
@@ -229,17 +242,23 @@ class BigQueryClient:
 
         client = self._get_client()
         now = datetime.now(timezone.utc).isoformat()
-        target = self._table_ref("sync_logs")
-
-        message_clause = f", message = '{message}'" if message else ""
+        target = self._table_ref("adm_sync_logs")
 
         query = f"""
             UPDATE {target}
-            SET status = '{status}',
-                finished_at = TIMESTAMP('{now}')
-                {message_clause}
-            WHERE id = '{sync_log_id}'
+            SET status = @status,
+                finished_at = TIMESTAMP(@finished_at),
+                message = @message
+            WHERE id = @sync_log_id
         """
-        job = client.query(query)
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("status", "STRING", status),
+                bigquery.ScalarQueryParameter("finished_at", "STRING", now),
+                bigquery.ScalarQueryParameter("message", "STRING", message),
+                bigquery.ScalarQueryParameter("sync_log_id", "STRING", sync_log_id),
+            ]
+        )
+        job = client.query(query, job_config=job_config)
         job.result()
         logger.info("sync_log %s → %s", sync_log_id, status)
