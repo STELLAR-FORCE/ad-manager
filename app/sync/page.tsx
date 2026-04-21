@@ -1,8 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { MainLayout } from '@/components/layout/MainLayout'
+import { notify } from '@/lib/toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -82,7 +81,7 @@ export default function SyncPage() {
         setIsMock(true)
       }
     } catch {
-      toast.error('ログの取得に失敗しました')
+      notify.error('ログの取得に失敗しました')
       setLogs(MOCK_LOGS)
       setIsMock(true)
     } finally {
@@ -103,14 +102,14 @@ export default function SyncPage() {
         body: JSON.stringify({ platform }),
       })
       if (!res.ok) throw new Error()
-      toast.success(`${PLATFORM_LABELS[platform]} の同期を開始しました`)
+      notify.success(`${PLATFORM_LABELS[platform]} の同期を開始しました`)
       // Refresh after 4 seconds to show updated status
       setTimeout(() => {
         fetchLogs()
         setSyncing((s) => ({ ...s, [platform]: false }))
       }, 4000)
     } catch {
-      toast.error('同期の開始に失敗しました')
+      notify.error('同期の開始に失敗しました')
       setSyncing((s) => ({ ...s, [platform]: false }))
     }
   }
@@ -133,7 +132,6 @@ export default function SyncPage() {
   })
 
   return (
-    <MainLayout>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -256,6 +254,5 @@ export default function SyncPage() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
   )
 }

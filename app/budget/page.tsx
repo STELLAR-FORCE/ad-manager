@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { toast } from 'sonner'
-import { MainLayout } from '@/components/layout/MainLayout'
+import { notify } from '@/lib/toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,6 +17,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { InfoIcon, CheckIcon, XIcon } from 'lucide-react'
+import { Meter } from '@heroui/react'
+import { StatusChip } from '@/components/ui/status-chip'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 }).format(n)
@@ -48,10 +49,10 @@ const AD_TYPE_LABELS: Record<string, string> = {
   display: 'ディスプレイ',
 }
 
-const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'warning' | 'outline' | 'secondary' }> = {
-  active: { label: '配信中', variant: 'success' },
-  paused: { label: '停止中', variant: 'warning' },
-  ended: { label: '終了', variant: 'secondary' },
+const STATUS_LABELS: Record<string, string> = {
+  active: '配信中',
+  paused: '停止中',
+  ended: '終了',
 }
 
 const MOCK_CAMPAIGNS: CampaignBudget[] = [
@@ -100,7 +101,7 @@ export default function BudgetPage() {
         setIsMock(true)
       }
     } catch {
-      toast.error('データの取得に失敗しました')
+      notify.error('データの取得に失敗しました')
       setCampaigns(MOCK_CAMPAIGNS)
       setIsMock(true)
     } finally {
@@ -142,7 +143,7 @@ export default function BudgetPage() {
   const saveEdit = async (id: string) => {
     const val = parseFloat(editValue)
     if (isNaN(val) || val < 0) {
-      toast.error('有効な金額を入力してください')
+      notify.error('有効な金額を入力してください')
       return
     }
     try {
@@ -152,22 +153,21 @@ export default function BudgetPage() {
         body: JSON.stringify({ monthlyBudget: val }),
       })
       if (!res.ok) throw new Error()
-      toast.success('予算を更新しました')
+      notify.success('予算を更新しました')
       cancelEdit()
       fetchData(month)
     } catch {
-      toast.error('予算の更新に失敗しました')
+      notify.error('予算の更新に失敗しました')
     }
   }
 
-  const utilizationColor = (u: number) =>
-    u > 90 ? 'bg-red-500' : u > 75 ? 'bg-amber-500' : 'bg-emerald-500'
+  const utilizationMeterColor = (u: number): 'success' | 'warning' | 'danger' =>
+    u > 100 ? 'danger' : u > 80 ? 'warning' : 'success'
 
   const utilizationBadge = (u: number): 'destructive' | 'warning' | 'success' =>
-    u > 90 ? 'destructive' : u > 75 ? 'warning' : 'success'
+    u > 100 ? 'destructive' : u > 80 ? 'warning' : 'success'
 
   return (
-    <MainLayout>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -226,16 +226,17 @@ export default function BudgetPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold tabular-nums">{fmtPct(totalUtilization)}</p>
-                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={`h-full rounded-full transition-all ${utilizationColor(totalUtilization)}`}
-                    style={{ width: `${Math.min(100, totalUtilization)}%` }}
-                    role="progressbar"
-                    aria-valuenow={totalUtilization}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  />
-                </div>
+                <Meter
+                  aria-label="総消化率"
+                  value={Math.min(100, totalUtilization)}
+                  maxValue={100}
+                  color={utilizationMeterColor(totalUtilization)}
+                  className="mt-2 w-full"
+                >
+                  <Meter.Track>
+                    <Meter.Fill />
+                  </Meter.Track>
+                </Meter>
               </CardContent>
             </Card>
           </div>
@@ -257,17 +258,17 @@ export default function BudgetPage() {
                       <span className="ml-2 font-medium">{fmtPct(utilization)}</span>
                     </span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={`h-full rounded-full ${utilizationColor(utilization)}`}
-                      style={{ width: `${Math.min(100, utilization)}%` }}
-                      role="progressbar"
-                      aria-valuenow={utilization}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-label={`${PLATFORM_LABELS[platform]} 消化率`}
-                    />
-                  </div>
+                  <Meter
+                    aria-label={`${PLATFORM_LABELS[platform]} 消化率`}
+                    value={Math.min(100, utilization)}
+                    maxValue={100}
+                    color={utilizationMeterColor(utilization)}
+                    className="w-full"
+                  >
+                    <Meter.Track>
+                      <Meter.Fill />
+                    </Meter.Track>
+                  </Meter>
                 </div>
               ))}
             </CardContent>
@@ -302,7 +303,7 @@ export default function BudgetPage() {
                 </TableHeader>
                 <TableBody>
                   {campaigns.map((c) => {
-                    const st = STATUS_LABELS[c.status] ?? { label: c.status, variant: 'outline' as const }
+                    const statusLabel = STATUS_LABELS[c.status] ?? c.status
                     return (
                       <TableRow key={c.id}>
                         <TableCell className="font-medium max-w-[200px] truncate" title={c.name}>
@@ -362,23 +363,25 @@ export default function BudgetPage() {
                         <TableCell className="text-right tabular-nums text-sm">{fmt(c.remaining)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className={`h-full rounded-full ${utilizationColor(c.utilization)}`}
-                                style={{ width: `${Math.min(100, c.utilization)}%` }}
-                                role="progressbar"
-                                aria-valuenow={c.utilization}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              />
-                            </div>
+                            <Meter
+                              aria-label={`${c.name} 消化率`}
+                              value={Math.min(100, c.utilization)}
+                              maxValue={100}
+                              size="sm"
+                              color={utilizationMeterColor(c.utilization)}
+                              className="flex-1"
+                            >
+                              <Meter.Track>
+                                <Meter.Fill />
+                              </Meter.Track>
+                            </Meter>
                             <Badge variant={utilizationBadge(c.utilization)} className="tabular-nums text-xs">
                               {fmtPct(c.utilization)}
                             </Badge>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={st.variant}>{st.label}</Badge>
+                          <StatusChip status={c.status} label={statusLabel} />
                         </TableCell>
                       </TableRow>
                     )
@@ -389,6 +392,5 @@ export default function BudgetPage() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
   )
 }

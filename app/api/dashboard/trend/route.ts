@@ -1,74 +1,92 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { query, table } from '@/lib/bigquery';
+
+type TrendRow = {
+  date: { value: string } | string;
+  platform: string;
+  cost: number | null;
+  conversions: number | null;
+};
+
+function normalizeDate(v: TrendRow['date']): string {
+  if (typeof v === 'string') return v.slice(0, 10);
+  return v.value.slice(0, 10);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const period = searchParams.get('period') ?? '7d';
   const platformParam = searchParams.get('platform') ?? 'all';
 
-  const now = new Date();
-  let start: Date;
-  let end: Date = new Date(now);
-  if (period === 'month') {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else if (period === 'lastmonth') {
-    end = new Date(now.getFullYear(), now.getMonth(), 0);
-    start = new Date(end.getFullYear(), end.getMonth(), 1);
-  } else {
-    const days = period === '30d' ? 30 : period === '14d' ? 14 : 7;
-    start = new Date(now);
-    start.setDate(start.getDate() - days);
+  const startStr = searchParams.get('start');
+  const endStr = searchParams.get('end');
+  if (!startStr || !endStr) {
+    return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
-  const platformFilter = platformParam !== 'all' ? { platform: platformParam } : {};
+  const platformFilter = platformParam !== 'all' ? 'AND platform = @platform' : '';
 
   try {
-    const rows = await prisma.dailyMetric.groupBy({
-      by: ['date', 'platform'],
-      where: {
-        date: { gte: start, lte: end },
-        campaignId: { not: null },
-        adGroupId: null,
-        creativeId: null,
-        ...platformFilter,
-      },
-      _sum: { cost: true, conversions: true },
-      orderBy: { date: 'asc' },
+    const sql = `
+      SELECT
+        date,
+        platform,
+        SUM(cost) AS cost,
+        SUM(conversions) AS conversions
+      FROM ${table('adm_daily_metrics')}
+      WHERE date BETWEEN DATE(@start) AND DATE(@end)
+        ${platformFilter}
+      GROUP BY date, platform
+      ORDER BY date ASC
+    `;
+
+    const rows = await query<TrendRow>(sql, {
+      start: startStr,
+      end: endStr,
+      ...(platformParam !== 'all' ? { platform: platformParam } : {}),
     });
 
     const byDate = new Map<
       string,
-      { google: number; yahoo: number; bing: number; cost: number; conversions: number }
+      {
+        google: number; yahoo: number; bing: number;
+        cost: number; conversions: number;
+        google_cv: number; yahoo_cv: number; bing_cv: number;
+      }
     >();
 
     for (const row of rows) {
-      const dateStr = new Date(row.date).toISOString().split('T')[0];
+      const dateStr = normalizeDate(row.date);
       const existing = byDate.get(dateStr) ?? {
-        google: 0,
-        yahoo: 0,
-        bing: 0,
-        cost: 0,
-        conversions: 0,
+        google: 0, yahoo: 0, bing: 0,
+        cost: 0, conversions: 0,
+        google_cv: 0, yahoo_cv: 0, bing_cv: 0,
       };
-      const c = row._sum.cost ?? 0;
-      const cv = row._sum.conversions ?? 0;
+      const c = Number(row.cost ?? 0);
+      const cv = Number(row.conversions ?? 0);
       existing.cost += c;
       existing.conversions += cv;
-      if (row.platform === 'google') existing.google += c;
-      if (row.platform === 'yahoo') existing.yahoo += c;
-      if (row.platform === 'bing') existing.bing += c;
+      if (row.platform === 'google') { existing.google += c; existing.google_cv += cv; }
+      if (row.platform === 'yahoo')  { existing.yahoo  += c; existing.yahoo_cv  += cv; }
+      if (row.platform === 'bing')   { existing.bing   += c; existing.bing_cv   += cv; }
       byDate.set(dateStr, existing);
     }
 
     const result = Array.from(byDate.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, data]) => ({
+      .map(([date, d]) => ({
         date,
-        google: data.google,
-        yahoo: data.yahoo,
-        bing: data.bing,
-        cost: data.cost,
-        cpa: data.conversions > 0 ? Math.round(data.cost / data.conversions) : null,
+        google: d.google,
+        yahoo: d.yahoo,
+        bing: d.bing,
+        cost: d.cost,
+        conversions: d.conversions,
+        cpa: d.conversions > 0 ? Math.round(d.cost / d.conversions) : null,
+        google_cv: d.google_cv,
+        yahoo_cv: d.yahoo_cv,
+        bing_cv: d.bing_cv,
+        google_cpa: d.google_cv > 0 ? Math.round(d.google / d.google_cv) : null,
+        yahoo_cpa:  d.yahoo_cv  > 0 ? Math.round(d.yahoo  / d.yahoo_cv)  : null,
+        bing_cpa:   d.bing_cv   > 0 ? Math.round(d.bing   / d.bing_cv)   : null,
       }));
 
     return NextResponse.json(result);

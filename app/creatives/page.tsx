@@ -1,8 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { MainLayout } from '@/components/layout/MainLayout'
+import { notify } from '@/lib/toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,7 +17,9 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog'
-import { PlusIcon, PauseIcon, PlayIcon, Trash2Icon, InfoIcon } from 'lucide-react'
+import { PlusIcon, PauseIcon, PlayIcon, Trash2Icon, InfoIcon, SearchXIcon } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusChip } from '@/components/ui/status-chip'
 
 interface Creative {
   id: string
@@ -49,11 +50,6 @@ const PLATFORM_COLORS: Record<string, string> = {
 }
 const PLATFORM_LABELS: Record<string, string> = { google: 'Google', yahoo: 'Yahoo!', bing: 'Bing' }
 const STATUS_LABELS: Record<string, string> = { active: '配信中', paused: '停止中', removed: '削除済' }
-const STATUS_VARIANTS: Record<string, 'success' | 'warning' | 'secondary'> = {
-  active: 'success',
-  paused: 'warning',
-  removed: 'secondary',
-}
 
 const MOCK_CREATIVES: Creative[] = [
   { id: 'mc1', name: '春季キャンペーン メインバナー', type: 'responsive', status: 'active', headline1: '春の特大セール開催中', headline2: '最大50%OFF！今すぐチェック', headline3: '期間限定・数量限定', description1: '春の新生活を応援。人気商品が大幅値引き。', description2: '送料無料キャンペーン実施中！', adGroup: { id: 'ag1', name: '春季グループ', campaign: { platform: 'google', name: 'ブランド訴求' } } },
@@ -119,7 +115,7 @@ export default function CreativesPage() {
         setIsMock(true)
       }
     } catch {
-      toast.error('データの取得に失敗しました')
+      notify.error('データの取得に失敗しました')
       setCreatives(MOCK_CREATIVES)
       setIsMock(true)
     } finally {
@@ -140,10 +136,10 @@ export default function CreativesPage() {
         body: JSON.stringify({ status: newStatus }),
       })
       if (!res.ok) throw new Error()
-      toast.success(newStatus === 'active' ? '配信を再開しました' : '配信を停止しました')
+      notify.success(newStatus === 'active' ? '配信を再開しました' : '配信を停止しました')
       fetchData()
     } catch {
-      toast.error('ステータスの変更に失敗しました')
+      notify.error('ステータスの変更に失敗しました')
     }
   }
 
@@ -152,17 +148,17 @@ export default function CreativesPage() {
     try {
       const res = await fetch(`/api/creatives/${deleteId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
-      toast.success('クリエイティブを削除しました')
+      notify.success('クリエイティブを削除しました')
       setDeleteId(null)
       fetchData()
     } catch {
-      toast.error('削除に失敗しました')
+      notify.error('削除に失敗しました')
     }
   }
 
   const handleCreate = async () => {
     if (!form.name || !form.adGroupId) {
-      toast.error('名前と広告グループIDは必須です')
+      notify.error('名前と広告グループIDは必須です')
       return
     }
     setSubmitting(true)
@@ -173,19 +169,19 @@ export default function CreativesPage() {
         body: JSON.stringify(form),
       })
       if (!res.ok) throw new Error()
-      toast.success('クリエイティブを作成しました')
+      notify.success('クリエイティブを作成しました')
       setNewDialogOpen(false)
       setForm({ name: '', type: 'text', adGroupId: '', headline1: '', headline2: '', headline3: '', description1: '', description2: '' })
       fetchData()
     } catch {
-      toast.error('作成に失敗しました')
+      notify.error('作成に失敗しました')
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <MainLayout>
+    <>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -239,7 +235,6 @@ export default function CreativesPage() {
             ? [0, 1, 2, 3, 4, 5].map((i) => <CreativeSkeleton key={i} />)
             : creatives.map((c) => {
                 const platform = c.adGroup?.campaign?.platform ?? ''
-                const sv = STATUS_VARIANTS[c.status] ?? 'outline'
                 return (
                   <Card key={c.id} className="flex flex-col">
                     <CardHeader className="pb-2">
@@ -260,9 +255,7 @@ export default function CreativesPage() {
                           <Badge variant={TYPE_VARIANTS[c.type] ?? 'secondary'} className="text-xs">
                             {TYPE_LABELS[c.type] ?? c.type}
                           </Badge>
-                          <Badge variant={sv} className="text-xs">
-                            {STATUS_LABELS[c.status] ?? c.status}
-                          </Badge>
+                          <StatusChip status={c.status} label={STATUS_LABELS[c.status] ?? c.status} />
                         </div>
                       </div>
                       {c.adGroup && (
@@ -321,9 +314,12 @@ export default function CreativesPage() {
               })}
 
           {!loading && creatives.length === 0 && (
-            <div className="col-span-full flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
-              <PlusIcon className="size-8 opacity-40" aria-hidden="true" />
-              <p className="text-sm">条件に合うクリエイティブがありません</p>
+            <div className="col-span-full">
+              <EmptyState
+                icon={SearchXIcon}
+                title="該当するクリエイティブがありません"
+                description="フィルター条件を変更してお試しください"
+              />
             </div>
           )}
         </div>
@@ -417,6 +413,6 @@ export default function CreativesPage() {
           <DialogClose onClick={() => setNewDialogOpen(false)} />
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </>
   )
 }

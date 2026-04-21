@@ -1,8 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { MainLayout } from '@/components/layout/MainLayout'
+import { notify } from '@/lib/toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -16,7 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { InfoIcon, ArrowUpIcon, ArrowDownIcon, MinusIcon } from 'lucide-react'
+import { InfoIcon, ArrowUpIcon, ArrowDownIcon, MinusIcon, SearchXIcon } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 interface SearchTerm {
   id: string
@@ -95,7 +95,7 @@ export default function SearchTermsPage() {
         setIsMock(true)
       }
     } catch {
-      toast.error('データの取得に失敗しました')
+      notify.error('データの取得に失敗しました')
       setTerms(MOCK_TERMS)
       setIsMock(true)
     } finally {
@@ -125,10 +125,10 @@ export default function SearchTermsPage() {
         body: JSON.stringify({ isExcluded: newVal }),
       })
       if (!res.ok) throw new Error()
-      toast.success(newVal ? '除外候補に設定しました' : '除外を解除しました')
+      notify.success(newVal ? '除外候補に設定しました' : '除外を解除しました')
       fetchData()
     } catch {
-      toast.error('更新に失敗しました')
+      notify.error('更新に失敗しました')
     }
   }
 
@@ -151,7 +151,6 @@ export default function SearchTermsPage() {
   )
 
   return (
-    <MainLayout>
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -209,6 +208,12 @@ export default function SearchTermsPage() {
               <div className="space-y-2 p-4">
                 {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
               </div>
+            ) : terms.length === 0 ? (
+              <EmptyState
+                icon={SearchXIcon}
+                title="該当する検索語句がありません"
+                description="フィルター条件を変更してお試しください"
+              />
             ) : (
               <Table>
                 <TableHeader>
@@ -272,19 +277,11 @@ export default function SearchTermsPage() {
                     )
                   })}
 
-                  {terms.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
-                        データがありません
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             )}
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
   )
 }

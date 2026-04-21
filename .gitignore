@@ -45,3 +45,11 @@ next-env.d.ts
 # database
 *.db
 *.db-journal
+
+# ETL
+etl/.env
+etl/**/__pycache__/
+etl/.pytest_cache/
+etl/.venv/
+etl/sa-key.json
+etl/**/sa-key*.json

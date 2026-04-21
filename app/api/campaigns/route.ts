@@ -1,11 +1,44 @@
-import { prisma } from '@/lib/prisma';
-import type { NextRequest } from 'next/server';
+import { query, table } from '@/lib/bigquery';
+
+type CampaignRow = {
+  id: string;
+  name: string;
+  platform: string;
+  ad_type: string;
+  type: string;
+  status: string;
+  daily_budget: number | null;
+  monthly_budget: number | null;
+  bid_strategy: string | null;
+  optimization_score: number | null;
+  synced_at: { value: string } | string;
+};
+
+function toIso(v: CampaignRow['synced_at']): string {
+  return typeof v === 'string' ? v : v.value;
+}
 
 export async function GET() {
   try {
-    const campaigns = await prisma.campaign.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    const rows = await query<CampaignRow>(
+      `SELECT id, name, platform, ad_type, type, status,
+              daily_budget, monthly_budget, bid_strategy, optimization_score, synced_at
+       FROM ${table('adm_campaigns')}
+       ORDER BY synced_at DESC`,
+    );
+    const campaigns = rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      platform: r.platform,
+      adType: r.ad_type,
+      type: r.type,
+      status: r.status,
+      dailyBudget: r.daily_budget,
+      monthlyBudget: r.monthly_budget,
+      bidStrategy: r.bid_strategy,
+      optimizationScore: r.optimization_score,
+      syncedAt: toIso(r.synced_at),
+    }));
     return Response.json(campaigns);
   } catch (error) {
     console.error('キャンペーン一覧取得エラー:', error);
@@ -13,28 +46,9 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { name, platform, adType, monthlyBudget } = body;
-
-    if (!name || !platform || !adType) {
-      return Response.json({ error: 'name, platform, adType は必須です' }, { status: 400 });
-    }
-
-    const campaign = await prisma.campaign.create({
-      data: {
-        name,
-        platform,
-        adType,
-        monthlyBudget: monthlyBudget ? Number(monthlyBudget) : null,
-        status: 'active',
-      },
-    });
-
-    return Response.json(campaign, { status: 201 });
-  } catch (error) {
-    console.error('キャンペーン作成エラー:', error);
-    return Response.json({ error: 'キャンペーンの作成に失敗しました' }, { status: 500 });
-  }
+export async function POST() {
+  return Response.json(
+    { error: 'BigQuery は読み取り専用です。キャンペーン作成は広告プラットフォーム側で行ってください。' },
+    { status: 501 },
+  );
 }
