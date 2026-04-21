@@ -65,33 +65,58 @@ echo "--- Cloud Run Job を設定 ---"
 
 # Secret Manager のシークレットを環境変数としてマウントする引数を構築
 # 形式: ENV_VAR=secret-name:latest
+# bash 3.2 互換のため連想配列ではなく並列配列を使う
 SECRETS_ARGS=""
-declare -A SECRET_MAP=(
+SECRET_ENV_VARS=(
   # Google Ads
-  ["GOOGLE_ADS_CUSTOMER_ID"]="google-ads-customer-id"
-  ["GOOGLE_ADS_DEVELOPER_TOKEN"]="google-ads-developer-token"
-  ["GOOGLE_ADS_CLIENT_ID"]="google-ads-client-id"
-  ["GOOGLE_ADS_CLIENT_SECRET"]="google-ads-client-secret"
-  ["GOOGLE_ADS_REFRESH_TOKEN"]="google-ads-refresh-token"
-  ["GOOGLE_ADS_LOGIN_CUSTOMER_ID"]="google-ads-login-customer-id"
+  "GOOGLE_ADS_CUSTOMER_ID"
+  "GOOGLE_ADS_DEVELOPER_TOKEN"
+  "GOOGLE_ADS_CLIENT_ID"
+  "GOOGLE_ADS_CLIENT_SECRET"
+  "GOOGLE_ADS_REFRESH_TOKEN"
+  "GOOGLE_ADS_LOGIN_CUSTOMER_ID"
   # Yahoo! 広告
-  ["YAHOO_ADS_BASE_ACCOUNT_ID"]="yahoo-ads-base-account-id"
-  ["YAHOO_ADS_SEARCH_ACCOUNT_ID"]="yahoo-ads-search-account-id"
-  ["YAHOO_ADS_DISPLAY_ACCOUNT_ID"]="yahoo-ads-display-account-id"
-  ["YAHOO_ADS_CLIENT_ID"]="yahoo-ads-client-id"
-  ["YAHOO_ADS_CLIENT_SECRET"]="yahoo-ads-client-secret"
-  ["YAHOO_ADS_REFRESH_TOKEN"]="yahoo-ads-refresh-token"
+  "YAHOO_ADS_BASE_ACCOUNT_ID"
+  "YAHOO_ADS_SEARCH_ACCOUNT_ID"
+  "YAHOO_ADS_DISPLAY_ACCOUNT_ID"
+  "YAHOO_ADS_CLIENT_ID"
+  "YAHOO_ADS_CLIENT_SECRET"
+  "YAHOO_ADS_REFRESH_TOKEN"
   # Bing Ads
-  ["BING_ADS_ACCOUNT_ID"]="bing-ads-account-id"
-  ["BING_ADS_CUSTOMER_ID"]="bing-ads-customer-id"
-  ["BING_ADS_CLIENT_ID"]="bing-ads-client-id"
-  ["BING_ADS_CLIENT_SECRET"]="bing-ads-client-secret"
-  ["BING_ADS_REFRESH_TOKEN"]="bing-ads-refresh-token"
-  ["BING_ADS_DEVELOPER_TOKEN"]="bing-ads-developer-token"
+  "BING_ADS_ACCOUNT_ID"
+  "BING_ADS_CUSTOMER_ID"
+  "BING_ADS_CLIENT_ID"
+  "BING_ADS_CLIENT_SECRET"
+  "BING_ADS_REFRESH_TOKEN"
+  "BING_ADS_DEVELOPER_TOKEN"
+)
+SECRET_NAMES=(
+  # Google Ads
+  "google-ads-customer-id"
+  "google-ads-developer-token"
+  "google-ads-client-id"
+  "google-ads-client-secret"
+  "google-ads-refresh-token"
+  "google-ads-login-customer-id"
+  # Yahoo! 広告
+  "yahoo-ads-base-account-id"
+  "yahoo-ads-search-account-id"
+  "yahoo-ads-display-account-id"
+  "yahoo-ads-client-id"
+  "yahoo-ads-client-secret"
+  "yahoo-ads-refresh-token"
+  # Bing Ads
+  "bing-ads-account-id"
+  "bing-ads-customer-id"
+  "bing-ads-client-id"
+  "bing-ads-client-secret"
+  "bing-ads-refresh-token"
+  "bing-ads-developer-token"
 )
 
-for env_var in "${!SECRET_MAP[@]}"; do
-  secret_id="${SECRET_PREFIX}-${SECRET_MAP[$env_var]}"
+for i in "${!SECRET_ENV_VARS[@]}"; do
+  env_var="${SECRET_ENV_VARS[$i]}"
+  secret_id="${SECRET_PREFIX}-${SECRET_NAMES[$i]}"
   if [ -n "$SECRETS_ARGS" ]; then
     SECRETS_ARGS="${SECRETS_ARGS},${env_var}=${secret_id}:latest"
   else
