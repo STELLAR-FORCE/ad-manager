@@ -5,9 +5,16 @@ Google / Yahoo! / Bing の広告パフォーマンスを一元管理するツー
 ## 技術スタック
 
 - **フレームワーク**: Next.js 16 (App Router) + TypeScript
-- **スタイリング**: Tailwind CSS + shadcn/ui（New Yorkスタイル）
-- **DB**: Prisma 7 + SQLite（開発）→ BigQuery（本番予定）
+- **スタイリング**: Tailwind CSS + shadcn/ui（New Yorkスタイル）+ HeroUI v3 + Animate UI
+- **データソース**: BigQuery（`stellarforce-bi.ad_manager`、`asia-northeast1`）
+- **ETL**: Python（`etl/`）。Cloud Run Jobs で毎日 06:00 JST に自動実行
+- **認証**: NextAuth (Google OAuth) + Vercel OIDC → GCP Workload Identity Federation
+- **ホスティング**: Vercel（`ad-manager-lvtl.vercel.app`）
 - **トースト通知**: Sonner
+
+## データフロー
+
+ダッシュボードに数値が表示されるまでの仕組み（広告 API → ETL → BigQuery → Next.js API → UI）は [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) に詳しく書いています。
 
 ## 開発サーバーの起動
 
