@@ -383,7 +383,7 @@ function KpiCard({
                   number={rawValue}
                   format={format}
                   decimalPlaces={decimalPlaces ?? 0}
-                  transition={{ stiffness: 120, damping: 30 }}
+                  transition={{ stiffness: 260, damping: 32 }}
                 />
               ) : (
                 value ?? fallback ?? '—'
