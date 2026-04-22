@@ -217,7 +217,7 @@ function FunnelColumn({
           <p className="text-lg sm:text-2xl font-bold tabular-nums tracking-tight mt-0.5 leading-tight">
             <CountingNumber
               number={stage.value}
-              transition={{ stiffness: 120, damping: 30 }}
+              transition={{ stiffness: 260, damping: 32 }}
               delay={delay}
               format={(v) => numFormat.format(Math.round(v))}
             />
