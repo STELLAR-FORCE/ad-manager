@@ -1,5 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { IdentityPoolClient } from 'google-auth-library';
+import { headers } from 'next/headers';
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID ?? 'stellarforce-bi';
 const DATASET = process.env.BQ_DATASET ?? 'ad_manager';
@@ -18,11 +19,18 @@ function createClient(): BigQuery {
       service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${wifServiceAccount}:generateAccessToken`,
       subject_token_supplier: {
         getSubjectToken: async () => {
-          const token = process.env.VERCEL_OIDC_TOKEN;
-          if (!token) {
-            throw new Error('VERCEL_OIDC_TOKEN is not available; ensure OIDC is enabled for this Vercel project');
+          // Vercel Functions では OIDC トークンは x-vercel-oidc-token ヘッダーで渡される。
+          // ローカル開発 (vercel env pull 済み) では VERCEL_OIDC_TOKEN 環境変数で上書き可。
+          const envToken = process.env.VERCEL_OIDC_TOKEN;
+          if (envToken) return envToken;
+          try {
+            const headerList = await headers();
+            const token = headerList.get('x-vercel-oidc-token');
+            if (token) return token;
+          } catch {
+            // headers() がリクエスト外 (ビルド時など) で呼ばれたケース
           }
-          return token;
+          throw new Error('OIDC token not available: neither VERCEL_OIDC_TOKEN env nor x-vercel-oidc-token header was found');
         },
       },
     });
