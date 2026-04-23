@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useSidebarCollapsed } from './MainLayout';
+import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 
 type NavItem = {
   href: string;
@@ -107,6 +108,7 @@ function formatSyncTime(iso: string | null): string {
 export function Sidebar() {
   const pathname = usePathname();
   const { collapsed, setCollapsed, ready } = useSidebarCollapsed();
+  const reducedMotion = usePrefersReducedMotion();
   const [syncStatuses, setSyncStatuses] = useState<SyncStatus[]>([
     { platform: 'google', lastSync: null, status: 'never' },
     { platform: 'yahoo', lastSync: null, status: 'never' },
@@ -123,7 +125,8 @@ export function Sidebar() {
   }, []);
 
   // ready がtrueになるまでアニメーションなし（初期フラッシュ防止）
-  const animate = ready;
+  // prefers-reduced-motion の場合も無効化
+  const animate = ready && !reducedMotion;
 
   return (
     <aside
@@ -216,8 +219,8 @@ export function Sidebar() {
                     <span
                       className={cn(
                         'flex-1 whitespace-nowrap overflow-hidden',
-                        animate && 'transition-[opacity,max-width] duration-300 ease-in-out',
-                        collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-48',
+                        animate && 'transition-[opacity,max-width,transform] duration-300 ease-in-out',
+                        collapsed ? 'opacity-0 max-w-0 -translate-x-1' : 'opacity-100 max-w-48 translate-x-0',
                       )}
                     >
                       {label}
