@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   LineChart,
   Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -41,6 +43,7 @@ import { Chip, Meter, ProgressCircle } from '@heroui/react';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
 import { FunnelFlow } from '@/components/dashboard/funnel-flow';
 import { cn } from '@/lib/utils';
+import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 import {
   aggregateCampaigns,
   aggregateCampaignsByPlatform,
@@ -95,6 +98,8 @@ type BudgetUsage = {
 };
 
 type Anomaly = { type: 'warning' | 'info'; message: string };
+
+type TrendMode = 'daily' | 'cumulative';
 
 // ─── 定数 ──────────────────────────────────────────────────
 
@@ -506,6 +511,37 @@ function defaultDateRange(): DateRangeValue {
   };
 }
 
+function TrendModeToggle({ mode, onChange }: { mode: TrendMode; onChange: (m: TrendMode) => void }) {
+  return (
+    <div
+      role="group"
+      aria-label="トレンド表示モード"
+      className="inline-flex items-center rounded-md border border-border bg-background p-0.5 text-xs font-normal"
+    >
+      {(['daily', 'cumulative'] as const).map((m) => {
+        const active = mode === m;
+        const label = m === 'daily' ? '日別' : '累積';
+        return (
+          <button
+            key={m}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(m)}
+            className={cn(
+              'px-2.5 py-0.5 rounded transition-colors motion-reduce:transition-none',
+              active
+                ? 'bg-muted text-foreground font-medium'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeValue>(defaultDateRange);
   const [platform, setPlatform] = useState<Platform>('all');
@@ -522,11 +558,22 @@ export default function DashboardPage() {
   // 目標CPA（localStorage永続化）
   const [cpaTarget, setCpaTarget] = useState<number | null>(null);
   const [cvTarget, setCvTarget] = useState<number | null>(null);
+  // トレンド表示モード（日別 / 累積）— URL query + localStorage で永続化
+  const [trendMode, setTrendModeState] = useState<TrendMode>('daily');
+  const reducedMotion = usePrefersReducedMotion();
   useEffect(() => {
     const storedCpa = localStorage.getItem('dashboard_cpa_target');
     const storedCv = localStorage.getItem('dashboard_cv_target');
     if (storedCpa) setCpaTarget(Number(storedCpa));
     if (storedCv) setCvTarget(Number(storedCv));
+    const urlMode = new URLSearchParams(window.location.search).get('trendMode');
+    const storedMode = localStorage.getItem('dashboard_trend_mode');
+    const resolved = (urlMode === 'cumulative' || urlMode === 'daily')
+      ? urlMode
+      : (storedMode === 'cumulative' || storedMode === 'daily')
+        ? storedMode
+        : 'daily';
+    setTrendModeState(resolved);
   }, []);
 
   function handleSetCpaTarget(val: number | null) {
@@ -536,6 +583,14 @@ export default function DashboardPage() {
   function handleSetCvTarget(val: number | null) {
     setCvTarget(val);
     val ? localStorage.setItem('dashboard_cv_target', String(val)) : localStorage.removeItem('dashboard_cv_target');
+  }
+  function setTrendMode(mode: TrendMode) {
+    setTrendModeState(mode);
+    localStorage.setItem('dashboard_trend_mode', mode);
+    const url = new URL(window.location.href);
+    if (mode === 'daily') url.searchParams.delete('trendMode');
+    else url.searchParams.set('trendMode', mode);
+    window.history.replaceState(null, '', url.toString());
   }
 
   const fetchData = useCallback(
@@ -619,19 +674,53 @@ export default function DashboardPage() {
   const deltaLabel = dateRange.compareEnabled ? '比較期間比' : '前期間比';
   const anomalies = isMock ? [] : buildAnomalies(current, previous, budget, cpaTarget);
 
-  // 比較トレンドをインデックス合わせでマージ
+  // 比較トレンドをインデックス合わせでマージ + 累積計算
   const showCompare = dateRange.compareEnabled && compareTrend.length > 0;
-  const chartData = displayTrend.map((d, i) => {
-    const cmp = compareTrend[i];
-    return {
-      ...d,
-      label: dateShort.format(new Date(d.date)),
-      cpaTargetLine: cpaTarget ?? undefined,
-      cmp_cpa: cmp?.cpa ?? null,
-      cmp_cv: cmp?.conversions ?? null,
-      cmp_date: cmp?.date ?? null,
-    };
-  });
+  const chartData = useMemo(() => {
+    let cumCost = 0;
+    let cumCv = 0;
+    let cumGoogleCost = 0;
+    let cumYahooCost = 0;
+    let cumBingCost = 0;
+    let cumGoogleCv = 0;
+    let cumYahooCv = 0;
+    let cumBingCv = 0;
+    let cumCmpCost = 0;
+    let cumCmpCv = 0;
+    return displayTrend.map((d, i) => {
+      const cmp = compareTrend[i];
+      cumCost += d.cost;
+      cumCv += d.conversions;
+      cumGoogleCost += d.google;
+      cumYahooCost += d.yahoo;
+      cumBingCost += d.bing;
+      cumGoogleCv += d.google_cv;
+      cumYahooCv += d.yahoo_cv;
+      cumBingCv += d.bing_cv;
+      if (cmp) {
+        cumCmpCost += cmp.cost;
+        cumCmpCv += cmp.conversions;
+      }
+      return {
+        ...d,
+        label: dateShort.format(new Date(d.date)),
+        cpaTargetLine: cpaTarget ?? undefined,
+        cmp_cpa: cmp?.cpa ?? null,
+        cmp_cv: cmp?.conversions ?? null,
+        cmp_date: cmp?.date ?? null,
+        cpa_cum: cumCv > 0 ? Math.round(cumCost / cumCv) : null,
+        cv_cum: cumCv,
+        google_cv_cum: cumGoogleCv,
+        yahoo_cv_cum: cumYahooCv,
+        bing_cv_cum: cumBingCv,
+        google_cpa_cum: cumGoogleCv > 0 ? Math.round(cumGoogleCost / cumGoogleCv) : null,
+        yahoo_cpa_cum: cumYahooCv > 0 ? Math.round(cumYahooCost / cumYahooCv) : null,
+        bing_cpa_cum: cumBingCv > 0 ? Math.round(cumBingCost / cumBingCv) : null,
+        cmp_cpa_cum: cmp ? (cumCmpCv > 0 ? Math.round(cumCmpCost / cumCmpCv) : null) : null,
+        cmp_cv_cum: cmp ? cumCmpCv : null,
+      };
+    });
+  }, [displayTrend, compareTrend, cpaTarget]);
 
 
   // 最終更新テキスト
@@ -855,13 +944,16 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center justify-between">
-                CPA推移
-                {cpaTarget && (
-                  <span className="text-xs font-normal text-muted-foreground/60 tabular-nums">
-                    目標 {jpyFormat.format(cpaTarget)}
-                  </span>
-                )}
+              <CardTitle className="text-base flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  CPA推移
+                  {cpaTarget && (
+                    <span className="text-xs font-normal text-muted-foreground/60 tabular-nums">
+                      目標 {jpyFormat.format(cpaTarget)}
+                    </span>
+                  )}
+                </span>
+                <TrendModeToggle mode={trendMode} onChange={setTrendMode} />
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -880,15 +972,21 @@ export default function DashboardPage() {
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
                       const d = payload[0].payload as typeof chartData[0];
+                      const isCum = trendMode === 'cumulative';
+                      const cpaVal = isCum ? d.cpa_cum : d.cpa;
+                      const cmpCpaVal = isCum ? d.cmp_cpa_cum : d.cmp_cpa;
                       return (
                         <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
-                          <p className="font-medium text-foreground">{label}</p>
+                          <p className="font-medium text-foreground">
+                            {label}
+                            {isCum && <span className="ml-1.5 text-muted-foreground font-normal">（期間累計）</span>}
+                          </p>
                           <div className="flex justify-between gap-4">
                             <span className="flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-[#6366f1] shrink-0" />
                               <span className="text-muted-foreground">表示期間</span>
                             </span>
-                            <span className="tabular-nums font-semibold">{d.cpa != null ? jpyFormat.format(d.cpa) : '—'}</span>
+                            <span className="tabular-nums font-semibold">{cpaVal != null ? jpyFormat.format(cpaVal) : '—'}</span>
                           </div>
                           {showCompare && (
                             <div className="flex justify-between gap-4">
@@ -898,20 +996,23 @@ export default function DashboardPage() {
                                   比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
                                 </span>
                               </span>
-                              <span className="tabular-nums">{d.cmp_cpa != null ? jpyFormat.format(d.cmp_cpa) : '—'}</span>
+                              <span className="tabular-nums">{cmpCpaVal != null ? jpyFormat.format(cmpCpaVal) : '—'}</span>
                             </div>
                           )}
                           {platform === 'all' && (
                             <div className="pt-1 border-t border-border/50 space-y-1.5">
-                              {(['google', 'yahoo', 'bing'] as const).map((p) => (
-                                <div key={p} className="flex justify-between gap-4">
-                                  <span className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p] }} />
-                                    <span className="text-muted-foreground">{PLATFORM_LABELS[p]}</span>
-                                  </span>
-                                  <span className="tabular-nums">{d[`${p}_cpa`] != null ? jpyFormat.format(d[`${p}_cpa`]!) : '—'}</span>
-                                </div>
-                              ))}
+                              {(['google', 'yahoo', 'bing'] as const).map((p) => {
+                                const v = isCum ? d[`${p}_cpa_cum`] : d[`${p}_cpa`];
+                                return (
+                                  <div key={p} className="flex justify-between gap-4">
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p] }} />
+                                      <span className="text-muted-foreground">{PLATFORM_LABELS[p]}</span>
+                                    </span>
+                                    <span className="tabular-nums">{v != null ? jpyFormat.format(v) : '—'}</span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                           {cpaTarget && (
@@ -934,28 +1035,31 @@ export default function DashboardPage() {
                       strokeWidth={1.5}
                       strokeDasharray="5 4"
                       dot={false}
+                      isAnimationActive={!reducedMotion}
                     />
                   )}
                   {showCompare && (
                     <Line
                       type="monotone"
-                      dataKey="cmp_cpa"
+                      dataKey={trendMode === 'cumulative' ? 'cmp_cpa_cum' : 'cmp_cpa'}
                       name="比較期間"
                       stroke="#f97316"
                       strokeWidth={1.5}
                       strokeDasharray="5 3"
                       dot={false}
                       connectNulls
+                      isAnimationActive={!reducedMotion}
                     />
                   )}
                   <Line
                     type="monotone"
-                    dataKey="cpa"
+                    dataKey={trendMode === 'cumulative' ? 'cpa_cum' : 'cpa'}
                     name="表示期間"
                     stroke="#6366f1"
                     strokeWidth={2}
-                    dot={{ r: 3, fill: '#6366f1' }}
+                    dot={trendMode === 'cumulative' ? false : { r: 3, fill: '#6366f1' }}
                     connectNulls
+                    isAnimationActive={!reducedMotion}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -965,84 +1069,198 @@ export default function DashboardPage() {
           {/* CV推移 */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">CV推移</CardTitle>
+              <CardTitle className="text-base flex items-center justify-between gap-2">
+                CV推移
+                <TrendModeToggle mode={trendMode} onChange={setTrendMode} />
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => numFormat.format(v)}
-                    width={36}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    content={({ active, payload, label }) => {
-                      if (!active || !payload?.length) return null;
-                      const d = payload[0].payload as typeof chartData[0];
-                      return (
-                        <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
-                          <p className="font-medium text-foreground">{label}</p>
-                          <div className="flex justify-between gap-4">
-                            <span className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-[#10b981] shrink-0" />
-                              <span className="text-muted-foreground">表示期間</span>
-                            </span>
-                            <span className="tabular-nums font-semibold">{numFormat.format(d.conversions)}</span>
-                          </div>
-                          {showCompare && (
+                {trendMode === 'cumulative' ? (
+                  <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <defs>
+                      {(['google', 'yahoo', 'bing'] as const).map((p) => (
+                        <linearGradient key={p} id={`cv-cum-${p}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={PLATFORM_COLORS[p]} stopOpacity={0.5} />
+                          <stop offset="100%" stopColor={PLATFORM_COLORS[p]} stopOpacity={0.08} />
+                        </linearGradient>
+                      ))}
+                      <linearGradient id="cv-cum-single" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.5} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.05} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => numFormat.format(v)}
+                      width={36}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0].payload as typeof chartData[0];
+                        return (
+                          <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
+                            <p className="font-medium text-foreground">
+                              {label}
+                              <span className="ml-1.5 text-muted-foreground font-normal">（期間累計）</span>
+                            </p>
                             <div className="flex justify-between gap-4">
                               <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
-                                <span className="text-muted-foreground">
-                                  比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
-                                </span>
+                                <span className="w-2 h-2 rounded-full bg-[#10b981] shrink-0" />
+                                <span className="text-muted-foreground">表示期間</span>
                               </span>
-                              <span className="tabular-nums">{d.cmp_cv != null ? numFormat.format(d.cmp_cv) : '—'}</span>
+                              <span className="tabular-nums font-semibold">{numFormat.format(d.cv_cum)}</span>
                             </div>
-                          )}
-                          {platform === 'all' && (
-                            <div className="pt-1 border-t border-border/50 space-y-1.5">
-                              {(['google', 'yahoo', 'bing'] as const).map((p) => (
-                                <div key={p} className="flex justify-between gap-4">
-                                  <span className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p] }} />
-                                    <span className="text-muted-foreground">{PLATFORM_LABELS[p]}</span>
+                            {showCompare && (
+                              <div className="flex justify-between gap-4">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
+                                  <span className="text-muted-foreground">
+                                    比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
                                   </span>
-                                  <span className="tabular-nums">{numFormat.format(d[`${p}_cv`])}</span>
-                                </div>
-                              ))}
+                                </span>
+                                <span className="tabular-nums">{d.cmp_cv_cum != null ? numFormat.format(d.cmp_cv_cum) : '—'}</span>
+                              </div>
+                            )}
+                            {platform === 'all' && (
+                              <div className="pt-1 border-t border-border/50 space-y-1.5">
+                                {(['google', 'yahoo', 'bing'] as const).map((p) => (
+                                  <div key={p} className="flex justify-between gap-4">
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p] }} />
+                                      <span className="text-muted-foreground">{PLATFORM_LABELS[p]}</span>
+                                    </span>
+                                    <span className="tabular-nums">{numFormat.format(d[`${p}_cv_cum`])}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    {showCompare && (
+                      <Area
+                        type="monotone"
+                        dataKey="cmp_cv_cum"
+                        name="比較期間"
+                        stroke="#f97316"
+                        strokeWidth={1.5}
+                        strokeDasharray="5 3"
+                        fill="#f97316"
+                        fillOpacity={0.05}
+                        isAnimationActive={!reducedMotion}
+                      />
+                    )}
+                    {platform === 'all' ? (
+                      (['google', 'yahoo', 'bing'] as const).map((p) => (
+                        <Area
+                          key={p}
+                          type="monotone"
+                          dataKey={`${p}_cv_cum`}
+                          name={PLATFORM_LABELS[p]}
+                          stackId="cv"
+                          stroke={PLATFORM_COLORS[p]}
+                          strokeWidth={1.5}
+                          fill={`url(#cv-cum-${p})`}
+                          isAnimationActive={!reducedMotion}
+                        />
+                      ))
+                    ) : (
+                      <Area
+                        type="monotone"
+                        dataKey="cv_cum"
+                        name="表示期間"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fill="url(#cv-cum-single)"
+                        isAnimationActive={!reducedMotion}
+                      />
+                    )}
+                  </AreaChart>
+                ) : (
+                  <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => numFormat.format(v)}
+                      width={36}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0].payload as typeof chartData[0];
+                        return (
+                          <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
+                            <p className="font-medium text-foreground">{label}</p>
+                            <div className="flex justify-between gap-4">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-[#10b981] shrink-0" />
+                                <span className="text-muted-foreground">表示期間</span>
+                              </span>
+                              <span className="tabular-nums font-semibold">{numFormat.format(d.conversions)}</span>
                             </div>
-                          )}
-                        </div>
-                      );
-                    }}
-                  />
-                  {showCompare && (
+                            {showCompare && (
+                              <div className="flex justify-between gap-4">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
+                                  <span className="text-muted-foreground">
+                                    比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
+                                  </span>
+                                </span>
+                                <span className="tabular-nums">{d.cmp_cv != null ? numFormat.format(d.cmp_cv) : '—'}</span>
+                              </div>
+                            )}
+                            {platform === 'all' && (
+                              <div className="pt-1 border-t border-border/50 space-y-1.5">
+                                {(['google', 'yahoo', 'bing'] as const).map((p) => (
+                                  <div key={p} className="flex justify-between gap-4">
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PLATFORM_COLORS[p] }} />
+                                      <span className="text-muted-foreground">{PLATFORM_LABELS[p]}</span>
+                                    </span>
+                                    <span className="tabular-nums">{numFormat.format(d[`${p}_cv`])}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    {showCompare && (
+                      <Line
+                        type="monotone"
+                        dataKey="cmp_cv"
+                        name="比較期間"
+                        stroke="#f97316"
+                        strokeWidth={1.5}
+                        strokeDasharray="5 3"
+                        dot={false}
+                        connectNulls
+                        isAnimationActive={!reducedMotion}
+                      />
+                    )}
                     <Line
                       type="monotone"
-                      dataKey="cmp_cv"
-                      name="比較期間"
-                      stroke="#f97316"
-                      strokeWidth={1.5}
-                      strokeDasharray="5 3"
-                      dot={false}
+                      dataKey="conversions"
+                      name="表示期間"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: '#10b981' }}
                       connectNulls
+                      isAnimationActive={!reducedMotion}
                     />
-                  )}
-                  <Line
-                    type="monotone"
-                    dataKey="conversions"
-                    name="表示期間"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: '#10b981' }}
-                    connectNulls
-                  />
-                </LineChart>
+                  </LineChart>
+                )}
               </ResponsiveContainer>
             </CardContent>
           </Card>
