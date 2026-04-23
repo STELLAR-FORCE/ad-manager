@@ -30,6 +30,7 @@ import {
   type Platform,
   type AdType,
 } from '@/lib/campaign-mock-data';
+import { MetricTooltip } from '@/components/ui/metric-tooltip';
 
 // ─── 定数・フォーマット ──────────────────────────────────────────
 
@@ -99,7 +100,6 @@ export default function AdGroupsListPage() {
   // フィルター
   const [platformFilter, setPlatformFilter] = useState<Platform | 'all'>('all');
   const [adTypeFilter, setAdTypeFilter] = useState<AdType | 'all'>('all');
-  const [campaignFilter, setCampaignFilter] = useState<string>('all');
 
   // ソート
   const [sort, setSort] = useState<{ col: SortKey; dir: 'asc' | 'desc' }>({
@@ -115,24 +115,17 @@ export default function AdGroupsListPage() {
     );
   };
 
-  // フィルター適用済みキャンペーンリスト（キャンペーンフィルター用）
-  const filteredCampaigns = useMemo(() => {
-    return CAMPAIGNS.filter((c) => {
-      if (platformFilter !== 'all' && c.platform !== platformFilter) return false;
-      if (adTypeFilter !== 'all' && c.adType !== adTypeFilter) return false;
-      return true;
-    });
-  }, [platformFilter, adTypeFilter]);
-
   // フィルター＋ソート
   const filtered = useMemo(() => {
-    const campaignIds = new Set(filteredCampaigns.map((c) => c.id));
+    const campaignIds = new Set(
+      CAMPAIGNS.filter((c) => {
+        if (platformFilter !== 'all' && c.platform !== platformFilter) return false;
+        if (adTypeFilter !== 'all' && c.adType !== adTypeFilter) return false;
+        return true;
+      }).map((c) => c.id),
+    );
 
-    let result = AD_GROUPS.filter((ag) => {
-      if (!campaignIds.has(ag.campaignId)) return false;
-      if (campaignFilter !== 'all' && ag.campaignId !== campaignFilter) return false;
-      return true;
-    });
+    let result = AD_GROUPS.filter((ag) => campaignIds.has(ag.campaignId));
 
     // campaignName はルックアップで取得
     const getCampaignName = (ag: AdGroupData) => campaignMap.get(ag.campaignId)?.name ?? '';
@@ -156,7 +149,7 @@ export default function AdGroupsListPage() {
     });
 
     return result;
-  }, [filteredCampaigns, campaignFilter, campaignMap, sort]);
+  }, [platformFilter, adTypeFilter, campaignMap, sort]);
 
   // 合計
   const totals = useMemo(() => {
@@ -194,42 +187,38 @@ export default function AdGroupsListPage() {
 
         {/* フィルター */}
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={platformFilter} onValueChange={(v) => { setPlatformFilter(v as Platform | 'all'); setCampaignFilter('all'); }}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="媒体" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">すべての媒体</SelectItem>
-              <SelectItem value="google">Google</SelectItem>
-              <SelectItem value="yahoo">Yahoo!</SelectItem>
-              <SelectItem value="bing">Bing</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <label htmlFor="filter-adtype" className="text-sm text-muted-foreground whitespace-nowrap">
+              種別
+            </label>
+            <Select value={adTypeFilter} onValueChange={(v) => setAdTypeFilter(v as AdType | 'all')}>
+              <SelectTrigger id="filter-adtype" className="h-8 w-36 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべて</SelectItem>
+                <SelectItem value="search">検索</SelectItem>
+                <SelectItem value="display">ディスプレイ</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <Select value={adTypeFilter} onValueChange={(v) => { setAdTypeFilter(v as AdType | 'all'); setCampaignFilter('all'); }}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="種別" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">すべての種別</SelectItem>
-              <SelectItem value="search">検索</SelectItem>
-              <SelectItem value="display">ディスプレイ</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={campaignFilter} onValueChange={(v) => setCampaignFilter(v ?? 'all')}>
-            <SelectTrigger className="w-[260px]">
-              <SelectValue placeholder="キャンペーン" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">すべてのキャンペーン</SelectItem>
-              {filteredCampaigns.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <label htmlFor="filter-platform" className="text-sm text-muted-foreground whitespace-nowrap">
+              媒体
+            </label>
+            <Select value={platformFilter} onValueChange={(v) => setPlatformFilter(v as Platform | 'all')}>
+              <SelectTrigger id="filter-platform" className="h-8 w-32 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべて</SelectItem>
+                <SelectItem value="google">Google</SelectItem>
+                <SelectItem value="yahoo">Yahoo!</SelectItem>
+                <SelectItem value="bing">Bing</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           <span className="text-sm text-muted-foreground tabular-nums ml-auto">
             {fmtInt.format(filtered.length)} 広告グループ
@@ -315,22 +304,54 @@ export default function AdGroupsListPage() {
                         {ag.clicks > 0 ? fmtInt.format(ag.clicks) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {ag.impressions > 0 ? fmtPct.format(ag.ctr) : '—'}
+                        {ag.impressions > 0 ? (
+                          <MetricTooltip
+                            label="CTR = クリック数 ÷ 表示回数"
+                            numerator={{ label: 'クリック数', value: fmtInt.format(ag.clicks) }}
+                            denominator={{ label: '表示回数', value: fmtInt.format(ag.impressions) }}
+                          >
+                            {fmtPct.format(ag.ctr)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {ag.cost > 0 ? fmtJpy.format(ag.cost) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {ag.clicks > 0 ? fmtJpy.format(ag.cpc) : '—'}
+                        {ag.clicks > 0 ? (
+                          <MetricTooltip
+                            label="平均CPC = 費用 ÷ クリック数"
+                            numerator={{ label: '費用', value: fmtJpy.format(ag.cost) }}
+                            denominator={{ label: 'クリック数', value: fmtInt.format(ag.clicks) }}
+                          >
+                            {fmtJpy.format(ag.cpc)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {ag.conversions > 0 ? fmtInt.format(ag.conversions) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {ag.clicks > 0 ? fmtPct.format(ag.cvr) : '—'}
+                        {ag.clicks > 0 ? (
+                          <MetricTooltip
+                            label="CVR = CV ÷ クリック数"
+                            numerator={{ label: 'CV', value: fmtInt.format(ag.conversions) }}
+                            denominator={{ label: 'クリック数', value: fmtInt.format(ag.clicks) }}
+                          >
+                            {fmtPct.format(ag.cvr)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums pr-4">
-                        {ag.cpa != null ? fmtJpy.format(ag.cpa) : '—'}
+                        {ag.cpa != null ? (
+                          <MetricTooltip
+                            label="CPA = 費用 ÷ CV"
+                            numerator={{ label: '費用', value: fmtJpy.format(ag.cost) }}
+                            denominator={{ label: 'CV', value: fmtInt.format(ag.conversions) }}
+                          >
+                            {fmtJpy.format(ag.cpa)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
                     </TableRow>
                   );

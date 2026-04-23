@@ -24,6 +24,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusChip } from '@/components/ui/status-chip';
 import { cn } from '@/lib/utils';
 import { CAMPAIGNS, type CampaignData, type Platform, type AdType } from '@/lib/campaign-mock-data';
+import { MetricTooltip } from '@/components/ui/metric-tooltip';
 
 // ─── 定数 ──────────────────────────────────────────────────────
 
@@ -328,7 +329,15 @@ export default function CampaignsPage() {
 
                       {/* CTR */}
                       <TableCell className="text-right tabular-nums">
-                        {c.impressions > 0 ? fmtPct.format(c.ctr) : '—'}
+                        {c.impressions > 0 ? (
+                          <MetricTooltip
+                            label="CTR = クリック数 ÷ 表示回数"
+                            numerator={{ label: 'クリック数', value: fmtInt.format(c.clicks) }}
+                            denominator={{ label: '表示回数', value: fmtInt.format(c.impressions) }}
+                          >
+                            {fmtPct.format(c.ctr)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
 
                       {/* 費用 */}
@@ -338,7 +347,15 @@ export default function CampaignsPage() {
 
                       {/* 平均CPC */}
                       <TableCell className="text-right tabular-nums">
-                        {c.clicks > 0 ? fmtJpy.format(c.cpc) : '—'}
+                        {c.clicks > 0 ? (
+                          <MetricTooltip
+                            label="平均CPC = 費用 ÷ クリック数"
+                            numerator={{ label: '費用', value: fmtJpy.format(c.cost) }}
+                            denominator={{ label: 'クリック数', value: fmtInt.format(c.clicks) }}
+                          >
+                            {fmtJpy.format(c.cpc)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
 
                       {/* CV */}
@@ -348,7 +365,15 @@ export default function CampaignsPage() {
 
                       {/* CPA */}
                       <TableCell className="text-right tabular-nums pr-4">
-                        {c.cpa != null ? fmtJpy.format(c.cpa) : '—'}
+                        {c.cpa != null ? (
+                          <MetricTooltip
+                            label="CPA = 費用 ÷ CV"
+                            numerator={{ label: '費用', value: fmtJpy.format(c.cost) }}
+                            denominator={{ label: 'CV', value: fmtInt.format(c.conversions) }}
+                          >
+                            {fmtJpy.format(c.cpa)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
                     </TableRow>
                   );
