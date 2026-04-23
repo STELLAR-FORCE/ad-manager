@@ -11,7 +11,7 @@ export type CommonStatus =
   | 'ended'
   | 'removed';
 
-export type StatusChipColor = 'success' | 'warning' | 'default';
+export type StatusChipColor = 'success' | 'warning' | 'danger' | 'default';
 
 export type StatusTone = {
   color: StatusChipColor;
@@ -25,7 +25,7 @@ const STATUS_TONE: Record<CommonStatus, StatusTone> = {
   active:         { color: 'success', dotClass: 'bg-green-500',  defaultLabel: '有効' },
   active_limited: { color: 'warning', dotClass: 'bg-yellow-400', defaultLabel: '有効（制限付き）' },
   limited:        { color: 'warning', dotClass: 'bg-yellow-400', defaultLabel: '制限付き' },
-  paused:         { color: 'warning', dotClass: 'bg-amber-400',  defaultLabel: '一時停止' },
+  paused:         { color: 'danger',  dotClass: 'bg-red-500',    defaultLabel: '一時停止' },
   ended:          { color: 'default', dotClass: 'bg-gray-300',   defaultLabel: '終了' },
   removed:        { color: 'default', dotClass: 'bg-gray-400',   defaultLabel: '削除済' },
 };
