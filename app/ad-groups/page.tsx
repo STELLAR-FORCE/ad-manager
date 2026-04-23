@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -21,28 +21,58 @@ import {
 } from '@/components/ui/select';
 import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon } from 'lucide-react';
 import { StatusChip } from '@/components/ui/status-chip';
+import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker';
 import { cn } from '@/lib/utils';
 import {
   AD_GROUPS,
-  CAMPAIGNS,
   getCampaignMap,
   type AdGroupData,
   type Platform,
   type AdType,
 } from '@/lib/campaign-mock-data';
 import { MetricTooltip } from '@/components/ui/metric-tooltip';
+import { KpiStrip } from '@/components/ad-insights/kpi-strip';
+import { TrendChart, type TrendChartItem } from '@/components/ad-insights/trend-chart';
+import {
+  METRICS,
+  DEFAULT_KPI_KEYS,
+  type MetricKey,
+} from '@/components/ad-insights/metric-defs';
+import { generateItemTrend } from '@/lib/trend-mock';
 
 // ─── 定数・フォーマット ──────────────────────────────────────────
 
 const PLATFORM_CONFIG = {
-  google: { label: 'Google',  className: 'bg-blue-100 text-blue-700' },
-  yahoo:  { label: 'Yahoo!',  className: 'bg-red-100 text-red-700' },
-  bing:   { label: 'Bing',    className: 'bg-teal-100 text-teal-700' },
+  google: { label: 'Google', className: 'bg-blue-100 text-blue-700' },
+  yahoo:  { label: 'Yahoo!', className: 'bg-red-100 text-red-700' },
+  bing:   { label: 'Bing',   className: 'bg-teal-100 text-teal-700' },
 } as const;
 
 const fmtInt = new Intl.NumberFormat('ja-JP');
 const fmtJpy = new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 });
 const fmtPct = new Intl.NumberFormat('ja-JP', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const TODAY = new Date();
+
+function buildDates(period: { start: Date; end: Date }): string[] {
+  const days = Math.max(
+    1,
+    Math.round((period.end.getTime() - period.start.getTime()) / 86_400_000) + 1,
+  );
+  return Array.from({ length: days }, (_, i) =>
+    new Date(period.start.getTime() + i * 86_400_000).toISOString().split('T')[0],
+  );
+}
+
+function defaultDateRange(): DateRangeValue {
+  const prevMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() - 1, 1);
+  const prevMonthEnd = new Date(TODAY.getFullYear(), TODAY.getMonth(), 0);
+  return {
+    main: { start: prevMonth, end: prevMonthEnd },
+    compareEnabled: false,
+    preset: 'lastmonth',
+  };
+}
 
 type SortKey =
   | 'name'
@@ -56,6 +86,14 @@ type SortKey =
   | 'cvr'
   | 'cpa'
   | 'qualityScore';
+
+type SectionTotals = {
+  impressions: number;
+  clicks: number;
+  cost: number;
+  conversions: number;
+  conversionValue: number;
+};
 
 // ─── ソートヘッダー ────────────────────────────────────────────
 
@@ -92,16 +130,21 @@ function SortHeader({
   );
 }
 
-// ─── ページ ──────────────────────────────────────────────────────
+// ─── セクション ──────────────────────────────────────────────────
 
-export default function AdGroupsListPage() {
+type SectionProps = {
+  title: string;
+  adType: AdType;
+  period: { start: Date; end: Date };
+};
+
+function Section({ title, adType, period }: SectionProps) {
   const campaignMap = useMemo(() => getCampaignMap(), []);
-
-  // フィルター
-  const [platformFilter, setPlatformFilter] = useState<Platform | 'all'>('all');
-  const [adTypeFilter, setAdTypeFilter] = useState<AdType | 'all'>('all');
-
-  // ソート
+  const [platform, setPlatform] = useState<Platform | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [tileKeys, setTileKeys] = useState<MetricKey[]>(DEFAULT_KPI_KEYS);
+  const [selected, setSelected] = useState<MetricKey>('clicks');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ col: SortKey; dir: 'asc' | 'desc' }>({
     col: 'cost',
     dir: 'desc',
@@ -115,22 +158,72 @@ export default function AdGroupsListPage() {
     );
   };
 
-  // フィルター＋ソート
-  const filtered = useMemo(() => {
-    const campaignIds = new Set(
-      CAMPAIGNS.filter((c) => {
-        if (platformFilter !== 'all' && c.platform !== platformFilter) return false;
-        if (adTypeFilter !== 'all' && c.adType !== adTypeFilter) return false;
-        return true;
-      }).map((c) => c.id),
+  const dates = useMemo(() => buildDates(period), [period]);
+
+  const { rows, totals } = useMemo(() => {
+    const filtered = AD_GROUPS.filter((ag) => {
+      const c = campaignMap.get(ag.campaignId);
+      if (!c || c.adType !== adType) return false;
+      if (platform !== 'all' && c.platform !== platform) return false;
+      if (statusFilter !== 'all' && ag.status !== statusFilter) return false;
+      return true;
+    });
+
+    const totals: SectionTotals = filtered.reduce<SectionTotals>(
+      (acc, ag) => ({
+        impressions: acc.impressions + ag.impressions,
+        clicks: acc.clicks + ag.clicks,
+        cost: acc.cost + ag.cost,
+        conversions: acc.conversions + ag.conversions,
+        conversionValue: 0,
+      }),
+      { impressions: 0, clicks: 0, cost: 0, conversions: 0, conversionValue: 0 },
     );
 
-    let result = AD_GROUPS.filter((ag) => campaignIds.has(ag.campaignId));
+    return { rows: filtered, totals };
+  }, [adType, platform, statusFilter, campaignMap]);
 
-    // campaignName はルックアップで取得
+  // 選択中の広告グループだけチャートに表示（選択順を保持）
+  const chartItems: TrendChartItem[] = useMemo(() => {
+    return rows
+      .filter((ag) => selectedIds.has(ag.id))
+      .map((ag) => ({
+        id: ag.id,
+        name: ag.name,
+        dailyTotals: generateItemTrend(
+          ag.id,
+          {
+            impressions: ag.impressions,
+            clicks: ag.clicks,
+            cost: ag.cost,
+            conversions: ag.conversions,
+            conversionValue: 0,
+          },
+          period,
+        ),
+      }));
+  }, [rows, selectedIds, period]);
+
+  // フィルター条件が変わったら、表に残らない選択 ID を外す
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const rowIds = new Set(rows.map((r) => r.id));
+      const next = new Set(Array.from(prev).filter((id) => rowIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [rows]);
+
+  // 初期選択: クリック数上位3件をデフォルト選択（選択が空のとき、表が更新された直後のみ）
+  useEffect(() => {
+    if (selectedIds.size > 0 || rows.length === 0) return;
+    const top = [...rows].sort((a, b) => b.clicks - a.clicks).slice(0, 3);
+    setSelectedIds(new Set(top.map((r) => r.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
+
+  const sortedRows = useMemo(() => {
     const getCampaignName = (ag: AdGroupData) => campaignMap.get(ag.campaignId)?.name ?? '';
-
-    result = [...result].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       if (sort.col === 'name') {
         return sort.dir === 'asc'
           ? a.name.localeCompare(b.name, 'ja')
@@ -147,14 +240,11 @@ export default function AdGroupsListPage() {
       const bv = (b[sort.col as keyof AdGroupData] as number | null) ?? (sort.dir === 'asc' ? Infinity : -Infinity);
       return sort.dir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
+  }, [rows, sort, campaignMap]);
 
-    return result;
-  }, [platformFilter, adTypeFilter, campaignMap, sort]);
-
-  // 合計
-  const totals = useMemo(() => {
+  const rowTotals = useMemo(() => {
     const t = { impressions: 0, clicks: 0, cost: 0, conversions: 0 };
-    for (const ag of filtered) {
+    for (const ag of sortedRows) {
       t.impressions += ag.impressions;
       t.clicks += ag.clicks;
       t.cost += ag.cost;
@@ -167,233 +257,299 @@ export default function AdGroupsListPage() {
       cvr: t.clicks > 0 ? t.conversions / t.clicks : 0,
       cpa: t.conversions > 0 ? t.cost / t.conversions : null,
     };
-  }, [filtered]);
+  }, [sortedRows]);
+
+  const getKpiValue = (key: MetricKey): number | null => {
+    return METRICS[key].compute(totals);
+  };
+
+  const selectedMetric = METRICS[selected];
 
   return (
-      <div className="space-y-4">
-        {/* ヘッダー */}
+    <Card className="flex flex-col">
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label htmlFor={`platform-${adType}`} className="text-xs text-muted-foreground">
+                媒体
+              </label>
+              <Select value={platform} onValueChange={(v) => setPlatform(v as Platform | 'all')}>
+                <SelectTrigger id={`platform-${adType}`} className="h-8 w-28 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  <SelectItem value="google">Google</SelectItem>
+                  <SelectItem value="yahoo">Yahoo!</SelectItem>
+                  <SelectItem value="bing">Bing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor={`status-${adType}`} className="text-xs text-muted-foreground">
+                ステータス
+              </label>
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? 'all')}>
+                <SelectTrigger id={`status-${adType}`} className="h-8 w-28 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  <SelectItem value="active">有効</SelectItem>
+                  <SelectItem value="paused">一時停止</SelectItem>
+                  <SelectItem value="ended">終了</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <KpiStrip
+          tileKeys={tileKeys}
+          onTileKeysChange={setTileKeys}
+          selected={selected}
+          onSelect={setSelected}
+          getValue={getKpiValue}
+        />
         <div>
-          <h1 className="text-2xl font-bold">広告グループ</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            全キャンペーンの広告グループ一覧 — 2026年3月
-          </p>
-        </div>
-
-        {/* サンプルデータバナー */}
-        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300">
-          <InfoIcon className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
-          <span>サンプルデータを表示しています。</span>
-        </div>
-
-        {/* フィルター */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label htmlFor="filter-adtype" className="text-sm text-muted-foreground whitespace-nowrap">
-              種別
-            </label>
-            <Select value={adTypeFilter} onValueChange={(v) => setAdTypeFilter(v as AdType | 'all')}>
-              <SelectTrigger id="filter-adtype" className="h-8 w-36 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべて</SelectItem>
-                <SelectItem value="search">検索</SelectItem>
-                <SelectItem value="display">ディスプレイ</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted-foreground">
+              {chartItems.length > 0
+                ? `${fmtInt.format(chartItems.length)} 件を表示中`
+                : '下の表から広告グループを選択するとチャートに表示されます'}
+            </p>
+            {chartItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none"
+              >
+                選択をクリア
+              </button>
+            )}
           </div>
-
-          <div className="flex items-center gap-2">
-            <label htmlFor="filter-platform" className="text-sm text-muted-foreground whitespace-nowrap">
-              媒体
-            </label>
-            <Select value={platformFilter} onValueChange={(v) => setPlatformFilter(v as Platform | 'all')}>
-              <SelectTrigger id="filter-platform" className="h-8 w-32 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべて</SelectItem>
-                <SelectItem value="google">Google</SelectItem>
-                <SelectItem value="yahoo">Yahoo!</SelectItem>
-                <SelectItem value="bing">Bing</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <span className="text-sm text-muted-foreground tabular-nums ml-auto">
-            {fmtInt.format(filtered.length)} 広告グループ
-          </span>
+          <TrendChart items={chartItems} dates={dates} metric={selectedMetric} topN={20} />
         </div>
 
-        {/* テーブル */}
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-6 pl-4" />
-                  <SortHeader col="name"          label="広告グループ名" sort={sort} onSort={toggleSort} className="min-w-44" />
-                  <SortHeader col="campaignName"   label="キャンペーン"  sort={sort} onSort={toggleSort} className="min-w-40" />
-                  <TableHead>媒体</TableHead>
-                  <TableHead>入札戦略</TableHead>
-                  <SortHeader col="impressions"    label="表示回数"     sort={sort} onSort={toggleSort} className="text-right" />
-                  <SortHeader col="clicks"         label="クリック数"   sort={sort} onSort={toggleSort} className="text-right" />
-                  <SortHeader col="ctr"            label="CTR"          sort={sort} onSort={toggleSort} className="text-right" />
-                  <SortHeader col="cost"           label="費用"         sort={sort} onSort={toggleSort} className="text-right" />
-                  <SortHeader col="cpc"            label="平均CPC"      sort={sort} onSort={toggleSort} className="text-right" />
-                  <SortHeader col="conversions"    label="CV"           sort={sort} onSort={toggleSort} className="text-right" />
-                  <SortHeader col="cvr"            label="CVR"          sort={sort} onSort={toggleSort} className="text-right" />
-                  <SortHeader col="cpa"            label="CPA"          sort={sort} onSort={toggleSort} className="text-right pr-4" />
-                </TableRow>
-              </TableHeader>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-8 pl-3">
+                  <input
+                    type="checkbox"
+                    aria-label="全選択"
+                    className="size-3.5 rounded border-border accent-primary cursor-pointer"
+                    checked={rows.length > 0 && selectedIds.size === rows.length}
+                    ref={(el) => {
+                      if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < rows.length;
+                    }}
+                    onChange={(e) => {
+                      setSelectedIds(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set());
+                    }}
+                  />
+                </TableHead>
+                <TableHead className="w-6" />
+                <SortHeader col="name" label="広告グループ" sort={sort} onSort={toggleSort} className="min-w-40" />
+                <SortHeader col="campaignName" label="キャンペーン" sort={sort} onSort={toggleSort} className="min-w-32" />
+                <SortHeader col="impressions" label="表示" sort={sort} onSort={toggleSort} className="text-right" />
+                <SortHeader col="clicks" label="クリック" sort={sort} onSort={toggleSort} className="text-right" />
+                <SortHeader col="ctr" label="CTR" sort={sort} onSort={toggleSort} className="text-right" />
+                <SortHeader col="cost" label="費用" sort={sort} onSort={toggleSort} className="text-right" />
+                <SortHeader col="cpc" label="CPC" sort={sort} onSort={toggleSort} className="text-right" />
+                <SortHeader col="conversions" label="CV" sort={sort} onSort={toggleSort} className="text-right" />
+                <SortHeader col="cvr" label="CVR" sort={sort} onSort={toggleSort} className="text-right" />
+                <SortHeader col="cpa" label="CPA" sort={sort} onSort={toggleSort} className="text-right pr-3" />
+              </TableRow>
+            </TableHeader>
 
-              <TableBody>
-                {filtered.map((ag) => {
-                  const campaign = campaignMap.get(ag.campaignId);
-                  const platformCfg = campaign ? PLATFORM_CONFIG[campaign.platform] : null;
-
-                  return (
-                    <TableRow key={ag.id} className="text-sm">
-                      {/* ステータス */}
-                      <TableCell className="pl-4">
-                        <StatusChip status={ag.status} />
-                      </TableCell>
-
-                      {/* 広告グループ名（ドリルダウンリンク） */}
-                      <TableCell className="font-medium max-w-xs">
-                        <Link
-                          href={`/campaigns/${ag.campaignId}/${ag.id}`}
-                          className="hover:underline text-foreground"
-                        >
-                          <div className="truncate" title={ag.name}>{ag.name}</div>
-                        </Link>
-                      </TableCell>
-
-                      {/* キャンペーン名 */}
-                      <TableCell className="max-w-xs">
-                        <Link
-                          href={`/campaigns/${ag.campaignId}`}
-                          className="hover:underline text-muted-foreground text-xs"
-                        >
-                          <div className="truncate" title={campaign?.name}>{campaign?.name ?? '—'}</div>
-                        </Link>
-                      </TableCell>
-
-                      {/* 媒体バッジ */}
-                      <TableCell>
+            <TableBody>
+              {sortedRows.map((ag) => {
+                const c = campaignMap.get(ag.campaignId);
+                const platformCfg = c ? PLATFORM_CONFIG[c.platform] : null;
+                const checked = selectedIds.has(ag.id);
+                return (
+                  <TableRow key={ag.id} className="text-sm">
+                    <TableCell className="pl-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`${ag.name}をチャートに表示`}
+                        className="size-3.5 rounded border-border accent-primary cursor-pointer"
+                        checked={checked}
+                        onChange={(e) => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(ag.id);
+                            else next.delete(ag.id);
+                            return next;
+                          });
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <StatusChip status={ag.status} />
+                    </TableCell>
+                    <TableCell className="font-medium max-w-[180px]">
+                      <Link
+                        href={`/campaigns/${ag.campaignId}/${ag.id}`}
+                        className="hover:underline text-foreground"
+                      >
+                        <div className="truncate" title={ag.name}>{ag.name}</div>
+                      </Link>
+                    </TableCell>
+                    <TableCell className="max-w-[160px]">
+                      <Link
+                        href={`/campaigns/${ag.campaignId}`}
+                        className="hover:underline text-muted-foreground text-xs flex items-center gap-1.5"
+                      >
                         {platformCfg && (
-                          <span className={cn('text-xs font-medium px-1.5 py-0.5 rounded-full', platformCfg.className)}>
+                          <span className={cn('text-[10px] font-medium px-1 py-0.5 rounded-full shrink-0', platformCfg.className)}>
                             {platformCfg.label}
                           </span>
                         )}
-                      </TableCell>
+                        <span className="truncate" title={c?.name}>{c?.name ?? '—'}</span>
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {ag.impressions > 0 ? fmtInt.format(ag.impressions) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {ag.clicks > 0 ? fmtInt.format(ag.clicks) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {ag.impressions > 0 ? (
+                        <MetricTooltip
+                          label="CTR = クリック数 ÷ 表示回数"
+                          numerator={{ label: 'クリック数', value: fmtInt.format(ag.clicks) }}
+                          denominator={{ label: '表示回数', value: fmtInt.format(ag.impressions) }}
+                        >
+                          {fmtPct.format(ag.ctr)}
+                        </MetricTooltip>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {ag.cost > 0 ? fmtJpy.format(ag.cost) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {ag.clicks > 0 ? (
+                        <MetricTooltip
+                          label="平均CPC = 費用 ÷ クリック数"
+                          numerator={{ label: '費用', value: fmtJpy.format(ag.cost) }}
+                          denominator={{ label: 'クリック数', value: fmtInt.format(ag.clicks) }}
+                        >
+                          {fmtJpy.format(ag.cpc)}
+                        </MetricTooltip>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {ag.conversions > 0 ? fmtInt.format(ag.conversions) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {ag.clicks > 0 ? (
+                        <MetricTooltip
+                          label="CVR = CV ÷ クリック数"
+                          numerator={{ label: 'CV', value: fmtInt.format(ag.conversions) }}
+                          denominator={{ label: 'クリック数', value: fmtInt.format(ag.clicks) }}
+                        >
+                          {fmtPct.format(ag.cvr)}
+                        </MetricTooltip>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums pr-3">
+                      {ag.cpa != null ? (
+                        <MetricTooltip
+                          label="CPA = 費用 ÷ CV"
+                          numerator={{ label: '費用', value: fmtJpy.format(ag.cost) }}
+                          denominator={{ label: 'CV', value: fmtInt.format(ag.conversions) }}
+                        >
+                          {fmtJpy.format(ag.cpa)}
+                        </MetricTooltip>
+                      ) : '—'}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {sortedRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center text-sm text-muted-foreground py-8">
+                    該当する広告グループはありません
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
 
-                      {/* 入札戦略 */}
-                      <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                        {ag.bidStrategy}
-                        {ag.targetCpa != null && (
-                          <span className="ml-1">({fmtJpy.format(ag.targetCpa)})</span>
-                        )}
-                      </TableCell>
-
-                      {/* 指標 */}
-                      <TableCell className="text-right tabular-nums">
-                        {ag.impressions > 0 ? fmtInt.format(ag.impressions) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {ag.clicks > 0 ? fmtInt.format(ag.clicks) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {ag.impressions > 0 ? (
-                          <MetricTooltip
-                            label="CTR = クリック数 ÷ 表示回数"
-                            numerator={{ label: 'クリック数', value: fmtInt.format(ag.clicks) }}
-                            denominator={{ label: '表示回数', value: fmtInt.format(ag.impressions) }}
-                          >
-                            {fmtPct.format(ag.ctr)}
-                          </MetricTooltip>
-                        ) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {ag.cost > 0 ? fmtJpy.format(ag.cost) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {ag.clicks > 0 ? (
-                          <MetricTooltip
-                            label="平均CPC = 費用 ÷ クリック数"
-                            numerator={{ label: '費用', value: fmtJpy.format(ag.cost) }}
-                            denominator={{ label: 'クリック数', value: fmtInt.format(ag.clicks) }}
-                          >
-                            {fmtJpy.format(ag.cpc)}
-                          </MetricTooltip>
-                        ) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {ag.conversions > 0 ? fmtInt.format(ag.conversions) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {ag.clicks > 0 ? (
-                          <MetricTooltip
-                            label="CVR = CV ÷ クリック数"
-                            numerator={{ label: 'CV', value: fmtInt.format(ag.conversions) }}
-                            denominator={{ label: 'クリック数', value: fmtInt.format(ag.clicks) }}
-                          >
-                            {fmtPct.format(ag.cvr)}
-                          </MetricTooltip>
-                        ) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums pr-4">
-                        {ag.cpa != null ? (
-                          <MetricTooltip
-                            label="CPA = 費用 ÷ CV"
-                            numerator={{ label: '費用', value: fmtJpy.format(ag.cost) }}
-                            denominator={{ label: 'CV', value: fmtInt.format(ag.conversions) }}
-                          >
-                            {fmtJpy.format(ag.cpa)}
-                          </MetricTooltip>
-                        ) : '—'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-
-              {/* 合計行 */}
+            {sortedRows.length > 0 && (
               <TableFooter>
                 <TableRow>
-                  <TableCell className="pl-4" />
-                  <TableCell className="font-semibold" colSpan={4}>
-                    合計 ({fmtInt.format(filtered.length)} 広告グループ)
+                  <TableCell className="pl-3" />
+                  <TableCell />
+                  <TableCell className="font-semibold" colSpan={2}>
+                    合計 ({fmtInt.format(sortedRows.length)})
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
-                    {fmtInt.format(totals.impressions)}
+                    {fmtInt.format(rowTotals.impressions)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
-                    {fmtInt.format(totals.clicks)}
+                    {fmtInt.format(rowTotals.clicks)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
-                    {totals.impressions > 0 ? fmtPct.format(totals.ctr) : '—'}
+                    {rowTotals.impressions > 0 ? fmtPct.format(rowTotals.ctr) : '—'}
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
-                    {fmtJpy.format(totals.cost)}
+                    {fmtJpy.format(rowTotals.cost)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
-                    {totals.clicks > 0 ? fmtJpy.format(Math.round(totals.cpc)) : '—'}
+                    {rowTotals.clicks > 0 ? fmtJpy.format(Math.round(rowTotals.cpc)) : '—'}
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
-                    {fmtInt.format(totals.conversions)}
+                    {fmtInt.format(rowTotals.conversions)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
-                    {totals.clicks > 0 ? fmtPct.format(totals.cvr) : '—'}
+                    {rowTotals.clicks > 0 ? fmtPct.format(rowTotals.cvr) : '—'}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums font-semibold pr-4">
-                    {totals.cpa != null ? fmtJpy.format(Math.round(totals.cpa)) : '—'}
+                  <TableCell className="text-right tabular-nums font-semibold pr-3">
+                    {rowTotals.cpa != null ? fmtJpy.format(Math.round(rowTotals.cpa)) : '—'}
                   </TableCell>
                 </TableRow>
               </TableFooter>
-            </Table>
-          </CardContent>
-        </Card>
+            )}
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── ページ ──────────────────────────────────────────────────────
+
+export default function AdGroupsListPage() {
+  const [dateRange, setDateRange] = useState<DateRangeValue>(defaultDateRange);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold">広告グループ</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            全キャンペーンの広告グループ一覧
+          </p>
+        </div>
+        <DateRangePicker value={dateRange} onChange={setDateRange} today={TODAY} />
       </div>
+
+      <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300">
+        <InfoIcon className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
+        <span>サンプルデータを表示しています。</span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Section title="検索" adType="search" period={dateRange.main} />
+        <Section title="ディスプレイ" adType="display" period={dateRange.main} />
+      </div>
+    </div>
   );
 }
