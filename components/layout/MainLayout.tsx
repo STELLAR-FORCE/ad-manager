@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Toaster } from 'sonner';
 import { PageTransition } from '@/components/animate-ui/page-transition';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 type SidebarContextValue = {
   collapsed: boolean;
@@ -46,21 +47,23 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarContext.Provider value={{ collapsed, setCollapsed, ready }}>
-      <div className="flex min-h-screen items-start bg-slate-50">
-        <Sidebar />
-        <main className="flex-1 min-w-0">
-          <div className="p-6">
-            <PageTransition>{children}</PageTransition>
-          </div>
-        </main>
-        <Toaster
-          richColors
-          closeButton
-          position="top-right"
-          duration={4000}
-          toastOptions={{ classNames: { toast: 'rounded-lg' } }}
-        />
-      </div>
+      <TooltipProvider delay={200}>
+        <div className="flex min-h-screen items-start bg-slate-50">
+          <Sidebar />
+          <main className="flex-1 min-w-0">
+            <div className="p-6">
+              <PageTransition>{children}</PageTransition>
+            </div>
+          </main>
+          <Toaster
+            richColors
+            closeButton
+            position="top-right"
+            duration={4000}
+            toastOptions={{ classNames: { toast: 'rounded-lg' } }}
+          />
+        </div>
+      </TooltipProvider>
     </SidebarContext.Provider>
   );
 }

@@ -30,6 +30,7 @@ import {
   type KeywordData,
   type Platform,
 } from '@/lib/campaign-mock-data';
+import { MetricTooltip } from '@/components/ui/metric-tooltip';
 
 // ─── 定数・フォーマット ──────────────────────────────────────────
 
@@ -333,22 +334,54 @@ export default function KeywordsListPage() {
                         {kw.clicks > 0 ? fmtInt.format(kw.clicks) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {kw.impressions > 0 ? fmtPct.format(kw.ctr) : '—'}
+                        {kw.impressions > 0 ? (
+                          <MetricTooltip
+                            label="CTR = クリック数 ÷ 表示回数"
+                            numerator={{ label: 'クリック数', value: fmtInt.format(kw.clicks) }}
+                            denominator={{ label: '表示回数', value: fmtInt.format(kw.impressions) }}
+                          >
+                            {fmtPct.format(kw.ctr)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {kw.cost > 0 ? fmtJpy.format(kw.cost) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {kw.clicks > 0 ? fmtJpy.format(kw.cpc) : '—'}
+                        {kw.clicks > 0 ? (
+                          <MetricTooltip
+                            label="CPC = 費用 ÷ クリック数"
+                            numerator={{ label: '費用', value: fmtJpy.format(kw.cost) }}
+                            denominator={{ label: 'クリック数', value: fmtInt.format(kw.clicks) }}
+                          >
+                            {fmtJpy.format(kw.cpc)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {kw.conversions > 0 ? fmtInt.format(kw.conversions) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {kw.clicks > 0 ? fmtPct.format(kw.cvr) : '—'}
+                        {kw.clicks > 0 ? (
+                          <MetricTooltip
+                            label="CVR = CV ÷ クリック数"
+                            numerator={{ label: 'CV', value: fmtInt.format(kw.conversions) }}
+                            denominator={{ label: 'クリック数', value: fmtInt.format(kw.clicks) }}
+                          >
+                            {fmtPct.format(kw.cvr)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums pr-4">
-                        {kw.cpa != null ? fmtJpy.format(kw.cpa) : '—'}
+                        {kw.cpa != null ? (
+                          <MetricTooltip
+                            label="CPA = 費用 ÷ CV"
+                            numerator={{ label: '費用', value: fmtJpy.format(kw.cost) }}
+                            denominator={{ label: 'CV', value: fmtInt.format(kw.conversions) }}
+                          >
+                            {fmtJpy.format(kw.cpa)}
+                          </MetricTooltip>
+                        ) : '—'}
                       </TableCell>
                     </TableRow>
                   );
