@@ -131,6 +131,7 @@ export const DEFAULT_KPI_KEYS: MetricKey[] = [
   'conversions',
   'clicks',
   'cpc',
+  'cpa',
 ];
 
 export const LINE_COLORS = [
