@@ -43,6 +43,7 @@ import {
 import { MetricTooltip } from '@/components/ui/metric-tooltip';
 import { KpiStrip } from '@/components/ad-insights/kpi-strip';
 import { TrendChart, type TrendChartItem } from '@/components/ad-insights/trend-chart';
+import { TrendModeToggle, type TrendMode } from '@/components/ad-insights/trend-mode-toggle';
 import {
   METRICS,
   DEFAULT_KPI_KEYS,
@@ -485,6 +486,7 @@ export default function AdGroupDetailPage({
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('clicks');
   const [selectedAdIds, setSelectedAdIds] = useState<Set<string>>(new Set());
   const [selectedKeywordIds, setSelectedKeywordIds] = useState<Set<string>>(new Set());
+  const [trendMode, setTrendMode] = useState<TrendMode>('daily');
 
   const matchesStatus = (s: string) => {
     if (statusFilter === 'all') return true;
@@ -682,23 +684,26 @@ export default function AdGroupDetailPage({
           />
           {chartScopeLabel ? (
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 gap-2">
                 <p className="text-xs text-muted-foreground">
                   {chartItems.length > 0
                     ? `${chartScopeLabel}: ${fmtInt.format(chartItems.length)} 件を表示中`
                     : `下の表から${chartScopeLabel}を選択するとチャートに表示されます`}
                 </p>
-                {chartItems.length > 0 && onClearSelection && (
-                  <button
-                    type="button"
-                    onClick={onClearSelection}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none"
-                  >
-                    選択をクリア
-                  </button>
-                )}
+                <div className="flex items-center gap-3">
+                  <TrendModeToggle mode={trendMode} onChange={setTrendMode} />
+                  {chartItems.length > 0 && onClearSelection && (
+                    <button
+                      type="button"
+                      onClick={onClearSelection}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none"
+                    >
+                      選択をクリア
+                    </button>
+                  )}
+                </div>
               </div>
-              <TrendChart items={chartItems} dates={dates} metric={selectedMetricDef} topN={20} />
+              <TrendChart items={chartItems} dates={dates} metric={selectedMetricDef} topN={20} mode={trendMode} />
             </div>
           ) : (
             <div className="flex h-56 items-center justify-center text-sm text-muted-foreground">

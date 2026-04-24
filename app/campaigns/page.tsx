@@ -27,6 +27,7 @@ import { CAMPAIGNS, PLATFORM_CONFIG, type CampaignData, type Platform, type AdTy
 import { MetricTooltip } from '@/components/ui/metric-tooltip';
 import { KpiStrip } from '@/components/ad-insights/kpi-strip';
 import { TrendChart, type TrendChartItem } from '@/components/ad-insights/trend-chart';
+import { TrendModeToggle, type TrendMode } from '@/components/ad-insights/trend-mode-toggle';
 import {
   METRICS,
   DEFAULT_KPI_KEYS,
@@ -137,6 +138,7 @@ function Section({ title, adType, period }: SectionProps) {
   const [tileKeys, setTileKeys] = useState<MetricKey[]>(DEFAULT_KPI_KEYS);
   const [selected, setSelected] = useState<MetricKey>('clicks');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [trendMode, setTrendMode] = useState<TrendMode>('daily');
   const [sort, setSort] = useState<{ col: SortKey; dir: 'asc' | 'desc' }>({
     col: 'cost',
     dir: 'desc',
@@ -300,23 +302,26 @@ function Section({ title, adType, period }: SectionProps) {
         />
 
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2 gap-2">
             <p className="text-xs text-muted-foreground">
               {chartItems.length > 0
                 ? `${fmtInt.format(chartItems.length)} 件を表示中`
                 : '下の表からキャンペーンを選択するとチャートに表示されます'}
             </p>
-            {chartItems.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelectedIds(new Set())}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none"
-              >
-                選択をクリア
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <TrendModeToggle mode={trendMode} onChange={setTrendMode} />
+              {chartItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none"
+                >
+                  選択をクリア
+                </button>
+              )}
+            </div>
           </div>
-          <TrendChart items={chartItems} dates={dates} metric={selectedMetric} topN={20} />
+          <TrendChart items={chartItems} dates={dates} metric={selectedMetric} topN={20} mode={trendMode} />
         </div>
 
         <div className="rounded-md border">

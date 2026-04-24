@@ -14,6 +14,7 @@ import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 import { PLATFORM_CONFIG, type Platform } from '@/lib/campaign-mock-data';
 import type { MetricDef } from './metric-defs';
 import { LINE_COLORS } from './metric-defs';
+import type { TrendMode } from './trend-mode-toggle';
 
 export type TrendChartItem = {
   id: string;
@@ -36,11 +37,13 @@ type TrendChartProps = {
   dates: string[];
   metric: MetricDef;
   topN?: number;
+  /** 'daily'（既定）は日別値、'cumulative' は累積値で描画 */
+  mode?: TrendMode;
 };
 
 const dateShort = new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'numeric' });
 
-export function TrendChart({ items, dates, metric, topN = 8 }: TrendChartProps) {
+export function TrendChart({ items, dates, metric, topN = 8, mode = 'daily' }: TrendChartProps) {
   const reducedMotion = usePrefersReducedMotion();
 
   // クリック数上位 N 件に絞る（残りは合計して「その他」）
@@ -57,16 +60,45 @@ export function TrendChart({ items, dates, metric, topN = 8 }: TrendChartProps) 
   }, [items, topN]);
 
   // chart data: 各日に item ごとの値を持つレコード
+  // cumulative: dailyTotals を累積してから metric.compute することで、
+  // 比率系メトリクス（CTR・CPC・CPA 等）も正しく累積平均になる
   const chartData = useMemo(() => {
+    const cumulativeByItem = new Map<string, TrendChartItem['dailyTotals'][number]>();
+    if (mode === 'cumulative') {
+      for (const it of ranked) {
+        cumulativeByItem.set(it.id, {
+          impressions: 0,
+          clicks: 0,
+          cost: 0,
+          conversions: 0,
+          conversionValue: 0,
+        });
+      }
+    }
+
     return dates.map((date, i) => {
       const row: Record<string, number | string | null> = { date, label: dateShort.format(new Date(date)) };
       for (const it of ranked) {
         const daily = it.dailyTotals[i];
-        row[it.id] = daily ? metric.compute(daily) : null;
+        if (!daily) {
+          row[it.id] = null;
+          continue;
+        }
+        if (mode === 'cumulative') {
+          const acc = cumulativeByItem.get(it.id)!;
+          acc.impressions += daily.impressions;
+          acc.clicks += daily.clicks;
+          acc.cost += daily.cost;
+          acc.conversions += daily.conversions;
+          acc.conversionValue += daily.conversionValue;
+          row[it.id] = metric.compute(acc);
+        } else {
+          row[it.id] = metric.compute(daily);
+        }
       }
       return row;
     });
-  }, [dates, ranked, metric]);
+  }, [dates, ranked, metric, mode]);
 
   if (items.length === 0 || dates.length === 0) {
     return (
