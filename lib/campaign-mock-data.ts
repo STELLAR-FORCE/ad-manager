@@ -4,6 +4,12 @@ export type Platform = 'google' | 'yahoo' | 'bing';
 export type AdType = 'search' | 'display';
 export type CampaignStatus = 'active' | 'active_limited' | 'paused' | 'ended';
 
+export const PLATFORM_CONFIG: Record<Platform, { label: string; className: string }> = {
+  google: { label: 'Google', className: 'bg-blue-100 text-blue-700' },
+  yahoo:  { label: 'Yahoo!', className: 'bg-red-100 text-red-700' },
+  bing:   { label: 'Bing',   className: 'bg-teal-100 text-teal-700' },
+};
+
 export type CampaignData = {
   id: string;
   name: string;

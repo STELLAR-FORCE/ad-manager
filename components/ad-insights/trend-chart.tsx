@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
+import { PLATFORM_CONFIG, type Platform } from '@/lib/campaign-mock-data';
 import type { MetricDef } from './metric-defs';
 import { LINE_COLORS } from './metric-defs';
 
@@ -19,6 +20,8 @@ export type TrendChartItem = {
   name: string;
   /** 色を外部指定したい場合（例: 媒体系統カラー）。未指定なら LINE_COLORS で循環 */
   color?: string;
+  /** 媒体（ツールチップにバッジ表示） */
+  platform?: Platform;
   dailyTotals: {
     impressions: number;
     clicks: number;
@@ -94,23 +97,37 @@ export function TrendChart({ items, dates, metric, topN = 8 }: TrendChartProps) 
               const rows = ranked
                 .map((it) => {
                   const pl = payload.find((p) => p.dataKey === it.id);
-                  return { id: it.id, name: it.name, color: it.color, value: pl?.value as number | null | undefined };
+                  return {
+                    id: it.id,
+                    name: it.name,
+                    color: it.color,
+                    platform: it.platform,
+                    value: pl?.value as number | null | undefined,
+                  };
                 })
                 .filter((r) => r.value != null);
               if (rows.length === 0) return null;
               return (
-                <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[220px] max-w-xs">
+                <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[240px] max-w-sm">
                   <p className="font-medium text-foreground">{label}</p>
                   <p className="text-[10px] text-muted-foreground">{metric.label}</p>
-                  {rows.map((r) => (
-                    <div key={r.id} className="flex items-center justify-between gap-3">
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
-                        <span className="text-muted-foreground truncate" title={r.name}>{r.name}</span>
-                      </span>
-                      <span className="tabular-nums shrink-0">{metric.format(r.value ?? null)}</span>
-                    </div>
-                  ))}
+                  {rows.map((r) => {
+                    const platformCfg = r.platform ? PLATFORM_CONFIG[r.platform] : null;
+                    return (
+                      <div key={r.id} className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
+                          {platformCfg && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${platformCfg.className}`}>
+                              {platformCfg.label}
+                            </span>
+                          )}
+                          <span className="text-muted-foreground truncate" title={r.name}>{r.name}</span>
+                        </span>
+                        <span className="tabular-nums shrink-0">{metric.format(r.value ?? null)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             }}

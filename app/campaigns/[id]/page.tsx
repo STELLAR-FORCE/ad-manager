@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import {
   getCampaign,
   getAdGroupsByCampaign,
+  PLATFORM_CONFIG,
   type AdGroupData,
 } from '@/lib/campaign-mock-data';
 import { MetricTooltip } from '@/components/ui/metric-tooltip';
@@ -47,12 +48,6 @@ import {
 import { generateItemTrend } from '@/lib/trend-mock';
 
 // ─── 定数・フォーマット ──────────────────────────────────────────
-
-const PLATFORM_CONFIG = {
-  google: { label: 'Google',  className: 'bg-blue-100 text-blue-700' },
-  yahoo:  { label: 'Yahoo!',  className: 'bg-red-100 text-red-700' },
-  bing:   { label: 'Bing',    className: 'bg-teal-100 text-teal-700' },
-} as const;
 
 const fmtInt = new Intl.NumberFormat('ja-JP');
 const fmtJpy = new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 });
@@ -220,6 +215,7 @@ export default function AdGroupsPage({
       .map((ag) => ({
         id: ag.id,
         name: ag.name,
+        platform: campaign?.platform,
         dailyTotals: generateItemTrend(
           ag.id,
           {
@@ -232,7 +228,7 @@ export default function AdGroupsPage({
           dateRange.main,
         ),
       }));
-  }, [filteredAdGroups, selectedIds, dateRange.main]);
+  }, [filteredAdGroups, selectedIds, dateRange.main, campaign?.platform]);
 
   const getKpiValue = (key: MetricKey): number | null => METRICS[key].compute(totals);
   const selectedMetric = METRICS[selected];
