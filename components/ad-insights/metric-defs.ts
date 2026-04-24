@@ -128,7 +128,6 @@ export const METRICS: Record<MetricKey, MetricDef> = {
 export const DEFAULT_KPI_KEYS: MetricKey[] = [
   'impressions',
   'cost',
-  'conversionValue',
   'conversions',
   'clicks',
   'cpc',
