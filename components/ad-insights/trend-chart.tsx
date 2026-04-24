@@ -13,7 +13,7 @@ import {
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 import { PLATFORM_CONFIG, type Platform } from '@/lib/campaign-mock-data';
 import type { MetricDef } from './metric-defs';
-import { LINE_COLORS } from './metric-defs';
+import { LINE_COLORS, PLATFORM_PALETTES } from './metric-defs';
 import type { TrendMode } from './trend-mode-toggle';
 
 export type TrendChartItem = {
@@ -47,16 +47,27 @@ export function TrendChart({ items, dates, metric, topN = 8, mode = 'daily' }: T
   const reducedMotion = usePrefersReducedMotion();
 
   // クリック数上位 N 件に絞る（残りは合計して「その他」）
+  // 色割り当て: 明示色 → 媒体パレット（同媒体内で循環） → LINE_COLORS フォールバック
   const ranked = useMemo(() => {
     const scored = items.map((it) => {
       const total = it.dailyTotals.reduce((acc, d) => acc + d.clicks, 0);
       return { item: it, score: total };
     });
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, topN).map((s, idx) => ({
-      ...s.item,
-      color: s.item.color ?? LINE_COLORS[idx % LINE_COLORS.length],
-    }));
+    const platformIndex: Record<Platform, number> = { google: 0, yahoo: 0, bing: 0 };
+    return scored.slice(0, topN).map((s, idx) => {
+      let color = s.item.color;
+      if (!color) {
+        if (s.item.platform) {
+          const palette = PLATFORM_PALETTES[s.item.platform];
+          color = palette[platformIndex[s.item.platform] % palette.length];
+          platformIndex[s.item.platform] += 1;
+        } else {
+          color = LINE_COLORS[idx % LINE_COLORS.length];
+        }
+      }
+      return { ...s.item, color };
+    });
   }, [items, topN]);
 
   // chart data: 各日に item ごとの値を持つレコード
