@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import {
   AD_GROUPS,
   getCampaignMap,
+  PLATFORM_CONFIG,
   type AdGroupData,
   type Platform,
   type AdType,
@@ -33,6 +34,7 @@ import {
 import { MetricTooltip } from '@/components/ui/metric-tooltip';
 import { KpiStrip } from '@/components/ad-insights/kpi-strip';
 import { TrendChart, type TrendChartItem } from '@/components/ad-insights/trend-chart';
+import { TrendModeToggle, type TrendMode } from '@/components/ad-insights/trend-mode-toggle';
 import {
   METRICS,
   DEFAULT_KPI_KEYS,
@@ -41,12 +43,6 @@ import {
 import { generateItemTrend } from '@/lib/trend-mock';
 
 // ─── 定数・フォーマット ──────────────────────────────────────────
-
-const PLATFORM_CONFIG = {
-  google: { label: 'Google', className: 'bg-blue-100 text-blue-700' },
-  yahoo:  { label: 'Yahoo!', className: 'bg-red-100 text-red-700' },
-  bing:   { label: 'Bing',   className: 'bg-teal-100 text-teal-700' },
-} as const;
 
 const fmtInt = new Intl.NumberFormat('ja-JP');
 const fmtJpy = new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 });
@@ -145,6 +141,7 @@ function Section({ title, adType, period }: SectionProps) {
   const [tileKeys, setTileKeys] = useState<MetricKey[]>(DEFAULT_KPI_KEYS);
   const [selected, setSelected] = useState<MetricKey>('clicks');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [trendMode, setTrendMode] = useState<TrendMode>('daily');
   const [sort, setSort] = useState<{ col: SortKey; dir: 'asc' | 'desc' }>({
     col: 'cost',
     dir: 'desc',
@@ -190,6 +187,7 @@ function Section({ title, adType, period }: SectionProps) {
       .map((ag) => ({
         id: ag.id,
         name: ag.name,
+        platform: campaignMap.get(ag.campaignId)?.platform,
         dailyTotals: generateItemTrend(
           ag.id,
           {
@@ -202,7 +200,7 @@ function Section({ title, adType, period }: SectionProps) {
           period,
         ),
       }));
-  }, [rows, selectedIds, period]);
+  }, [rows, selectedIds, period, campaignMap]);
 
   // フィルター条件が変わったら、表に残らない選択 ID を外す
   useEffect(() => {
@@ -316,23 +314,26 @@ function Section({ title, adType, period }: SectionProps) {
           getValue={getKpiValue}
         />
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2 gap-2">
             <p className="text-xs text-muted-foreground">
               {chartItems.length > 0
                 ? `${fmtInt.format(chartItems.length)} 件を表示中`
                 : '下の表から広告グループを選択するとチャートに表示されます'}
             </p>
-            {chartItems.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelectedIds(new Set())}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none"
-              >
-                選択をクリア
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <TrendModeToggle mode={trendMode} onChange={setTrendMode} />
+              {chartItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none"
+                >
+                  選択をクリア
+                </button>
+              )}
+            </div>
           </div>
-          <TrendChart items={chartItems} dates={dates} metric={selectedMetric} topN={20} />
+          <TrendChart items={chartItems} dates={dates} metric={selectedMetric} topN={20} mode={trendMode} />
         </div>
 
         <div className="rounded-md border">

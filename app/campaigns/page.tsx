@@ -23,10 +23,11 @@ import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon } from 'lucide-react';
 import { StatusChip } from '@/components/ui/status-chip';
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker';
 import { cn } from '@/lib/utils';
-import { CAMPAIGNS, type CampaignData, type Platform, type AdType } from '@/lib/campaign-mock-data';
+import { CAMPAIGNS, PLATFORM_CONFIG, type CampaignData, type Platform, type AdType } from '@/lib/campaign-mock-data';
 import { MetricTooltip } from '@/components/ui/metric-tooltip';
 import { KpiStrip } from '@/components/ad-insights/kpi-strip';
 import { TrendChart, type TrendChartItem } from '@/components/ad-insights/trend-chart';
+import { TrendModeToggle, type TrendMode } from '@/components/ad-insights/trend-mode-toggle';
 import {
   METRICS,
   DEFAULT_KPI_KEYS,
@@ -47,12 +48,6 @@ type SortKey =
   | 'cpc'
   | 'conversions'
   | 'cpa';
-
-const PLATFORM_CONFIG: Record<Platform, { label: string; className: string }> = {
-  google: { label: 'Google', className: 'bg-blue-100 text-blue-700' },
-  yahoo:  { label: 'Yahoo!', className: 'bg-red-100 text-red-700' },
-  bing:   { label: 'Bing',   className: 'bg-teal-100 text-teal-700' },
-};
 
 const fmtInt = new Intl.NumberFormat('ja-JP');
 const fmtJpy = new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 });
@@ -143,6 +138,7 @@ function Section({ title, adType, period }: SectionProps) {
   const [tileKeys, setTileKeys] = useState<MetricKey[]>(DEFAULT_KPI_KEYS);
   const [selected, setSelected] = useState<MetricKey>('clicks');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [trendMode, setTrendMode] = useState<TrendMode>('daily');
   const [sort, setSort] = useState<{ col: SortKey; dir: 'asc' | 'desc' }>({
     col: 'cost',
     dir: 'desc',
@@ -236,6 +232,7 @@ function Section({ title, adType, period }: SectionProps) {
       .map((c) => ({
         id: c.id,
         name: c.name,
+        platform: c.platform,
         dailyTotals: generateItemTrend(
           c.id,
           {
@@ -305,23 +302,26 @@ function Section({ title, adType, period }: SectionProps) {
         />
 
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2 gap-2">
             <p className="text-xs text-muted-foreground">
               {chartItems.length > 0
                 ? `${fmtInt.format(chartItems.length)} 件を表示中`
                 : '下の表からキャンペーンを選択するとチャートに表示されます'}
             </p>
-            {chartItems.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelectedIds(new Set())}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none"
-              >
-                選択をクリア
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <TrendModeToggle mode={trendMode} onChange={setTrendMode} />
+              {chartItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none"
+                >
+                  選択をクリア
+                </button>
+              )}
+            </div>
           </div>
-          <TrendChart items={chartItems} dates={dates} metric={selectedMetric} topN={20} />
+          <TrendChart items={chartItems} dates={dates} metric={selectedMetric} topN={20} mode={trendMode} />
         </div>
 
         <div className="rounded-md border">

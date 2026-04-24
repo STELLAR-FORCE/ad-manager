@@ -50,7 +50,7 @@ export function KpiStrip({
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
       {tileKeys.map((k) => {
         const metric = METRICS[k];
-        const isDefault = (['impressions', 'cost', 'conversionValue', 'conversions', 'clicks', 'cpc'] as MetricKey[]).includes(k);
+        const isDefault = (['impressions', 'cost', 'conversions', 'clicks', 'cpc', 'cpa'] as MetricKey[]).includes(k);
         return (
           <div key={k} className="relative group">
             <KpiTile
