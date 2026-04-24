@@ -147,9 +147,10 @@ export const LINE_COLORS = [
   '#84cc16',
 ];
 
-/** 媒体系統カラーパレット — 各媒体内のアイテムはこの順で色を循環 */
+/** 媒体系統カラーパレット — 各媒体内のアイテムはこの順で色を循環
+ *  500 を基準に 400/600/300/700/200 で段階をつけ、ライン描画で視認しやすい彩度帯にそろえる */
 export const PLATFORM_PALETTES = {
-  google: ['#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'],
-  yahoo:  ['#b91c1c', '#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca'],
-  bing:   ['#0f766e', '#0d9488', '#14b8a6', '#2dd4bf', '#5eead4', '#99f6e4'],
+  google: ['#3b82f6', '#60a5fa', '#2563eb', '#93c5fd', '#1d4ed8', '#bfdbfe'],
+  yahoo:  ['#ef4444', '#f87171', '#dc2626', '#fca5a5', '#b91c1c', '#fecaca'],
+  bing:   ['#14b8a6', '#2dd4bf', '#0d9488', '#5eead4', '#0f766e', '#99f6e4'],
 } as const;
