@@ -4,12 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Legend,
+  Cell,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -26,6 +29,7 @@ import type {
   SfOpportunitySummary,
   SfPipelineRow,
   SfTrendRow,
+  SfLeadSummary,
 } from '@/lib/types/salesforce';
 
 const fmtInt = new Intl.NumberFormat('ja-JP');
@@ -96,6 +100,7 @@ export default function SalesforcePage() {
   const [summary, setSummary] = useState<LoadState<SfOpportunitySummary>>({ status: 'idle' });
   const [pipeline, setPipeline] = useState<LoadState<SfPipelineRow[]>>({ status: 'idle' });
   const [trend, setTrend] = useState<LoadState<SfTrendRow[]>>({ status: 'idle' });
+  const [leads, setLeads] = useState<LoadState<SfLeadSummary>>({ status: 'idle' });
 
   const { start, end } = dateRange.main;
   const startParam = useMemo(() => toDateParam(start), [start]);
@@ -108,6 +113,7 @@ export default function SalesforcePage() {
     setSummary({ status: 'loading' });
     setPipeline({ status: 'loading' });
     setTrend({ status: 'loading' });
+    setLeads({ status: 'loading' });
 
     fetch(`/api/salesforce/summary?${qs}`, { signal: controller.signal })
       .then(async (r) => {
@@ -145,6 +151,18 @@ export default function SalesforcePage() {
         setTrend({ status: 'error', message: err instanceof Error ? err.message : String(err) });
       });
 
+    fetch(`/api/salesforce/leads?${qs}`, { signal: controller.signal })
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) throw new Error(json.error ?? `HTTP ${r.status}`);
+        return json as SfLeadSummary;
+      })
+      .then((data) => setLeads({ status: 'success', data }))
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        setLeads({ status: 'error', message: err instanceof Error ? err.message : String(err) });
+      });
+
     return () => controller.abort();
   }, [startParam, endParam]);
 
@@ -171,6 +189,35 @@ export default function SalesforcePage() {
     }
     return { open, won, lost };
   }, [pipeline]);
+
+  // ステージ別 bar chart 用（件数が多い順 top 12）
+  const stageBarData = useMemo(() => {
+    if (pipeline.status !== 'success') return [];
+    return [...pipeline.data]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12)
+      .map((r) => ({
+        stage: r.stageName,
+        件数: r.count,
+        kind: r.kind,
+      }));
+  }, [pipeline]);
+
+  // リード媒体別 bar chart 用
+  const mediaBarData = useMemo(() => {
+    if (leads.status !== 'success') return [];
+    return leads.data.byMedia.slice(0, 10).map((r) => ({
+      media: r.media,
+      件数: r.count,
+    }));
+  }, [leads]);
+
+  const mediaColor = (media: string): string => {
+    if (media === 'google') return '#3b82f6';
+    if (media === 'yahoo') return '#ef4444';
+    if (media === 'bing') return '#14b8a6';
+    return '#94a3b8';
+  };
 
   return (
     <div className="space-y-4">
@@ -208,7 +255,12 @@ export default function SalesforcePage() {
             <KpiTile
               label="成約"
               value={fmtInt.format(summary.data.won)}
-              hint={`失注 ${fmtInt.format(summary.data.lost)} / 進行中 ${fmtInt.format(summary.data.open)}`}
+              hint={`進行中 ${fmtInt.format(summary.data.open)}`}
+            />
+            <KpiTile
+              label="失注"
+              value={fmtInt.format(summary.data.lost)}
+              hint="失注＋キャンセル合計"
             />
             <KpiTile
               label="Win 率"
@@ -223,6 +275,39 @@ export default function SalesforcePage() {
                   : '—'
               }
               hint="成約案件のみ"
+            />
+          </>
+        )}
+      </div>
+
+      {/* Lead KPI */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {leads.status === 'loading' && (
+          <div className="col-span-full text-sm text-muted-foreground">Lead 読み込み中…</div>
+        )}
+        {leads.status === 'error' && (
+          <div className="col-span-full text-sm text-red-600">Lead エラー: {leads.message}</div>
+        )}
+        {leads.status === 'success' && (
+          <>
+            <KpiTile
+              label="新規リード数"
+              value={fmtInt.format(leads.data.total)}
+              hint="sf_Lead.CreatedDate 基準"
+            />
+            <KpiTile
+              label="コンバージョン済"
+              value={fmtInt.format(leads.data.converted)}
+              hint="IsConverted = TRUE"
+            />
+            <KpiTile
+              label="リード CV 率"
+              value={
+                leads.data.conversionRate != null
+                  ? fmtPct.format(leads.data.conversionRate)
+                  : '—'
+              }
+              hint="Converted ÷ Total"
             />
           </>
         )}
@@ -264,10 +349,89 @@ export default function SalesforcePage() {
         </CardContent>
       </Card>
 
-      {/* ステージ別 */}
+      {/* ステージ別 bar chart + 媒体別 bar chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">ステージ別件数（上位 12）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {pipeline.status === 'success' && stageBarData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart
+                  data={stageBarData}
+                  layout="vertical"
+                  margin={{ top: 4, right: 16, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="stage"
+                    tick={{ fontSize: 11 }}
+                    width={140}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  <Bar dataKey="件数" radius={[0, 4, 4, 0]}>
+                    {stageBarData.map((d, i) => (
+                      <Cell key={i} fill={KIND_COLORS[d.kind]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                {pipeline.status === 'loading' ? '読み込み中…' : 'データなし'}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">媒体別リード件数</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {leads.status === 'success' && mediaBarData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart
+                  data={mediaBarData}
+                  layout="vertical"
+                  margin={{ top: 4, right: 16, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="media"
+                    tick={{ fontSize: 11 }}
+                    width={120}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  <Bar dataKey="件数" radius={[0, 4, 4, 0]}>
+                    {mediaBarData.map((d, i) => (
+                      <Cell key={i} fill={mediaColor(d.media)} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                {leads.status === 'loading' ? '読み込み中…' : 'データなし'}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ステージ別テーブル */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">ステージ別内訳</CardTitle>
+          <CardTitle className="text-base">ステージ別内訳（全件）</CardTitle>
         </CardHeader>
         <CardContent>
           {pipeline.status === 'loading' && (
