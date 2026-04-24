@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID ?? 'stellarforce-bi';
 const DATASET = process.env.BQ_DATASET ?? 'ad_manager';
+const SFDC_DATASET = process.env.BQ_SFDC_DATASET ?? 'staging';
 const LOCATION = process.env.BQ_LOCATION ?? 'asia-northeast1';
 
 const globalForBq = globalThis as unknown as { bq: BigQuery | undefined };
@@ -51,6 +52,14 @@ if (process.env.NODE_ENV !== 'production') globalForBq.bq = bq;
 
 export function table(name: string): string {
   return `\`${PROJECT_ID}.${DATASET}.${name}\``;
+}
+
+export function tableIn(dataset: string, name: string): string {
+  return `\`${PROJECT_ID}.${dataset}.${name}\``;
+}
+
+export function sfTable(name: string): string {
+  return tableIn(SFDC_DATASET, name);
 }
 
 export async function query<T = Record<string, unknown>>(
