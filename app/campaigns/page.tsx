@@ -23,7 +23,7 @@ import { ChevronUp, ChevronDown, ChevronsUpDown, InfoIcon } from 'lucide-react';
 import { StatusChip } from '@/components/ui/status-chip';
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker';
 import { cn } from '@/lib/utils';
-import { CAMPAIGNS, type CampaignData, type Platform, type AdType } from '@/lib/campaign-mock-data';
+import { CAMPAIGNS, PLATFORM_CONFIG, type CampaignData, type Platform, type AdType } from '@/lib/campaign-mock-data';
 import { MetricTooltip } from '@/components/ui/metric-tooltip';
 import { KpiStrip } from '@/components/ad-insights/kpi-strip';
 import { TrendChart, type TrendChartItem } from '@/components/ad-insights/trend-chart';
@@ -47,12 +47,6 @@ type SortKey =
   | 'cpc'
   | 'conversions'
   | 'cpa';
-
-const PLATFORM_CONFIG: Record<Platform, { label: string; className: string }> = {
-  google: { label: 'Google', className: 'bg-blue-100 text-blue-700' },
-  yahoo:  { label: 'Yahoo!', className: 'bg-red-100 text-red-700' },
-  bing:   { label: 'Bing',   className: 'bg-teal-100 text-teal-700' },
-};
 
 const fmtInt = new Intl.NumberFormat('ja-JP');
 const fmtJpy = new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 });
@@ -236,6 +230,7 @@ function Section({ title, adType, period }: SectionProps) {
       .map((c) => ({
         id: c.id,
         name: c.name,
+        platform: c.platform,
         dailyTotals: generateItemTrend(
           c.id,
           {

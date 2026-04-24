@@ -36,6 +36,7 @@ import {
   getAdGroup,
   getAdsByAdGroup,
   getKeywordsByAdGroup,
+  PLATFORM_CONFIG,
   type AdData,
   type KeywordData,
 } from '@/lib/campaign-mock-data';
@@ -50,12 +51,6 @@ import {
 import { generateItemTrend } from '@/lib/trend-mock';
 
 // ─── 定数・フォーマット ──────────────────────────────────────────
-
-const PLATFORM_CONFIG = {
-  google: { label: 'Google', className: 'bg-blue-100 text-blue-700' },
-  yahoo:  { label: 'Yahoo!', className: 'bg-red-100 text-red-700' },
-  bing:   { label: 'Bing',   className: 'bg-teal-100 text-teal-700' },
-} as const;
 
 const fmtInt = new Intl.NumberFormat('ja-JP');
 const fmtJpy = new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 });
@@ -543,6 +538,7 @@ export default function AdGroupDetailPage({
         .map((a) => ({
           id: a.id,
           name: a.name,
+          platform: campaign?.platform,
           dailyTotals: generateItemTrend(
             a.id,
             {
@@ -567,6 +563,7 @@ export default function AdGroupDetailPage({
         .map((k) => ({
           id: k.id,
           name: k.keyword,
+          platform: campaign?.platform,
           dailyTotals: generateItemTrend(
             k.id,
             {
@@ -586,7 +583,7 @@ export default function AdGroupDetailPage({
       };
     }
     return { chartItems: [] as TrendChartItem[], chartScopeLabel: null as string | null, onClearSelection: null as (() => void) | null };
-  }, [activeTab, filteredAds, filteredKeywords, selectedAdIds, selectedKeywordIds, isSearch, dateRange.main]);
+  }, [activeTab, filteredAds, filteredKeywords, selectedAdIds, selectedKeywordIds, isSearch, dateRange.main, campaign?.platform]);
 
   const selectedMetricDef = METRICS[selectedMetric];
 
