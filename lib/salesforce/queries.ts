@@ -1,0 +1,48 @@
+import { sfTable } from '@/lib/bigquery';
+import type { SfPlatform } from '@/lib/types/salesforce';
+
+/**
+ * sf_Lead.TrafficSourceMedia__c → ad_manager の Platform
+ * 大文字小文字の揺れがあるので lower-case で比較する
+ */
+export const SF_MEDIA_TO_PLATFORM: Record<string, SfPlatform> = {
+  google: 'google',
+  adwords: 'google',
+  yahoo: 'yahoo',
+  yss: 'yahoo',
+  bing: 'bing',
+  pmax: 'google',
+};
+
+export function mapMediaToPlatform(media: string | null | undefined): SfPlatform {
+  if (!media) return 'other';
+  return SF_MEDIA_TO_PLATFORM[media.toLowerCase()] ?? 'other';
+}
+
+/** ステージ名（sf_OpportunityStage.MasterLabel） — 実データから決定値 */
+export const SF_STAGE_WON = '案件成立';
+
+export const SF_STAGES_LOST = [
+  '失注（キャンセル）',
+  '失注（連絡が取れなかった）',
+  '失注（案内できなかった）',
+  '失注（案内したが負けた）',
+  '失注（他決）',
+  '失注（他決 / ウィークリー）',
+  '失注（理由不明）',
+  '失注（対応不備・トラブル）',
+  'キャンセル',
+  '依頼キャンセル',
+] as const;
+
+export const SF_STAGES_LOST_SET = new Set<string>(SF_STAGES_LOST);
+
+/** BQ SQL の IN 句用: ステージ名は全て安全な固定文字列 */
+export function lostStagesSqlList(): string {
+  return SF_STAGES_LOST.map((s) => `'${s}'`).join(', ');
+}
+
+/** エイリアス（SQL で使い回し） */
+export const SF_OPPORTUNITY = sfTable('sf_Opportunity');
+export const SF_OPPORTUNITY_STAGE = sfTable('sf_OpportunityStage');
+export const SF_LEAD = sfTable('sf_Lead');
