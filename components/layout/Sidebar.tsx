@@ -15,6 +15,7 @@ import {
   History,
   RefreshCw,
   Bot,
+  Briefcase,
   Circle,
   CheckCircle2,
   XCircle,
@@ -58,6 +59,7 @@ const navSections: NavSection[] = [
     label: '分析',
     items: [
       { href: '/search-terms', label: '検索語句分析', icon: Search },
+      { href: '/salesforce', label: '営業パイプライン', icon: Briefcase, badge: 'BETA' },
       { href: '/history', label: '変更履歴', icon: History },
     ],
   },

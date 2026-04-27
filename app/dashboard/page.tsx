@@ -41,7 +41,8 @@ import {
 } from 'recharts';
 import { Chip, Meter, ProgressCircle } from '@heroui/react';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
-import { FunnelFlow } from '@/components/dashboard/funnel-flow';
+import { IntegratedFunnel } from '@/components/dashboard/integrated-funnel';
+import { SalesforceSection } from '@/components/dashboard/salesforce-section';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 import { TrendModeToggle, type TrendMode } from '@/components/ad-insights/trend-mode-toggle';
@@ -822,7 +823,16 @@ export default function DashboardPage() {
             <CardContent className="pt-6 text-center text-muted-foreground">読み込み中…</CardContent>
           </Card>
         ) : (
-          <FunnelFlow metrics={current} isMock={isMock} />
+          <IntegratedFunnel
+            adMetrics={{
+              impressions: current.impressions,
+              clicks: current.clicks,
+              cost: current.cost,
+              conversions: current.conversions,
+            }}
+            dateRange={dateRange}
+            isMock={isMock}
+          />
         )}
 
         {/* ─── KPIカード ─── */}
@@ -1326,6 +1336,9 @@ export default function DashboardPage() {
             );})}
           </div>
         )}
+
+        {/* ─── 営業パイプライン（Salesforce） ─── */}
+        <SalesforceSection dateRange={dateRange} />
       </div>
   );
 }
