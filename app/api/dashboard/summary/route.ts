@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, table } from '@/lib/bigquery';
+import { cached } from '@/lib/dashboard-cache';
 
 type PlatformAggregateRow = {
   platform: string;
@@ -94,29 +95,43 @@ export async function GET(request: Request) {
       GROUP BY m.platform
     `;
 
-    const [currentRows, prevRows] = await Promise.all([
-      query<PlatformAggregateRow>(sql, {
-        start,
-        end,
-        ...(platformParam !== 'all' ? { platform: platformParam } : {}),
-        ...(adTypeParam !== 'all' ? { adType: adTypeParam } : {}),
-      }),
-      query<PlatformAggregateRow>(sql, {
-        start: prevStart,
-        end: prevEnd,
-        ...(platformParam !== 'all' ? { platform: platformParam } : {}),
-        ...(adTypeParam !== 'all' ? { adType: adTypeParam } : {}),
-      }),
+    const cacheKeyBase = `summary:${platformParam}:${adTypeParam}`;
+    const [currentResult, prevResult] = await Promise.all([
+      cached(`${cacheKeyBase}:${start}:${end}`, () =>
+        query<PlatformAggregateRow>(sql, {
+          start,
+          end,
+          ...(platformParam !== 'all' ? { platform: platformParam } : {}),
+          ...(adTypeParam !== 'all' ? { adType: adTypeParam } : {}),
+        }),
+      ),
+      cached(`${cacheKeyBase}:${prevStart}:${prevEnd}`, () =>
+        query<PlatformAggregateRow>(sql, {
+          start: prevStart,
+          end: prevEnd,
+          ...(platformParam !== 'all' ? { platform: platformParam } : {}),
+          ...(adTypeParam !== 'all' ? { adType: adTypeParam } : {}),
+        }),
+      ),
     ]);
 
-    const current = aggregateMetrics(currentRows);
-    const previous = aggregateMetrics(prevRows);
-    const byPlatform = currentRows.map((m) => ({
+    const current = aggregateMetrics(currentResult.value);
+    const previous = aggregateMetrics(prevResult.value);
+    const byPlatform = currentResult.value.map((m) => ({
       platform: m.platform,
       ...aggregateMetrics([m]),
     }));
 
-    return NextResponse.json({ platform: platformParam, current, previous, byPlatform });
+    const fetchedAt = Math.min(currentResult.fetchedAt, prevResult.fetchedAt);
+    return NextResponse.json(
+      { platform: platformParam, current, previous, byPlatform },
+      {
+        headers: {
+          'X-Cache-Fetched-At': new Date(fetchedAt).toISOString(),
+          'X-Cache-Hit': String(currentResult.hit && prevResult.hit),
+        },
+      },
+    );
   } catch (error) {
     console.error('ダッシュボードサマリー取得エラー:', error);
     return NextResponse.json({ error: 'データの取得に失敗しました' }, { status: 500 });

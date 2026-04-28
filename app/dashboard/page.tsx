@@ -45,6 +45,7 @@ import { IntegratedFunnel } from '@/components/dashboard/integrated-funnel';
 import { SalesforceSection } from '@/components/dashboard/salesforce-section';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
+import { useSidebarCollapsed } from '@/components/layout/MainLayout';
 import { TrendModeToggle, type TrendMode } from '@/components/ad-insights/trend-mode-toggle';
 import {
   aggregateCampaigns,
@@ -523,6 +524,13 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const initialized = useRef(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [cacheFetchedAt, setCacheFetchedAt] = useState<Date | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const { collapsed: sidebarCollapsed } = useSidebarCollapsed();
 
   // 目標CPA（localStorage永続化）
   const [cpaTarget, setCpaTarget] = useState<number | null>(null);
@@ -567,6 +575,9 @@ export default function DashboardPage() {
       if (isRefresh || initialized.current) setRefreshing(true);
       else setLoading(true);
       try {
+        if (isRefresh) {
+          await fetch('/api/dashboard/revalidate', { method: 'POST' }).catch(() => {});
+        }
         const fmt = (d: Date) => d.toISOString().split('T')[0];
         const { main, compare, compareEnabled } = dateRange;
         const summaryParams = new URLSearchParams({
@@ -597,6 +608,13 @@ export default function DashboardPage() {
         setCompareTrend(cmpData && Array.isArray(cmpData) ? cmpData : []);
         setBudget(bData.byPlatform ? bData : null);
         setLastUpdated(new Date());
+
+        const fetchedAtTimes = responses
+          .map((r) => r.headers.get('X-Cache-Fetched-At'))
+          .filter((s): s is string => Boolean(s))
+          .map((s) => new Date(s).getTime())
+          .filter((t) => !Number.isNaN(t));
+        setCacheFetchedAt(fetchedAtTimes.length ? new Date(Math.min(...fetchedAtTimes)) : null);
       } catch {
         setSummary(null);
         setTrend([]);
@@ -702,6 +720,19 @@ export default function DashboardPage() {
     return `${timeFormat.format(d)} に更新`;
   }
 
+  // サーバーキャッシュの取得時刻からの経過テキスト（nowTick で 30 秒ごとに再評価）
+  function formatCacheAge(d: Date | null, now: number): string {
+    if (!d) return '';
+    const diffMs = now - d.getTime();
+    const sec = Math.floor(diffMs / 1000);
+    if (sec < 60) return 'たった今のデータ';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min} 分前のデータ`;
+    const hour = Math.floor(min / 60);
+    if (hour < 24) return `${hour} 時間前のデータ`;
+    return `${timeFormat.format(d)} のデータ`;
+  }
+
   return (
       <div className="space-y-6">
 
@@ -792,30 +823,22 @@ export default function DashboardPage() {
             </PopoverContent>
           </Popover>
 
-          {/* 更新ボタン */}
+          {/* 再読み込みボタン */}
           <Button
             variant="outline"
             size="sm"
             className="gap-2"
             onClick={() => fetchData(true)}
             disabled={refreshing}
-            aria-label="データを更新"
+            aria-label="再読み込み"
           >
             <RefreshCw
               className={cn('h-4 w-4', refreshing && 'animate-spin')}
               aria-hidden="true"
             />
-            {refreshing ? '更新中…' : 'データ更新'}
+            {refreshing ? '読み込み中…' : '再読み込み'}
           </Button>
         </div>
-
-        {/* ─── サンプルデータ通知 ─── */}
-        {isMock && !loading && (
-          <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-700 flex items-center gap-2">
-            <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
-            API連携前のため、サンプルデータを表示しています
-          </div>
-        )}
 
         {/* ─── ファネルフロー ─── */}
         {loading ? (
@@ -831,7 +854,6 @@ export default function DashboardPage() {
               conversions: current.conversions,
             }}
             dateRange={dateRange}
-            isMock={isMock}
           />
         )}
 
@@ -1339,6 +1361,18 @@ export default function DashboardPage() {
 
         {/* ─── 営業パイプライン（Salesforce） ─── */}
         <SalesforceSection dateRange={dateRange} />
+
+        {/* ─── キャッシュ取得時刻インジケーター（左下固定） ─── */}
+        {cacheFetchedAt && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-4 z-40 px-3 py-1.5 rounded-full border bg-background/85 backdrop-blur text-xs text-muted-foreground tabular-nums shadow-sm pointer-events-none"
+            style={{ left: `calc(${sidebarCollapsed ? '4rem' : '15rem'} + 1rem)` }}
+          >
+            {formatCacheAge(cacheFetchedAt, nowTick)}
+          </div>
+        )}
       </div>
   );
 }

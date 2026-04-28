@@ -4,7 +4,6 @@ import { Fragment, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Chip } from '@heroui/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
 import { cn } from '@/lib/utils';
 
@@ -59,10 +58,8 @@ const CHART_HEIGHT_PX = 340;
 
 export function FunnelFlow({
   metrics,
-  isMock,
 }: {
   metrics: FunnelMetrics;
-  isMock: boolean;
 }) {
   const { impressions, clicks, cost, conversions, ctr, cvr, cpc, cpa } = metrics;
   const [hovered, setHovered] = useState<number | null>(null);
@@ -117,11 +114,6 @@ export function FunnelFlow({
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           表示 → クリック → CV フロー
-          {isMock && (
-            <Badge variant="secondary" className="text-xs font-normal">
-              サンプル
-            </Badge>
-          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
