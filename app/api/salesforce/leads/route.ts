@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/bigquery';
-import { SF_LEAD, mapMediaToPlatform } from '@/lib/salesforce/queries';
+import { SF_LEAD, SF_LEAD_FIELDS, mapMediaToPlatform } from '@/lib/salesforce/queries';
 import type { SfLeadSummary, SfPlatform } from '@/lib/types/salesforce';
 
 function parseDate(s: string | null): string | null {
@@ -21,18 +21,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
+  // 受付日時（Field9__c）が NULL のリードが約 5% あるため、CreatedDate にフォールバック
+  const receivedAt = `COALESCE(${SF_LEAD_FIELDS.receivedAt}, CreatedDate)`;
+
   const totalsSql = `
     SELECT
       COUNT(*) AS total,
       COUNTIF(IsConverted = TRUE) AS converted
     FROM ${SF_LEAD}
-    WHERE DATE(CreatedDate) BETWEEN DATE(@start) AND DATE(@end)
+    WHERE DATE(${receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
   `;
 
   const mediaSql = `
     SELECT TrafficSourceMedia__c AS media, COUNT(*) AS count
     FROM ${SF_LEAD}
-    WHERE DATE(CreatedDate) BETWEEN DATE(@start) AND DATE(@end)
+    WHERE DATE(${receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
       AND TrafficSourceMedia__c IS NOT NULL
     GROUP BY TrafficSourceMedia__c
     ORDER BY count DESC

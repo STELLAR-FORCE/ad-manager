@@ -23,6 +23,7 @@ export function mapMediaToPlatform(media: string | null | undefined): SfPlatform
 export const SF_STAGE_WON = '案件成立';
 
 export const SF_STAGES_LOST = [
+  '失注',
   '失注（キャンセル）',
   '失注（連絡が取れなかった）',
   '失注（案内できなかった）',
@@ -46,3 +47,25 @@ export function lostStagesSqlList(): string {
 export const SF_OPPORTUNITY = sfTable('sf_Opportunity');
 export const SF_OPPORTUNITY_STAGE = sfTable('sf_OpportunityStage');
 export const SF_LEAD = sfTable('sf_Lead');
+export const SF_CONTRACT = sfTable('sf_contract_management__c');
+export const SF_ACCOUNT = sfTable('sf_Account');
+
+/**
+ * Field*__c など名前から用途が読めない項目の意味付き定数。
+ * 詳細は docs/salesforce-mapping.md を参照。
+ */
+export const SF_LEAD_FIELDS = {
+  receivedAt: 'Field9__c',
+  approachedAt: 'Field15__c',
+  approachTimeMinutes: 'Field16__c',
+  leadTime: 'Field11__c',
+  desiredAccommodation: 'Field17__c',
+  usePeriodStart: 'Field5__c',
+  usePeriodEnd: 'Field6__c',
+  usePeriodDays: 'Field8__c',
+} as const;
+
+export const SF_OPPORTUNITY_FIELDS = {
+  receptionDate: 'Reception_date__c',
+  contactPerson: 'Field38__c',
+} as const;

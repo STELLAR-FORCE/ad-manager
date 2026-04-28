@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, table } from '@/lib/bigquery';
+import { cached } from '@/lib/dashboard-cache';
 
 type TrendRow = {
   date: { value: string } | string;
@@ -39,11 +40,15 @@ export async function GET(request: Request) {
       ORDER BY date ASC
     `;
 
-    const rows = await query<TrendRow>(sql, {
-      start: startStr,
-      end: endStr,
-      ...(platformParam !== 'all' ? { platform: platformParam } : {}),
-    });
+    const cacheKey = `trend:${platformParam}:${startStr}:${endStr}`;
+    const cacheResult = await cached(cacheKey, () =>
+      query<TrendRow>(sql, {
+        start: startStr,
+        end: endStr,
+        ...(platformParam !== 'all' ? { platform: platformParam } : {}),
+      }),
+    );
+    const rows = cacheResult.value;
 
     const byDate = new Map<
       string,
@@ -89,7 +94,12 @@ export async function GET(request: Request) {
         bing_cpa:   d.bing_cv   > 0 ? Math.round(d.bing   / d.bing_cv)   : null,
       }));
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: {
+        'X-Cache-Fetched-At': new Date(cacheResult.fetchedAt).toISOString(),
+        'X-Cache-Hit': String(cacheResult.hit),
+      },
+    });
   } catch (error) {
     console.error('トレンドデータ取得エラー:', error);
     return NextResponse.json({ error: 'データの取得に失敗しました' }, { status: 500 });

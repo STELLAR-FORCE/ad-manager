@@ -24,7 +24,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker';
-import { InfoIcon } from 'lucide-react';
 import type {
   SfOpportunitySummary,
   SfPipelineRow,
@@ -45,7 +44,6 @@ const dateShort = new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'num
 const TODAY = new Date();
 
 function defaultDateRange(): DateRangeValue {
-  // staging のテストデータは直近データが古い場合があるため、まずは過去1年で初期化
   const start = new Date(TODAY.getFullYear() - 1, TODAY.getMonth(), TODAY.getDate());
   return {
     main: { start, end: TODAY },
@@ -231,14 +229,6 @@ export default function SalesforcePage() {
         <DateRangePicker value={dateRange} onChange={setDateRange} today={TODAY} />
       </div>
 
-      <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300">
-        <InfoIcon className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
-        <span>
-          現在 <code>staging.sf_Opportunity</code> を参照中（BQ_SFDC_DATASET で切替可）。
-          本番データに切り替える際は環境変数のみ更新します。
-        </span>
-      </div>
-
       {/* KPI タイル */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         {summary.status === 'loading' && (
@@ -293,7 +283,7 @@ export default function SalesforcePage() {
             <KpiTile
               label="新規リード数"
               value={fmtInt.format(leads.data.total)}
-              hint="sf_Lead.CreatedDate 基準"
+              hint="sf_Lead.Field9__c（受付日時）基準。NULL は CreatedDate でフォールバック"
             />
             <KpiTile
               label="コンバージョン済"

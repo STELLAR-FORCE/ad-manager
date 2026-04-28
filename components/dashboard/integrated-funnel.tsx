@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
   TooltipContent,
@@ -62,11 +61,9 @@ function toDateParam(d: Date): string {
 export function IntegratedFunnel({
   adMetrics,
   dateRange,
-  isMock,
 }: {
   adMetrics: AdMetrics;
   dateRange: DateRangeValue;
-  isMock: boolean;
 }) {
   const [sfSummary, setSfSummary] = useState<SfOpportunitySummary | null>(null);
   const [sfLeads, setSfLeads] = useState<SfLeadSummary | null>(null);
@@ -197,11 +194,6 @@ export function IntegratedFunnel({
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           広告 → 営業 統合ファネル
-          {isMock && (
-            <Badge variant="secondary" className="text-xs font-normal">
-              サンプル
-            </Badge>
-          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
