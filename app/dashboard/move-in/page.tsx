@@ -39,9 +39,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { RefreshCw, Pencil, ArrowDown } from 'lucide-react';
+import { RefreshCw, Pencil, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react';
+import { Meter, Label } from '@heroui/react';
 import { PeriodSelector } from '@/components/dashboard/period-selector';
-import { jpyFormat, numFormat, pctFormat, formatMonthLabel } from '@/lib/format';
+import {
+  MoveInSummaryCard,
+  type MoveInSummaryCardData,
+} from '@/components/dashboard/move-in-summary-card';
+import { jpyFormat, jpyCompact, numFormat, pctFormat, formatMonthLabel } from '@/lib/format';
 import { currentPeriod, periodRange, type Period } from '@/lib/period';
 import { cn } from '@/lib/utils';
 
@@ -80,11 +85,43 @@ type ApiResponse = {
   targets: TargetRow[];
 };
 
+type ForecastRow = {
+  moveInMonth: string;
+  confirmedGrossProfit: number;
+  confirmedRooms: number;
+  actualUnitPriceMedian: number | null;
+  introducedRooms: number;
+  earlyRooms: number;
+  pipelineWeightedRooms: number;
+  pipelineForecastGrossProfit: number;
+  assumedUnitPrice: number;
+};
+
+type LeadAggRow = {
+  moveInMonth: string;
+  cv: number;
+  cvRooms: number;
+  requestRoomDays: number;
+};
+
+type SummaryApiResponse = {
+  period: { months: string[]; label: string };
+  forecast: ForecastRow[];
+  leadAgg: LeadAggRow[];
+  summary: SummaryRow[];
+  targets: TargetRow[];
+};
+
+type SortMode = 'chrono' | 'risk';
+
 export default function MoveInPivotPage() {
   const [period, setPeriod] = useState<Period>(() => currentPeriod(TODAY, 'half'));
   const [data, setData] = useState<ApiResponse | null>(null);
+  const [summaryData, setSummaryData] = useState<SummaryApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>('chrono');
+  const [showPivot, setShowPivot] = useState(false);
 
   const fetchData = useCallback(async () => {
     setRefreshing(true);
@@ -94,16 +131,25 @@ export default function MoveInPivotPage() {
         year: String(period.year),
         index: String(period.index),
       });
-      const res = await fetch(`/api/dashboard/move-in/pivot?${params}`);
-      const json = await res.json();
-      if (json.error) {
-        console.error(json.error);
+      const [pivotRes, summaryRes] = await Promise.all([
+        fetch(`/api/dashboard/move-in/pivot?${params}`).then((r) => r.json()),
+        fetch(`/api/dashboard/move-in/summary?${params}`).then((r) => r.json()),
+      ]);
+      if (pivotRes.error) {
+        console.error(pivotRes.error);
         setData(null);
       } else {
-        setData(json);
+        setData(pivotRes);
+      }
+      if (summaryRes.error) {
+        console.error(summaryRes.error);
+        setSummaryData(null);
+      } else {
+        setSummaryData(summaryRes);
       }
     } catch {
       setData(null);
+      setSummaryData(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -215,6 +261,59 @@ export default function MoveInPivotPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, months]);
 
+  /** サマリーカード用データ（入居月別） */
+  const summaryCards = useMemo<MoveInSummaryCardData[]>(() => {
+    if (!summaryData) return [];
+    const forecastMap = new Map(summaryData.forecast.map((r) => [r.moveInMonth, r]));
+    const leadMap = new Map(summaryData.leadAgg.map((r) => [r.moveInMonth, r]));
+    const targetMap = new Map(summaryData.targets.map((r) => [r.month, r]));
+    return months.map<MoveInSummaryCardData>((m) => {
+      const f = forecastMap.get(m);
+      const l = leadMap.get(m);
+      const t = targetMap.get(m);
+      return {
+        moveInMonth: m,
+        cv: l?.cv ?? 0,
+        cvTarget: t?.cvTarget ?? null,
+        rooms: l?.cvRooms ?? 0,
+        roomTarget: t?.roomTarget ?? null,
+        confirmedGrossProfit: f?.confirmedGrossProfit ?? 0,
+        pipelineForecastGrossProfit: f?.pipelineForecastGrossProfit ?? 0,
+        grossProfitTarget: t?.grossProfitTarget ?? null,
+        actualUnitPriceMedian: f?.actualUnitPriceMedian ?? null,
+        assumedUnitPrice: f?.assumedUnitPrice ?? 100000,
+        introducedRooms: f?.introducedRooms ?? 0,
+        earlyRooms: f?.earlyRooms ?? 0,
+      };
+    });
+  }, [summaryData, months]);
+
+  /** 並び替え後のカード（時系列 / 危険度順）*/
+  const sortedCards = useMemo(() => {
+    if (sortMode === 'chrono') return summaryCards;
+    // 危険度順: 粗利達成率の低い順（targetが無いものは末尾）
+    return [...summaryCards].sort((a, b) => {
+      const af = a.confirmedGrossProfit + a.pipelineForecastGrossProfit;
+      const bf = b.confirmedGrossProfit + b.pipelineForecastGrossProfit;
+      const ar = a.grossProfitTarget && a.grossProfitTarget > 0 ? af / a.grossProfitTarget : Infinity;
+      const br = b.grossProfitTarget && b.grossProfitTarget > 0 ? bf / b.grossProfitTarget : Infinity;
+      return ar - br;
+    });
+  }, [summaryCards, sortMode]);
+
+  /** 期間合計タイル用 */
+  const periodTotal = useMemo(() => {
+    const confirmed = summaryCards.reduce((s, c) => s + c.confirmedGrossProfit, 0);
+    const pipeline = summaryCards.reduce((s, c) => s + c.pipelineForecastGrossProfit, 0);
+    const forecastTotal = confirmed + pipeline;
+    const target = summaryCards.reduce((s, c) => s + (c.grossProfitTarget ?? 0), 0);
+    const cv = summaryCards.reduce((s, c) => s + c.cv, 0);
+    const cvTarget = summaryCards.reduce((s, c) => s + (c.cvTarget ?? 0), 0);
+    const rooms = summaryCards.reduce((s, c) => s + c.rooms, 0);
+    const roomTarget = summaryCards.reduce((s, c) => s + (c.roomTarget ?? 0), 0);
+    return { confirmed, pipeline, forecastTotal, target, cv, cvTarget, rooms, roomTarget };
+  }, [summaryCards]);
+
   return (
     <TooltipProvider>
     <div className="space-y-6">
@@ -222,7 +321,7 @@ export default function MoveInPivotPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">入居日ベース</h1>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
-            行 = CV発生月、列 = 入居月（件数＋室数を並列表示）。マーケ課以外がメインで見る KPI ビュー。
+            入居月ごとの着地見込み（LP流入の案件のみ）。営業/経営は時系列、マーケはリードタイム逆算で施策タイミングを判断。
           </p>
         </div>
         <PeriodSelector value={period} onChange={setPeriod} />
@@ -252,9 +351,143 @@ export default function MoveInPivotPage() {
           <CardContent className="py-12 text-center text-muted-foreground">読み込み中…</CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="overflow-x-auto p-0">
-            <Table>
+        <>
+          {/* ─── 期間合計タイル ─── */}
+          <Card className="bg-gradient-to-br from-background to-muted/30">
+            <CardContent className="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
+              <div>
+                <div className="text-xs font-medium text-muted-foreground">予想粗利（期間合計）</div>
+                <div className="mt-1 text-2xl font-bold tabular-nums">
+                  {jpyCompact.format(periodTotal.forecastTotal)}
+                </div>
+                <div className="text-[11px] text-muted-foreground tabular-nums">
+                  目標 {periodTotal.target > 0 ? jpyCompact.format(periodTotal.target) : '—'}
+                  {periodTotal.target > 0 && (
+                    <span className="ml-1.5">
+                      （{pctFormat.format(periodTotal.forecastTotal / periodTotal.target)}）
+                    </span>
+                  )}
+                </div>
+                {periodTotal.target > 0 && (
+                  <Meter
+                    aria-label="期間合計 達成率"
+                    value={Math.min(100, (periodTotal.forecastTotal / periodTotal.target) * 100)}
+                    maxValue={100}
+                    color={
+                      periodTotal.forecastTotal >= periodTotal.target
+                        ? 'success'
+                        : periodTotal.forecastTotal / periodTotal.target >= 0.7
+                          ? 'warning'
+                          : 'danger'
+                    }
+                    className="mt-2 w-full"
+                  >
+                    <Meter.Track>
+                      <Meter.Fill />
+                    </Meter.Track>
+                  </Meter>
+                )}
+              </div>
+              <div>
+                <div className="text-xs font-medium text-muted-foreground">確定粗利</div>
+                <div className="mt-1 text-2xl font-bold tabular-nums">
+                  {jpyCompact.format(periodTotal.confirmed)}
+                </div>
+                <div className="text-[11px] text-muted-foreground">契約管理レコードの粗利合計</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium text-muted-foreground">進行中（加重）</div>
+                <div className="mt-1 text-2xl font-bold tabular-nums">
+                  {jpyCompact.format(periodTotal.pipeline)}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  紹介後 50% / 早期 25% × ¥100,000/室
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground">CV</div>
+                  <div className="mt-1 text-lg font-bold tabular-nums">
+                    {numFormat.format(periodTotal.cv)}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      / {periodTotal.cvTarget > 0 ? numFormat.format(periodTotal.cvTarget) : '—'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground">室数</div>
+                  <div className="mt-1 text-lg font-bold tabular-nums">
+                    {numFormat.format(periodTotal.rooms)}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      / {periodTotal.roomTarget > 0 ? numFormat.format(periodTotal.roomTarget) : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ─── 並び替えトグル ─── */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-muted-foreground">入居月別サマリー</h2>
+            <div className="inline-flex rounded-md border bg-background p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setSortMode('chrono')}
+                className={cn(
+                  'px-2.5 py-1 rounded transition-colors',
+                  sortMode === 'chrono' ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50',
+                )}
+              >
+                時系列
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortMode('risk')}
+                className={cn(
+                  'px-2.5 py-1 rounded transition-colors',
+                  sortMode === 'risk' ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/50',
+                )}
+              >
+                危険度順
+              </button>
+            </div>
+          </div>
+
+          {/* ─── サマリーカードグリッド ─── */}
+          {sortedCards.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                サマリーデータが取得できませんでした
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {sortedCards.map((card) => (
+                <MoveInSummaryCard key={card.moveInMonth} data={card} today={TODAY} />
+              ))}
+            </div>
+          )}
+
+          {/* ─── 全月詳細（既存ピボット表）— デフォルト折りたたみ ─── */}
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowPivot((s) => !s)}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              aria-expanded={showPivot}
+            >
+              {showPivot ? (
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              )}
+              全月詳細（CV発生月 × 入居月のピボット）
+            </button>
+            {showPivot && (
+              <Card>
+                <CardContent className="overflow-x-auto p-0">
+                  <Table>
               {/* ─── ヘッダ 3 段 ─── */}
               <TableHeader>
                 {/* 1 段目: 入居月（colspan=4 = 件数 2 + 室数 2）。corner = CV発生月ラベル */}
@@ -553,10 +786,13 @@ export default function MoveInPivotPage() {
                     highlight
                   />
                 </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </>
       )}
     </div>
     </TooltipProvider>
