@@ -22,6 +22,37 @@ export function mapMediaToPlatform(media: string | null | undefined): SfPlatform
 /** ステージ名（sf_OpportunityStage.MasterLabel） — 実データから決定値 */
 export const SF_STAGE_WON = '案件成立';
 
+/**
+ * LP 流入元フィルタ（sf_Lead.ryuunyuumoto__c）— Issue #64。
+ *
+ *   monthly-order / express / standard … 検索依頼用 LP（https://www.monthly-bank.jp/lp/...）
+ *   site                                 … 資料 DL 用 LP（https://monthly-bank.jp/）
+ *
+ * これ以外の値（gm / net-tel / form / SNS / mail-form）は別経路のため除外。
+ * NULL も除外。
+ */
+export const SF_LP_RYUUNYUUMOTO_VALUES = [
+  'monthly-order',
+  'express',
+  'standard',
+  'site',
+] as const;
+
+/** BQ SQL の IN 句用: 全て安全な固定文字列 */
+export function lpRyuunyuumotoSqlList(): string {
+  return SF_LP_RYUUNYUUMOTO_VALUES.map((s) => `'${s}'`).join(', ');
+}
+
+/** sf_Lead に LP フィルタを当てる WHERE 句（先頭 AND 無し） */
+export const LP_LEAD_FILTER_SQL = `l.ryuunyuumoto__c IN (${SF_LP_RYUUNYUUMOTO_VALUES.map((s) => `'${s}'`).join(', ')})`;
+
+/**
+ * フェーズ確度マスタ（dashboard.stage_probability）— Issue #64。
+ * 物件成立 (won) は契約管理側で確定粗利を使うため、確度は名目上 100%。
+ * 実際の予想粗利計算では Opportunity 側の進行中（introduced / early）にだけ確度を当てる。
+ */
+export type StageGroup = 'won' | 'introduced' | 'early' | 'lost';
+
 export const SF_STAGES_LOST = [
   '失注',
   '失注（キャンセル）',

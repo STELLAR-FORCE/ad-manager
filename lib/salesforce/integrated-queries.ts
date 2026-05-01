@@ -15,13 +15,14 @@
  *  - sf_contract_management__c.is_contracted_monthly_inhouse__c = 自社物件チェック
  */
 
-import { table } from '@/lib/bigquery';
+import { table, tableIn } from '@/lib/bigquery';
 import {
   SF_LEAD,
   SF_OPPORTUNITY,
   SF_CONTRACT,
   SF_STAGE_WON,
   PLATFORM_FROM_MEDIA_CASE,
+  LP_LEAD_FILTER_SQL,
   contractKindCase,
 } from './queries';
 
@@ -291,4 +292,103 @@ export type MoveInSummaryRawRow = {
   gross_profit: number | null;
   revenue: number | null;
   contracted_room_days: number | null;
+};
+
+/**
+ * Issue #64 — 入居月別の予想粗利と進行中パイプライン。
+ *
+ * - LP 経由リード (`ryuunyuumoto__c IN (LP値)`) → 案件化済のみが対象
+ * - 確定粗利: 契約管理側の `total_sales_gross_profit__c`（自社物件除外）
+ * - 進行中: 案件のフェーズが 'introduced'/'early' のもの。`need_number_of_room__c × unit_price × probability`
+ * - 実績粗利単価中央値: 直近の確定粗利 / 成約室数 の中央値（想定 ¥100,000/室 との乖離可視化用）
+ *
+ * 注:
+ *   1. won グループ（物件決定〜案件成立）は契約管理側で確定粗利を取るため
+ *      Opportunity 側の集計対象に含めない（重複防止）
+ *   2. lost グループは確度 0% なので集計しても 0 になるが、明示的に除外する
+ *   3. 契約管理レコードが既にある案件は確定粗利でカウント（重複防止のため Opportunity 側から除外）
+ *   4. unit_price は dashboard.unit_price_assumption の最新値（effective_from が NULL or 過去）を使う
+ */
+export const MOVE_IN_FORECAST_SQL = `
+  WITH stage_prob AS (
+    SELECT stage_name, stage_group, probability
+    FROM ${tableIn('dashboard', 'stage_probability')}
+  ),
+  unit_price_cte AS (
+    SELECT unit_price
+    FROM ${tableIn('dashboard', 'unit_price_assumption')}
+    WHERE effective_from IS NULL OR effective_from <= CURRENT_DATE()
+    ORDER BY effective_from DESC NULLS LAST
+    LIMIT 1
+  ),
+  confirmed AS (
+    SELECT
+      FORMAT_DATE('%Y-%m', DATE(l.Field5__c)) AS move_in_month,
+      SUM(IFNULL(con.total_sales_gross_profit__c, 0)) AS confirmed_gross_profit,
+      SUM(IFNULL(con.contracted_number_of_room__c, 0)) AS confirmed_rooms,
+      ARRAY_AGG(
+        SAFE_DIVIDE(con.total_sales_gross_profit__c, NULLIF(con.contracted_number_of_room__c, 0))
+        IGNORE NULLS
+      ) AS unit_prices
+    FROM ${SF_LEAD} l
+    JOIN ${SF_OPPORTUNITY} opp ON opp.Id = l.ConvertedOpportunityId
+    JOIN ${SF_CONTRACT} con ON con.opportunity__c = opp.Id
+    WHERE DATE(l.Field5__c) BETWEEN @periodStart AND @periodEnd
+      AND ${LP_LEAD_FILTER_SQL}
+      AND IFNULL(con.is_contracted_monthly_inhouse__c, FALSE) = FALSE
+    GROUP BY 1
+  ),
+  pipeline AS (
+    SELECT
+      FORMAT_DATE('%Y-%m', DATE(l.Field5__c)) AS move_in_month,
+      sp.stage_group,
+      SUM(IFNULL(l.need_number_of_room__c, 0)) AS rooms,
+      SUM(IFNULL(l.need_number_of_room__c, 0) * sp.probability) AS weighted_rooms
+    FROM ${SF_LEAD} l
+    JOIN ${SF_OPPORTUNITY} opp ON opp.Id = l.ConvertedOpportunityId
+    JOIN stage_prob sp ON sp.stage_name = opp.StageName
+    LEFT JOIN ${SF_CONTRACT} con ON con.opportunity__c = opp.Id
+    WHERE DATE(l.Field5__c) BETWEEN @periodStart AND @periodEnd
+      AND ${LP_LEAD_FILTER_SQL}
+      AND sp.stage_group IN ('introduced', 'early')
+      AND con.Id IS NULL
+    GROUP BY 1, 2
+  ),
+  pipeline_pivot AS (
+    SELECT
+      move_in_month,
+      SUM(IF(stage_group = 'introduced', rooms, 0)) AS introduced_rooms,
+      SUM(IF(stage_group = 'early', rooms, 0)) AS early_rooms,
+      SUM(weighted_rooms) AS pipeline_weighted_rooms
+    FROM pipeline
+    GROUP BY 1
+  )
+  SELECT
+    COALESCE(c.move_in_month, p.move_in_month) AS move_in_month,
+    IFNULL(c.confirmed_gross_profit, 0) AS confirmed_gross_profit,
+    IFNULL(c.confirmed_rooms, 0) AS confirmed_rooms,
+    (
+      SELECT APPROX_QUANTILES(x, 100)[OFFSET(50)]
+      FROM UNNEST(IFNULL(c.unit_prices, [])) AS x
+    ) AS actual_unit_price_median,
+    IFNULL(p.introduced_rooms, 0) AS introduced_rooms,
+    IFNULL(p.early_rooms, 0) AS early_rooms,
+    IFNULL(p.pipeline_weighted_rooms, 0) AS pipeline_weighted_rooms,
+    IFNULL(p.pipeline_weighted_rooms, 0) * (SELECT unit_price FROM unit_price_cte) AS pipeline_forecast_gross_profit,
+    (SELECT unit_price FROM unit_price_cte) AS assumed_unit_price
+  FROM confirmed c
+  FULL OUTER JOIN pipeline_pivot p USING (move_in_month)
+  ORDER BY move_in_month
+`;
+
+export type MoveInForecastRawRow = {
+  move_in_month: string;
+  confirmed_gross_profit: number | null;
+  confirmed_rooms: number | null;
+  actual_unit_price_median: number | null;
+  introduced_rooms: number | null;
+  early_rooms: number | null;
+  pipeline_weighted_rooms: number | null;
+  pipeline_forecast_gross_profit: number | null;
+  assumed_unit_price: number | null;
 };
