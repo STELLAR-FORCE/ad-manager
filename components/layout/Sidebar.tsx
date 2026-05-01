@@ -21,6 +21,10 @@ import {
   XCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  CalendarDays,
+  Activity,
+  LineChart,
+  Target,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +49,14 @@ const navSections: NavSection[] = [
     items: [{ href: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard }],
   },
   {
+    label: '統合ビュー',
+    items: [
+      { href: '/dashboard/move-in', label: '入居日ベース', icon: CalendarDays, badge: 'NEW' },
+      { href: '/dashboard/cv-based', label: 'CV発生日ベース', icon: Activity, badge: 'NEW' },
+      { href: '/dashboard/cv-daily', label: '日次CV詳細', icon: LineChart, badge: 'NEW' },
+    ],
+  },
+  {
     label: '運用管理',
     items: [
       { href: '/campaigns', label: 'キャンペーン', icon: TrendingUp },
@@ -53,6 +65,7 @@ const navSections: NavSection[] = [
       { href: '/keywords', label: 'キーワード', icon: KeyRound },
       { href: '/creatives', label: 'クリエイティブ', icon: Image },
       { href: '/budget', label: '予算管理', icon: Wallet },
+      { href: '/targets', label: '目標値管理', icon: Target, badge: 'NEW' },
     ],
   },
   {

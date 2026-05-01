@@ -22,6 +22,37 @@ export function mapMediaToPlatform(media: string | null | undefined): SfPlatform
 /** ステージ名（sf_OpportunityStage.MasterLabel） — 実データから決定値 */
 export const SF_STAGE_WON = '案件成立';
 
+/**
+ * LP 流入元フィルタ（sf_Lead.ryuunyuumoto__c）— Issue #64。
+ *
+ *   monthly-order / express / standard … 検索依頼用 LP（https://www.monthly-bank.jp/lp/...）
+ *   site                                 … 資料 DL 用 LP（https://monthly-bank.jp/）
+ *
+ * これ以外の値（gm / net-tel / form / SNS / mail-form）は別経路のため除外。
+ * NULL も除外。
+ */
+export const SF_LP_RYUUNYUUMOTO_VALUES = [
+  'monthly-order',
+  'express',
+  'standard',
+  'site',
+] as const;
+
+/** BQ SQL の IN 句用: 全て安全な固定文字列 */
+export function lpRyuunyuumotoSqlList(): string {
+  return SF_LP_RYUUNYUUMOTO_VALUES.map((s) => `'${s}'`).join(', ');
+}
+
+/** sf_Lead に LP フィルタを当てる WHERE 句（先頭 AND 無し） */
+export const LP_LEAD_FILTER_SQL = `l.ryuunyuumoto__c IN (${SF_LP_RYUUNYUUMOTO_VALUES.map((s) => `'${s}'`).join(', ')})`;
+
+/**
+ * フェーズ確度マスタ（dashboard.stage_probability）— Issue #64。
+ * 物件成立 (won) は契約管理側で確定粗利を使うため、確度は名目上 100%。
+ * 実際の予想粗利計算では Opportunity 側の進行中（introduced / early）にだけ確度を当てる。
+ */
+export type StageGroup = 'won' | 'introduced' | 'early' | 'lost';
+
 export const SF_STAGES_LOST = [
   '失注',
   '失注（キャンセル）',
@@ -69,3 +100,56 @@ export const SF_OPPORTUNITY_FIELDS = {
   receptionDate: 'Reception_date__c',
   contactPerson: 'Field38__c',
 } as const;
+
+/**
+ * 契約管理（sf_contract_management__c）の業務上の主要項目。
+ * 詳細は docs/salesforce-mapping.md を参照。
+ */
+export const SF_CONTRACT_FIELDS = {
+  /** 案件 ID（sf_Opportunity への JOIN キー）*/
+  opportunityId: 'opportunity__c',
+  /** 成約室数 */
+  contractedRooms: 'contracted_number_of_room__c',
+  /** 粗利（自社物件は 0 で計上される。Phase 3 で自社ポータル連携予定）*/
+  grossProfit: 'total_sales_gross_profit__c',
+  /** 売上（借主への請求額）*/
+  revenue: 'billed_amount_to_tenant__c',
+  /** 自社物件で決まった場合チェック（true の行は粗利が 0）*/
+  isInhouse: 'is_contracted_monthly_inhouse__c',
+  /** 契約開始日（実入居日）*/
+  contractStart: 'contract_start_date__c',
+  /** 決定日（粗利益計上日）*/
+  decisionDate: 'decision_date__c',
+} as const;
+
+/**
+ * 契約管理 Name の文字列パターンで契約区分を判定する SQL CASE 式を生成する。
+ * 中冨さん確認: 「契約管理名に更新／延長／キャンセルが含まれる。
+ *   既存案件が延長やキャンセルになると新たな契約管理レコードが作られる」
+ */
+export function contractKindCase(nameExpr: string): string {
+  return `
+    CASE
+      WHEN ${nameExpr} LIKE '%キャンセル%' THEN 'cancel'
+      WHEN ${nameExpr} LIKE '%延長%' THEN 'extension'
+      WHEN ${nameExpr} LIKE '%更新%' THEN 'renewal'
+      ELSE 'new'
+    END
+  `.trim();
+}
+
+/**
+ * sf_Lead.TrafficSourceMedia__c → ad_manager Platform への BQ 側マッピング。
+ * フロント側の mapMediaToPlatform と同等のロジックを SQL でも持つ。
+ */
+export const PLATFORM_FROM_MEDIA_CASE = `
+  CASE LOWER(IFNULL(l.TrafficSourceMedia__c, ''))
+    WHEN 'google' THEN 'google'
+    WHEN 'adwords' THEN 'google'
+    WHEN 'pmax' THEN 'google'
+    WHEN 'yahoo' THEN 'yahoo'
+    WHEN 'yss' THEN 'yahoo'
+    WHEN 'bing' THEN 'bing'
+    ELSE 'other'
+  END
+`.trim();
