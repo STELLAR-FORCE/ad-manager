@@ -36,6 +36,8 @@ type NavItem = {
   label: string;
   icon: React.ElementType;
   badge?: string;
+  /** true の場合、pathname が href と完全一致のときだけ active 扱いにする */
+  exact?: boolean;
 };
 
 type NavSection = {
@@ -46,7 +48,7 @@ type NavSection = {
 const navSections: NavSection[] = [
   {
     label: null,
-    items: [{ href: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard }],
+    items: [{ href: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard, exact: true }],
   },
   {
     label: '統合ビュー',
@@ -213,9 +215,10 @@ export function Sidebar() {
               <div className="h-px bg-sidebar-border mx-2 mb-2" />
             )}
             <div className="space-y-0.5">
-              {section.items.map(({ href, label, icon: Icon, badge }) => {
-                const isActive =
-                  pathname === href || pathname.startsWith(href + '/');
+              {section.items.map(({ href, label, icon: Icon, badge, exact }) => {
+                const isActive = exact
+                  ? pathname === href
+                  : pathname === href || pathname.startsWith(href + '/');
                 return (
                   <Link
                     key={href}

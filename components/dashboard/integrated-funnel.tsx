@@ -55,7 +55,11 @@ type RateDef = {
 };
 
 function toDateParam(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // JST → UTC 変換で前日にずれないよう、ローカルカレンダー日付を使う
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export function IntegratedFunnel({
@@ -150,6 +154,16 @@ export function IntegratedFunnel({
     return num / den;
   };
 
+  // 重複推定率: 広告 CV のうち、SF 側に広告経由リードとして残っていない割合
+  // 1 - (広告経由リード / 広告 CV)。LP エラーで重複した CV ほど値が大きくなる
+  const dupRate = (() => {
+    if (!sfLeads || adMetrics.conversions <= 0) return null;
+    const matched = sfLeads.adTotal;
+    const cv = adMetrics.conversions;
+    if (matched >= cv) return 0;
+    return (cv - matched) / cv;
+  })();
+
   const rates: RateDef[] = [
     {
       key: 'ctr',
@@ -162,10 +176,11 @@ export function IntegratedFunnel({
       value: ratio(adMetrics.conversions, adMetrics.clicks),
     },
     {
-      key: 'lead_match',
-      label: 'リード化',
-      value: ratio(sfLeads?.total ?? null, adMetrics.conversions),
-      caveat: '同期間の合計同士の比率です。広告流入から発生したリードの実数ではありません',
+      key: 'dup_rate',
+      label: '重複推定率',
+      value: dupRate,
+      caveat:
+        '1 - (広告経由リード ÷ 広告 CV)。LP エラーで広告 CV に同じ問い合わせが重複しているとリード側と差分が出るため、その差分の割合を示す。広告経由リードは TrafficSourceMedia__c が google/yahoo/bing 系のリード件数。',
     },
     {
       key: 'opp_rate',

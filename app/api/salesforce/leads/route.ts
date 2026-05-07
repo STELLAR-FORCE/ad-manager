@@ -10,8 +10,14 @@ function parseDate(s: string | null): string | null {
   return d.toISOString().slice(0, 10);
 }
 
-type TotalsRow = { total: number | null; converted: number | null };
+type TotalsRow = {
+  total: number | null;
+  converted: number | null;
+  ad_total: number | null;
+};
 type MediaRow = { media: string | null; count: number | null };
+
+const AD_MEDIA_VALUES = ['google', 'adwords', 'pmax', 'yahoo', 'yss', 'bing'];
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -24,10 +30,12 @@ export async function GET(request: Request) {
   // 受付日時（Field9__c）が NULL のリードが約 5% あるため、CreatedDate にフォールバック
   const receivedAt = `COALESCE(${SF_LEAD_FIELDS.receivedAt}, CreatedDate)`;
 
+  const adMediaList = AD_MEDIA_VALUES.map((v) => `'${v}'`).join(', ');
   const totalsSql = `
     SELECT
       COUNT(*) AS total,
-      COUNTIF(IsConverted = TRUE) AS converted
+      COUNTIF(IsConverted = TRUE) AS converted,
+      COUNTIF(LOWER(IFNULL(TrafficSourceMedia__c, '')) IN (${adMediaList})) AS ad_total
     FROM ${SF_LEAD}
     WHERE DATE(${receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
   `;
@@ -47,9 +55,10 @@ export async function GET(request: Request) {
       query<MediaRow>(mediaSql, { start, end }),
     ]);
 
-    const t = totalsRows[0] ?? { total: 0, converted: 0 };
+    const t = totalsRows[0] ?? { total: 0, converted: 0, ad_total: 0 };
     const total = Number(t.total ?? 0);
     const converted = Number(t.converted ?? 0);
+    const adTotal = Number(t.ad_total ?? 0);
 
     // 媒体ラベルを Platform にマッピングして集約
     const platformCounts = new Map<SfPlatform | string, number>();
@@ -68,6 +77,7 @@ export async function GET(request: Request) {
       total,
       converted,
       conversionRate: total > 0 ? converted / total : null,
+      adTotal,
       byMedia,
     };
     return NextResponse.json(result);

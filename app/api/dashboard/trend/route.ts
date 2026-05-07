@@ -17,6 +17,7 @@ function normalizeDate(v: TrendRow['date']): string {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const platformParam = searchParams.get('platform') ?? 'all';
+  const adTypeParam = searchParams.get('adType') ?? 'all';
 
   const startStr = searchParams.get('start');
   const endStr = searchParams.get('end');
@@ -24,28 +25,36 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
-  const platformFilter = platformParam !== 'all' ? 'AND platform = @platform' : '';
+  const adTypeJoin =
+    adTypeParam !== 'all'
+      ? `JOIN ${table('adm_campaigns')} c ON c.id = m.campaign_id AND c.platform = m.platform`
+      : '';
+  const adTypeFilter = adTypeParam !== 'all' ? 'AND c.ad_type = @adType' : '';
+  const platformFilter = platformParam !== 'all' ? 'AND m.platform = @platform' : '';
 
   try {
     const sql = `
       SELECT
-        date,
-        platform,
-        SUM(cost) AS cost,
-        SUM(conversions) AS conversions
-      FROM ${table('adm_daily_metrics')}
-      WHERE date BETWEEN DATE(@start) AND DATE(@end)
+        m.date AS date,
+        m.platform AS platform,
+        SUM(m.cost) AS cost,
+        SUM(m.conversions) AS conversions
+      FROM ${table('adm_daily_metrics')} m
+      ${adTypeJoin}
+      WHERE m.date BETWEEN DATE(@start) AND DATE(@end)
         ${platformFilter}
+        ${adTypeFilter}
       GROUP BY date, platform
       ORDER BY date ASC
     `;
 
-    const cacheKey = `trend:${platformParam}:${startStr}:${endStr}`;
+    const cacheKey = `trend:${platformParam}:${adTypeParam}:${startStr}:${endStr}`;
     const cacheResult = await cached(cacheKey, () =>
       query<TrendRow>(sql, {
         start: startStr,
         end: endStr,
         ...(platformParam !== 'all' ? { platform: platformParam } : {}),
+        ...(adTypeParam !== 'all' ? { adType: adTypeParam } : {}),
       }),
     );
     const rows = cacheResult.value;
