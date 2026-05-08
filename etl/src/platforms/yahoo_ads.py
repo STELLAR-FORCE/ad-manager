@@ -318,6 +318,8 @@ class YahooAdsClient(AdPlatformClient):
             "reportDownloadEncode": "UTF8",
             "reportLanguage": "EN",
             "reportSkipReportSummary": "TRUE",
+            # 削除済み・停止済みも含めて取得する（過去キャンペーンのバックフィル整合性のため）
+            "reportIncludeDeleted": "TRUE",
         }
         # Display Ads API v19 には reportType フィールドがない
         if not is_display:

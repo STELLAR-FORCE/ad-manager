@@ -181,6 +181,48 @@ class BingAdsClient(AdPlatformClient):
             return self._create_time(start_date=start_date, end_date=end_date)
         return self._create_time(predefined="Last30Days")
 
+    # 全ステータス（停止/削除済み含む）— CampaignStatusReportFilter 型のリスト
+    _ALL_CAMPAIGN_STATUSES = "Active Paused BudgetPaused Deleted Suspended"
+
+    def _campaign_status_filter(self):
+        """全 CampaignStatus を含む CampaignPerformanceReportFilter を作る."""
+        f = self._reporting_service.factory.create("CampaignPerformanceReportFilter")
+        f.Status = self._ALL_CAMPAIGN_STATUSES
+        return f
+
+    def _ad_group_filter(self):
+        """全 CampaignStatus / AdGroupStatus を含む AdGroupPerformanceReportFilter.
+
+        Bing API ではこの Filter 内のフィールド名は CampaignStatus と Status
+        （AdGroupStatusReportFilter 型）の組み合わせ。
+        """
+        f = self._reporting_service.factory.create("AdGroupPerformanceReportFilter")
+        f.CampaignStatus = self._ALL_CAMPAIGN_STATUSES
+        f.Status = "Active Deleted Paused Expired"
+        return f
+
+    def _ad_filter(self):
+        """全ステータスを含む AdPerformanceReportFilter.
+
+        フィールド名は CampaignStatus / AdGroupStatus / AdStatus（それぞれ別フィールド）。
+        """
+        f = self._reporting_service.factory.create("AdPerformanceReportFilter")
+        f.CampaignStatus = self._ALL_CAMPAIGN_STATUSES
+        f.AdGroupStatus = "Active Deleted Paused Expired"
+        f.AdStatus = "Active Rejected Deleted Pending Paused"
+        return f
+
+    def _keyword_filter(self):
+        """全ステータスを含む KeywordPerformanceReportFilter.
+
+        フィールド名は CampaignStatus / AdGroupStatus / KeywordStatus（それぞれ別フィールド）。
+        """
+        f = self._reporting_service.factory.create("KeywordPerformanceReportFilter")
+        f.CampaignStatus = self._ALL_CAMPAIGN_STATUSES
+        f.AdGroupStatus = "Active Deleted Paused Expired"
+        f.KeywordStatus = "Active Deleted Paused"
+        return f
+
     def _create_time(
         self,
         start_date: date | None = None,
@@ -280,6 +322,7 @@ class BingAdsClient(AdPlatformClient):
         ]
         request.Time = self._master_time(start_date, end_date)
         request.Scope = self._create_scope()
+        request.Filter = self._campaign_status_filter()
 
         rows = self._download_report(request)
 
@@ -336,6 +379,7 @@ class BingAdsClient(AdPlatformClient):
         ]
         request.Time = self._master_time(start_date, end_date)
         request.Scope = self._create_adgroup_scope()
+        request.Filter = self._ad_group_filter()
 
         rows = self._download_report(request)
 
@@ -411,6 +455,7 @@ class BingAdsClient(AdPlatformClient):
         ]
         request.Time = self._master_time(start_date, end_date)
         request.Scope = self._create_adgroup_scope()
+        request.Filter = self._ad_filter()
 
         rows = self._download_report(request)
 
@@ -490,6 +535,7 @@ class BingAdsClient(AdPlatformClient):
         ]
         request.Time = self._master_time(start_date, end_date)
         request.Scope = self._create_adgroup_scope()
+        request.Filter = self._keyword_filter()
 
         rows = self._download_report(request)
 
