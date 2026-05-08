@@ -60,20 +60,21 @@ def _sync_platform(
     # 1. 認証
     client.authenticate()
 
-    # 2. キャンペーン
-    campaigns = client.fetch_campaigns()
+    # 2. キャンペーン（バックフィル時は start_date/end_date を渡して
+    #    その期間にアクティブだったキャンペーンも取得対象にする）
+    campaigns = client.fetch_campaigns(start_date, end_date)
     bq.upsert("adm_campaigns", campaigns)
 
     # 3. 広告グループ
-    ad_groups = client.fetch_ad_groups()
+    ad_groups = client.fetch_ad_groups(start_date, end_date)
     bq.upsert("adm_ad_groups", ad_groups)
 
     # 4. 広告
-    ads = client.fetch_ads()
+    ads = client.fetch_ads(start_date, end_date)
     bq.upsert("adm_ads", ads)
 
     # 5. キーワード
-    keywords = client.fetch_keywords()
+    keywords = client.fetch_keywords(start_date, end_date)
     bq.upsert("adm_keywords", keywords)
 
     # 6. 日次指標

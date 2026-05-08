@@ -33,23 +33,37 @@ class AdPlatformClient(ABC):
         ...
 
     @abstractmethod
-    def fetch_campaigns(self) -> list[CampaignRow]:
-        """全キャンペーンを取得する."""
+    def fetch_campaigns(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[CampaignRow]:
+        """キャンペーンを取得する.
+
+        start_date / end_date を渡すと、その期間にアクティブだったキャンペーンを取得する。
+        Bing / Yahoo! はレポート API ベースで実装されているため、期間指定が無いと
+        直近 30 日のキャンペーンしか取得できない（バックフィル時は必須）。
+        Google Ads はステータスベースで全期間取得するため、渡しても無視される。
+        """
         ...
 
     @abstractmethod
-    def fetch_ad_groups(self) -> list[AdGroupRow]:
-        """全広告グループを実績指標付きで取得する."""
+    def fetch_ad_groups(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[AdGroupRow]:
+        """広告グループを実績指標付きで取得する."""
         ...
 
     @abstractmethod
-    def fetch_ads(self) -> list[AdRow]:
-        """全広告を見出し・説明文・画像情報付きで取得する."""
+    def fetch_ads(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[AdRow]:
+        """広告を見出し・説明文・画像情報付きで取得する."""
         ...
 
     @abstractmethod
-    def fetch_keywords(self) -> list[KeywordRow]:
-        """全キーワードを品質スコア・IS付きで取得する."""
+    def fetch_keywords(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[KeywordRow]:
+        """キーワードを品質スコア・IS付きで取得する."""
         ...
 
     @abstractmethod

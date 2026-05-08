@@ -169,6 +169,18 @@ class BingAdsClient(AdPlatformClient):
                 reader = csv.DictReader(f)
                 return list(reader)
 
+    def _master_time(
+        self, start_date: date | None, end_date: date | None
+    ):
+        """マスタ系 fetch 用の ReportTime.
+
+        start_date / end_date があれば CUSTOM、なければ Last30Days にフォールバック
+        （通常運用での挙動を維持）。
+        """
+        if start_date and end_date:
+            return self._create_time(start_date=start_date, end_date=end_date)
+        return self._create_time(predefined="Last30Days")
+
     def _create_time(
         self,
         start_date: date | None = None,
@@ -244,7 +256,9 @@ class BingAdsClient(AdPlatformClient):
     # ── キャンペーン ──────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_campaigns(self) -> list[CampaignRow]:
+    def fetch_campaigns(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[CampaignRow]:
         request = self._reporting_service.factory.create(
             "CampaignPerformanceReportRequest"
         )
@@ -264,7 +278,7 @@ class BingAdsClient(AdPlatformClient):
             "Spend",
             "ConversionsQualified",
         ]
-        request.Time = self._create_time(predefined="Last30Days")
+        request.Time = self._master_time(start_date, end_date)
         request.Scope = self._create_scope()
 
         rows = self._download_report(request)
@@ -296,7 +310,9 @@ class BingAdsClient(AdPlatformClient):
     # ── 広告グループ ──────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_ad_groups(self) -> list[AdGroupRow]:
+    def fetch_ad_groups(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[AdGroupRow]:
         request = self._reporting_service.factory.create(
             "AdGroupPerformanceReportRequest"
         )
@@ -318,7 +334,7 @@ class BingAdsClient(AdPlatformClient):
             "TopImpressionRatePercent",
             "AbsoluteTopImpressionRatePercent",
         ]
-        request.Time = self._create_time(predefined="Last30Days")
+        request.Time = self._master_time(start_date, end_date)
         request.Scope = self._create_adgroup_scope()
 
         rows = self._download_report(request)
@@ -367,7 +383,9 @@ class BingAdsClient(AdPlatformClient):
     # ── 広告 ──────────────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_ads(self) -> list[AdRow]:
+    def fetch_ads(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[AdRow]:
         request = self._reporting_service.factory.create(
             "AdPerformanceReportRequest"
         )
@@ -391,7 +409,7 @@ class BingAdsClient(AdPlatformClient):
             "Spend",
             "ConversionsQualified",
         ]
-        request.Time = self._create_time(predefined="Last30Days")
+        request.Time = self._master_time(start_date, end_date)
         request.Scope = self._create_adgroup_scope()
 
         rows = self._download_report(request)
@@ -445,7 +463,9 @@ class BingAdsClient(AdPlatformClient):
     # ── キーワード ────────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_keywords(self) -> list[KeywordRow]:
+    def fetch_keywords(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[KeywordRow]:
         request = self._reporting_service.factory.create(
             "KeywordPerformanceReportRequest"
         )
@@ -468,7 +488,7 @@ class BingAdsClient(AdPlatformClient):
             "TopImpressionRatePercent",
             "AbsoluteTopImpressionRatePercent",
         ]
-        request.Time = self._create_time(predefined="Last30Days")
+        request.Time = self._master_time(start_date, end_date)
         request.Scope = self._create_adgroup_scope()
 
         rows = self._download_report(request)
