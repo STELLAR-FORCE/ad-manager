@@ -23,8 +23,8 @@ import {
   type MoveInSummaryRawRow,
 } from '@/lib/salesforce/integrated-queries';
 import {
-  SF_LEAD,
-  SF_OPPORTUNITY,
+  SF_MART,
+  SF_COLS,
   LP_LEAD_FILTER_SQL,
 } from '@/lib/salesforce/queries';
 import {
@@ -44,13 +44,13 @@ const TARGETS_TABLE = `\`${PROJECT_ID}.dashboard.targets_monthly\``;
  */
 const LP_LEAD_AGG_SQL = `
   SELECT
-    FORMAT_DATE('%Y-%m', DATE(l.Field5__c)) AS move_in_month,
+    FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart})) AS move_in_month,
     COUNT(*) AS cv,
-    SUM(IFNULL(l.need_number_of_room__c, 0)) AS cv_rooms,
-    SUM(IFNULL(l.Field8__c, 0)) AS request_room_days
-  FROM ${SF_LEAD} l
-  JOIN ${SF_OPPORTUNITY} opp ON opp.Id = l.ConvertedOpportunityId
-  WHERE DATE(l.Field5__c) BETWEEN @periodStart AND @periodEnd
+    SUM(IFNULL(${SF_COLS.needRooms}, 0)) AS cv_rooms,
+    SUM(IFNULL(${SF_COLS.usePeriodDays}, 0) * IFNULL(${SF_COLS.needRooms}, 0)) AS request_room_days
+  FROM ${SF_MART}
+  WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
+    AND ${SF_COLS.oppId} IS NOT NULL
     AND ${LP_LEAD_FILTER_SQL}
   GROUP BY 1
   ORDER BY 1

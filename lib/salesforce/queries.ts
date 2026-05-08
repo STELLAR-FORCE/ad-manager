@@ -1,17 +1,24 @@
-import { sfTable } from '@/lib/bigquery';
+import { tableIn } from '@/lib/bigquery';
 import type { SfPlatform } from '@/lib/types/salesforce';
 
 /**
- * sf_Lead.TrafficSourceMedia__c → ad_manager の Platform
- * 大文字小文字の揺れがあるので lower-case で比較する
+ * Salesforce データのソースは mart.salesforce_all_obj に統一。
+ * Lead + Opportunity + 契約管理を JOIN 済みのワイドビュー（1リード1行）。
+ * 旧 staging.sf_Lead / sf_Opportunity / sf_contract_management__c は廃止。
+ */
+export const SF_MART = tableIn('mart', 'salesforce_all_obj');
+
+/**
+ * 流入元_媒体別 → ad_manager の Platform マッピング。
+ * 大文字小文字の揺れがあるので lower-case で比較する（PMAX 大文字も含む）。
  */
 export const SF_MEDIA_TO_PLATFORM: Record<string, SfPlatform> = {
   google: 'google',
   adwords: 'google',
+  pmax: 'google',
   yahoo: 'yahoo',
   yss: 'yahoo',
   bing: 'bing',
-  pmax: 'google',
 };
 
 export function mapMediaToPlatform(media: string | null | undefined): SfPlatform {
@@ -19,11 +26,11 @@ export function mapMediaToPlatform(media: string | null | undefined): SfPlatform
   return SF_MEDIA_TO_PLATFORM[media.toLowerCase()] ?? 'other';
 }
 
-/** ステージ名（sf_OpportunityStage.MasterLabel） — 実データから決定値 */
+/** ステージ名（mart.salesforce_all_obj.案件フェーズ） — 実データから決定値 */
 export const SF_STAGE_WON = '案件成立';
 
 /**
- * LP 流入元フィルタ（sf_Lead.ryuunyuumoto__c）— Issue #64。
+ * LP 流入元フィルタ（mart.salesforce_all_obj.流入元_LP反響）— Issue #64。
  *
  *   monthly-order / express / standard … 検索依頼用 LP（https://www.monthly-bank.jp/lp/...）
  *   site                                 … 資料 DL 用 LP（https://monthly-bank.jp/）
@@ -43,13 +50,13 @@ export function lpRyuunyuumotoSqlList(): string {
   return SF_LP_RYUUNYUUMOTO_VALUES.map((s) => `'${s}'`).join(', ');
 }
 
-/** sf_Lead に LP フィルタを当てる WHERE 句（先頭 AND 無し） */
-export const LP_LEAD_FILTER_SQL = `l.ryuunyuumoto__c IN (${SF_LP_RYUUNYUUMOTO_VALUES.map((s) => `'${s}'`).join(', ')})`;
+/** mart.salesforce_all_obj に LP フィルタを当てる WHERE 句（先頭 AND 無し） */
+export const LP_LEAD_FILTER_SQL = `\`流入元_LP反響\` IN (${SF_LP_RYUUNYUUMOTO_VALUES.map((s) => `'${s}'`).join(', ')})`;
 
 /**
  * フェーズ確度マスタ（dashboard.stage_probability）— Issue #64。
  * 物件成立 (won) は契約管理側で確定粗利を使うため、確度は名目上 100%。
- * 実際の予想粗利計算では Opportunity 側の進行中（introduced / early）にだけ確度を当てる。
+ * 実際の予想粗利計算では進行中（introduced / early）にだけ確度を当てる。
  */
 export type StageGroup = 'won' | 'introduced' | 'early' | 'lost';
 
@@ -74,57 +81,52 @@ export function lostStagesSqlList(): string {
   return SF_STAGES_LOST.map((s) => `'${s}'`).join(', ');
 }
 
-/** エイリアス（SQL で使い回し） */
-export const SF_OPPORTUNITY = sfTable('sf_Opportunity');
-export const SF_OPPORTUNITY_STAGE = sfTable('sf_OpportunityStage');
-export const SF_LEAD = sfTable('sf_Lead');
-export const SF_CONTRACT = sfTable('sf_contract_management__c');
-export const SF_ACCOUNT = sfTable('sf_Account');
-
 /**
- * Field*__c など名前から用途が読めない項目の意味付き定数。
- * 詳細は docs/salesforce-mapping.md を参照。
+ * mart.salesforce_all_obj のカラム名定数。
+ * 1 ビューに全フィールドがフラットに展開されている前提で参照する。
+ * SQL では `\`カラム名\`` のようにバッククオートで囲む必要があるが、
+ * テンプレート文字列内では二重エスケープになるので各 SQL 側で書く。
  */
-export const SF_LEAD_FIELDS = {
-  receivedAt: 'Field9__c',
-  approachedAt: 'Field15__c',
-  approachTimeMinutes: 'Field16__c',
-  leadTime: 'Field11__c',
-  desiredAccommodation: 'Field17__c',
-  usePeriodStart: 'Field5__c',
-  usePeriodEnd: 'Field6__c',
-  usePeriodDays: 'Field8__c',
-} as const;
+export const SF_COLS = {
+  // ── 識別子 ──
+  leadId: '`リードID`',
+  oppId: '`案件ID`',
+  contractId: '`契約管理ID`',
+  convertedFlag: '`コンバートフラグ`',
 
-export const SF_OPPORTUNITY_FIELDS = {
-  receptionDate: 'Reception_date__c',
-  contactPerson: 'Field38__c',
+  // ── リード関連 ──
+  receivedAt: '`受付日時`',
+  media: '`流入元_媒体別`',
+  lpSource: '`流入元_LP反響`',
+  needRooms: '`必要戸数_数値`',
+  usePeriodStart: '`利用期間_始期`',
+  usePeriodEnd: '`利用期間_終期`',
+  usePeriodDays: '`利用期間_日数`',
+  approachedAt: '`アプローチ日時`',
+  approachTimeMinutes: '`アプローチタイム分`',
+  leadTime: '`リードタイム`',
+
+  // ── 案件関連 ──
+  oppName: '`案件名`',
+  oppStage: '`案件フェーズ`',
+  oppReceptionDate: '`受付日`',
+  oppMoveInDate: '`入居予定日`',
+  elapsedLeadTime: '`経過リードタイム`',
+
+  // ── 契約管理関連 ──
+  contractName: '`契約管理名`',
+  contractedRooms: '`成約室数`',
+  grossProfit: '`総売上_粗利`',
+  revenue: '`借主への請求額`',
+  isInhouse: '`自社物件で決まった場合チェック`',
+  contractStart: '`契約開始日`',
+  decisionDate: '`決定日_粗利益計上日`',
+  useDaysContracted: '`利用日数_成約`',
 } as const;
 
 /**
- * 契約管理（sf_contract_management__c）の業務上の主要項目。
- * 詳細は docs/salesforce-mapping.md を参照。
- */
-export const SF_CONTRACT_FIELDS = {
-  /** 案件 ID（sf_Opportunity への JOIN キー）*/
-  opportunityId: 'opportunity__c',
-  /** 成約室数 */
-  contractedRooms: 'contracted_number_of_room__c',
-  /** 粗利（自社物件は 0 で計上される。Phase 3 で自社ポータル連携予定）*/
-  grossProfit: 'total_sales_gross_profit__c',
-  /** 売上（借主への請求額）*/
-  revenue: 'billed_amount_to_tenant__c',
-  /** 自社物件で決まった場合チェック（true の行は粗利が 0）*/
-  isInhouse: 'is_contracted_monthly_inhouse__c',
-  /** 契約開始日（実入居日）*/
-  contractStart: 'contract_start_date__c',
-  /** 決定日（粗利益計上日）*/
-  decisionDate: 'decision_date__c',
-} as const;
-
-/**
- * 契約管理 Name の文字列パターンで契約区分を判定する SQL CASE 式を生成する。
- * 中冨さん確認: 「契約管理名に更新／延長／キャンセルが含まれる。
+ * 契約管理名の文字列パターンで契約区分を判定する SQL CASE 式を生成する。
+ * 「契約管理名に更新／延長／キャンセルが含まれる。
  *   既存案件が延長やキャンセルになると新たな契約管理レコードが作られる」
  */
 export function contractKindCase(nameExpr: string): string {
@@ -139,11 +141,12 @@ export function contractKindCase(nameExpr: string): string {
 }
 
 /**
- * sf_Lead.TrafficSourceMedia__c → ad_manager Platform への BQ 側マッピング。
+ * 流入元_媒体別 → ad_manager Platform への BQ 側マッピング。
  * フロント側の mapMediaToPlatform と同等のロジックを SQL でも持つ。
+ * NULL は 'other' になる。
  */
 export const PLATFORM_FROM_MEDIA_CASE = `
-  CASE LOWER(IFNULL(l.TrafficSourceMedia__c, ''))
+  CASE LOWER(IFNULL(${SF_COLS.media}, ''))
     WHEN 'google' THEN 'google'
     WHEN 'adwords' THEN 'google'
     WHEN 'pmax' THEN 'google'
