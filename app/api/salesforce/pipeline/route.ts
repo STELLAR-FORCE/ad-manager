@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/bigquery';
 import {
-  SF_OPPORTUNITY,
-  SF_OPPORTUNITY_STAGE,
+  SF_MART,
+  SF_COLS,
   SF_STAGE_WON,
   SF_STAGES_LOST_SET,
 } from '@/lib/salesforce/queries';
@@ -17,8 +17,6 @@ function parseDate(s: string | null): string | null {
 
 type Row = {
   stage_name: string;
-  forecast_category: string | null;
-  sort_order: number | null;
   count: number;
 };
 
@@ -30,18 +28,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
+  // mart には ForecastCategoryName / SortOrder を持つステージマスタは含まれないため、
+  // フォーキャスト分類は API 側で返さない（forecastCategory / sortOrder は null）。
+  // UI 側の色分けは kind (open/won/lost) ベースに統一済み。
   const sql = `
     SELECT
-      o.StageName AS stage_name,
-      ANY_VALUE(s.ForecastCategoryName) AS forecast_category,
-      ANY_VALUE(s.SortOrder) AS sort_order,
+      ${SF_COLS.oppStage} AS stage_name,
       COUNT(*) AS count
-    FROM ${SF_OPPORTUNITY} AS o
-    LEFT JOIN ${SF_OPPORTUNITY_STAGE} AS s
-      ON s.MasterLabel = o.StageName
-    WHERE DATE(o.CreatedDate) BETWEEN DATE(@start) AND DATE(@end)
-    GROUP BY o.StageName
-    ORDER BY sort_order NULLS LAST, count DESC
+    FROM ${SF_MART}
+    WHERE ${SF_COLS.oppId} IS NOT NULL
+      AND ${SF_COLS.oppStage} IS NOT NULL
+      AND DATE(${SF_COLS.oppReceptionDate}) BETWEEN DATE(@start) AND DATE(@end)
+    GROUP BY ${SF_COLS.oppStage}
+    ORDER BY count DESC
   `;
 
   try {
@@ -52,8 +51,8 @@ export async function GET(request: Request) {
       else if (SF_STAGES_LOST_SET.has(r.stage_name)) kind = 'lost';
       return {
         stageName: r.stage_name,
-        forecastCategory: r.forecast_category,
-        sortOrder: r.sort_order != null ? Number(r.sort_order) : null,
+        forecastCategory: null,
+        sortOrder: null,
         count: Number(r.count),
         kind,
       };

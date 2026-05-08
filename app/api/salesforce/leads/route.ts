@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/bigquery';
-import { SF_LEAD, SF_LEAD_FIELDS, mapMediaToPlatform } from '@/lib/salesforce/queries';
+import { SF_MART, SF_COLS, mapMediaToPlatform } from '@/lib/salesforce/queries';
 import type { SfLeadSummary, SfPlatform } from '@/lib/types/salesforce';
 
 function parseDate(s: string | null): string | null {
@@ -27,25 +27,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
-  // 受付日時（Field9__c）が NULL のリードが約 5% あるため、CreatedDate にフォールバック
-  const receivedAt = `COALESCE(${SF_LEAD_FIELDS.receivedAt}, CreatedDate)`;
-
   const adMediaList = AD_MEDIA_VALUES.map((v) => `'${v}'`).join(', ');
   const totalsSql = `
     SELECT
       COUNT(*) AS total,
-      COUNTIF(IsConverted = TRUE) AS converted,
-      COUNTIF(LOWER(IFNULL(TrafficSourceMedia__c, '')) IN (${adMediaList})) AS ad_total
-    FROM ${SF_LEAD}
-    WHERE DATE(${receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
+      COUNTIF(${SF_COLS.convertedFlag} = TRUE) AS converted,
+      COUNTIF(LOWER(IFNULL(${SF_COLS.media}, '')) IN (${adMediaList})) AS ad_total
+    FROM ${SF_MART}
+    WHERE DATE(${SF_COLS.receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
   `;
 
   const mediaSql = `
-    SELECT TrafficSourceMedia__c AS media, COUNT(*) AS count
-    FROM ${SF_LEAD}
-    WHERE DATE(${receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
-      AND TrafficSourceMedia__c IS NOT NULL
-    GROUP BY TrafficSourceMedia__c
+    SELECT ${SF_COLS.media} AS media, COUNT(*) AS count
+    FROM ${SF_MART}
+    WHERE DATE(${SF_COLS.receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
+      AND ${SF_COLS.media} IS NOT NULL
+    GROUP BY ${SF_COLS.media}
     ORDER BY count DESC
   `;
 

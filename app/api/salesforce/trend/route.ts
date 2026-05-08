@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/bigquery';
 import {
-  SF_OPPORTUNITY,
+  SF_MART,
+  SF_COLS,
   SF_STAGE_WON,
   lostStagesSqlList,
 } from '@/lib/salesforce/queries';
@@ -34,42 +35,38 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
-  // CreatedDate ベースの日別新規件数 + Won/Lost を LastStageChangeDate ベースで別集計
-  // 単一クエリで完結させるため、日付ディメンションを生成して LEFT JOIN する
+  // mart は LastStageChangeDate を持たないため、案件側 `受付日` を共通の日付軸として使う。
+  // → 「対象期間中に発生した案件のうち、現時点で成約 / 失注のもの」を日次でカウントする。
+  //   日次の遷移（その日に成約状態になった件数）とは意味が異なる点に留意。
   const sql = `
     WITH dates AS (
       SELECT d AS date
       FROM UNNEST(GENERATE_DATE_ARRAY(DATE(@start), DATE(@end))) AS d
     ),
-    created AS (
-      SELECT DATE(CreatedDate) AS date, COUNT(*) AS n
-      FROM ${SF_OPPORTUNITY}
-      WHERE DATE(CreatedDate) BETWEEN DATE(@start) AND DATE(@end)
-      GROUP BY 1
+    base AS (
+      SELECT
+        DATE(${SF_COLS.oppReceptionDate}) AS date,
+        ${SF_COLS.oppStage} AS stage
+      FROM ${SF_MART}
+      WHERE ${SF_COLS.oppId} IS NOT NULL
+        AND DATE(${SF_COLS.oppReceptionDate}) BETWEEN DATE(@start) AND DATE(@end)
     ),
-    won AS (
-      SELECT DATE(LastStageChangeDate) AS date, COUNT(*) AS n
-      FROM ${SF_OPPORTUNITY}
-      WHERE StageName = @wonStage
-        AND DATE(LastStageChangeDate) BETWEEN DATE(@start) AND DATE(@end)
-      GROUP BY 1
-    ),
-    lost AS (
-      SELECT DATE(LastStageChangeDate) AS date, COUNT(*) AS n
-      FROM ${SF_OPPORTUNITY}
-      WHERE StageName IN (${lostStagesSqlList()})
-        AND DATE(LastStageChangeDate) BETWEEN DATE(@start) AND DATE(@end)
-      GROUP BY 1
+    daily AS (
+      SELECT
+        date,
+        COUNT(*) AS created,
+        COUNTIF(stage = @wonStage) AS won,
+        COUNTIF(stage IN (${lostStagesSqlList()})) AS lost
+      FROM base
+      GROUP BY date
     )
     SELECT
       d.date,
-      IFNULL(c.n, 0) AS created,
-      IFNULL(w.n, 0) AS won,
-      IFNULL(l.n, 0) AS lost
+      IFNULL(daily.created, 0) AS created,
+      IFNULL(daily.won, 0) AS won,
+      IFNULL(daily.lost, 0) AS lost
     FROM dates d
-    LEFT JOIN created c ON c.date = d.date
-    LEFT JOIN won w ON w.date = d.date
-    LEFT JOIN lost l ON l.date = d.date
+    LEFT JOIN daily ON daily.date = d.date
     ORDER BY d.date
   `;
 

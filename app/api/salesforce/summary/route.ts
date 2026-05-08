@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/bigquery';
 import {
-  SF_OPPORTUNITY,
+  SF_MART,
+  SF_COLS,
   SF_STAGE_WON,
   lostStagesSqlList,
 } from '@/lib/salesforce/queries';
@@ -29,14 +30,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
+  // mart の `経過リードタイム` (= elapsed_lead_time__c) を平均リードタイムに使う
   const sql = `
     SELECT
       COUNT(*) AS total,
-      COUNTIF(StageName = @wonStage) AS won,
-      COUNTIF(StageName IN (${lostStagesSqlList()})) AS lost,
-      AVG(IF(StageName = @wonStage, elapsed_lead_time__c, NULL)) AS avg_lead_time_days
-    FROM ${SF_OPPORTUNITY}
-    WHERE DATE(CreatedDate) BETWEEN DATE(@start) AND DATE(@end)
+      COUNTIF(${SF_COLS.oppStage} = @wonStage) AS won,
+      COUNTIF(${SF_COLS.oppStage} IN (${lostStagesSqlList()})) AS lost,
+      AVG(IF(${SF_COLS.oppStage} = @wonStage, ${SF_COLS.elapsedLeadTime}, NULL)) AS avg_lead_time_days
+    FROM ${SF_MART}
+    WHERE ${SF_COLS.oppId} IS NOT NULL
+      AND DATE(${SF_COLS.oppReceptionDate}) BETWEEN DATE(@start) AND DATE(@end)
   `;
 
   try {
