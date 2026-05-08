@@ -453,14 +453,33 @@ class YahooAdsClient(AdPlatformClient):
 
     # ── キャンペーン ──────────────────────────────────────────────
 
+    def _date_range_kwargs(
+        self, start_date: date | None, end_date: date | None
+    ) -> dict:
+        """マスタ系 fetch で渡す date_range 引数を組み立てる.
+
+        start_date / end_date が両方指定されている場合は CUSTOM_DATE。
+        無指定なら LAST_30_DAYS にフォールバック（通常運用での挙動を維持）。
+        """
+        if start_date and end_date:
+            return {
+                "date_range_type": "CUSTOM_DATE",
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+        return {"date_range_type": "LAST_30_DAYS"}
+
     @with_retry(max_attempts=3)
-    def fetch_campaigns(self) -> list[CampaignRow]:
+    def fetch_campaigns(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[CampaignRow]:
+        date_kwargs = self._date_range_kwargs(start_date, end_date)
         # 検索広告のキャンペーンをレポート経由で取得
         csv_text = self._request_report(
             base_url=SEARCH_API_BASE,
             fields=SEARCH_CAMPAIGN_REPORT_FIELDS,
             report_type="CAMPAIGN",
-            date_range_type="LAST_30_DAYS",
+            **date_kwargs,
         )
         rows = self._parse_csv(csv_text)
 
@@ -498,7 +517,7 @@ class YahooAdsClient(AdPlatformClient):
                 base_url=DISPLAY_API_BASE,
                 fields=["CAMPAIGN_ID", "CAMPAIGN_NAME", "DAY", "IMPS", "CLICKS", "COST", "CONVERSIONS"],
                 report_type="AD",
-                date_range_type="LAST_30_DAYS",
+                **date_kwargs,
             )
             display_rows = self._parse_csv(display_csv)
             for r in display_rows:
@@ -527,12 +546,14 @@ class YahooAdsClient(AdPlatformClient):
     # ── 広告グループ ──────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_ad_groups(self) -> list[AdGroupRow]:
+    def fetch_ad_groups(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[AdGroupRow]:
         csv_text = self._request_report(
             base_url=SEARCH_API_BASE,
             fields=SEARCH_ADGROUP_REPORT_FIELDS,
             report_type="ADGROUP",
-            date_range_type="LAST_30_DAYS",
+            **self._date_range_kwargs(start_date, end_date),
         )
         rows = self._parse_csv(csv_text)
 
@@ -578,12 +599,14 @@ class YahooAdsClient(AdPlatformClient):
     # ── 広告 ──────────────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_ads(self) -> list[AdRow]:
+    def fetch_ads(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[AdRow]:
         csv_text = self._request_report(
             base_url=SEARCH_API_BASE,
             fields=SEARCH_AD_REPORT_FIELDS,
             report_type="AD",
-            date_range_type="LAST_30_DAYS",
+            **self._date_range_kwargs(start_date, end_date),
         )
         rows = self._parse_csv(csv_text)
 
@@ -630,12 +653,14 @@ class YahooAdsClient(AdPlatformClient):
     # ── キーワード ────────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_keywords(self) -> list[KeywordRow]:
+    def fetch_keywords(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[KeywordRow]:
         csv_text = self._request_report(
             base_url=SEARCH_API_BASE,
             fields=SEARCH_KEYWORD_REPORT_FIELDS,
             report_type="KEYWORDS",
-            date_range_type="LAST_30_DAYS",
+            **self._date_range_kwargs(start_date, end_date),
         )
         rows = self._parse_csv(csv_text)
 

@@ -137,7 +137,9 @@ class GoogleAdsClient_(AdPlatformClient):
     # ── キャンペーン ──────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_campaigns(self) -> list[CampaignRow]:
+    def fetch_campaigns(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[CampaignRow]:
         query = """
             SELECT
                 campaign.id,
@@ -182,7 +184,9 @@ class GoogleAdsClient_(AdPlatformClient):
     # ── 広告グループ ──────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_ad_groups(self) -> list[AdGroupRow]:
+    def fetch_ad_groups(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[AdGroupRow]:
         query = """
             SELECT
                 ad_group.id,
@@ -266,7 +270,9 @@ class GoogleAdsClient_(AdPlatformClient):
     # ── 広告 ──────────────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_ads(self) -> list[AdRow]:
+    def fetch_ads(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[AdRow]:
         query = """
             SELECT
                 ad_group_ad.ad.id,
@@ -339,7 +345,9 @@ class GoogleAdsClient_(AdPlatformClient):
     # ── キーワード ────────────────────────────────────────────────
 
     @with_retry(max_attempts=3)
-    def fetch_keywords(self) -> list[KeywordRow]:
+    def fetch_keywords(
+        self, start_date: date | None = None, end_date: date | None = None
+    ) -> list[KeywordRow]:
         query = """
             SELECT
                 ad_group_criterion.criterion_id,
