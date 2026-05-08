@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -54,6 +56,13 @@ class Settings(BaseSettings):
     sync_platform: str = "all"  # "all" | "google" | "yahoo" | "bing"
     dry_run: bool = False
     log_level: str = "INFO"
+
+    # ── バックフィル（明示的な日付範囲指定） ──
+    # CLI 引数 --start-date / --end-date でも指定可能。両方指定された場合に
+    # バックフィルモードとして動作し、sync_days_back の 90 日上限を回避する。
+    # 通常運用では未設定のままで sync_days_back ベースで動く。
+    sync_start_date: date | None = None
+    sync_end_date: date | None = None
 
     # ── Secret Manager ──
     use_secret_manager: bool = False
