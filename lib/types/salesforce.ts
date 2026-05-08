@@ -45,6 +45,8 @@ export type SfLeadSummary = {
   total: number;
   converted: number;
   conversionRate: number | null;
+  /** 広告経由リード件数（TrafficSourceMedia__c が Google/Yahoo/Bing 系） */
+  adTotal: number;
   byMedia: { media: string; count: number }[];
 };
 

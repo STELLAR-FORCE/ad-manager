@@ -47,11 +47,7 @@ import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 import { useSidebarCollapsed } from '@/components/layout/MainLayout';
 import { TrendModeToggle, type TrendMode } from '@/components/ad-insights/trend-mode-toggle';
-import {
-  aggregateCampaigns,
-  aggregateCampaignsByPlatform,
-  type AdType,
-} from '@/lib/campaign-mock-data';
+import { type AdType } from '@/lib/campaign-mock-data';
 
 // ─── 型定義 ────────────────────────────────────────────────
 
@@ -148,43 +144,18 @@ const timeFormat = new Intl.DateTimeFormat('ja-JP', {
   second: '2-digit',
 });
 
-// ─── モックデータ ───────────────────────────────────────────
+// ─── 定数 ──────────────────────────────────────────────────
 
-// MOCK_SUMMARY は削除 — campaign-mock-data.ts の aggregateCampaigns() で動的生成
-
-function getMockTrendData(main: { start: Date; end: Date }): TrendPoint[] {
-  const msMs = main.start.getTime();
-  const days = Math.max(1, Math.round((main.end.getTime() - msMs) / 86_400_000) + 1);
-
-  return Array.from({ length: days }, (_, i) => {
-    const date = new Date(msMs + i * 86_400_000);
-    const t = i / Math.max(days - 1, 1);
-    const wave = Math.sin(i * 2.3) * 0.12 + Math.sin(i * 5.7) * 0.06;
-    const google = Math.round((58 + wave * 58 + t * 25) * 1000);
-    const yahoo = Math.round((33 + wave * 33 + t * 15) * 1000);
-    const bing = Math.round((14 + wave * 14 + t * 8) * 1000);
-    const cost = google + yahoo + bing;
-    const conversions = Math.max(1, Math.round(cost / 6100));
-    const google_cv = Math.max(0, Math.round(google / 6800));
-    const yahoo_cv = Math.max(0, Math.round(yahoo / 6500));
-    const bing_cv = Math.max(0, Math.round(bing / 7200));
-    return {
-      date: date.toISOString().split('T')[0],
-      google,
-      yahoo,
-      bing,
-      cost,
-      conversions,
-      cpa: Math.round(cost / conversions),
-      google_cv,
-      yahoo_cv,
-      bing_cv,
-      google_cpa: google_cv > 0 ? Math.round(google / google_cv) : null,
-      yahoo_cpa:  yahoo_cv  > 0 ? Math.round(yahoo  / yahoo_cv)  : null,
-      bing_cpa:   bing_cv   > 0 ? Math.round(bing   / bing_cv)   : null,
-    };
-  });
-}
+const EMPTY_METRICS: Metrics = {
+  impressions: 0,
+  clicks: 0,
+  cost: 0,
+  conversions: 0,
+  ctr: 0,
+  cpc: 0,
+  cpa: 0,
+  cvr: 0,
+};
 
 // ─── ユーティリティ ─────────────────────────────────────────
 
@@ -515,7 +486,7 @@ function defaultDateRange(): DateRangeValue {
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeValue>(defaultDateRange);
   const [platform, setPlatform] = useState<Platform>('all');
-  const [adType, setAdType] = useState<AdType | 'all'>('all');
+  const [adType, setAdType] = useState<AdType | 'all'>('search');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [compareTrend, setCompareTrend] = useState<TrendPoint[]>([]);
@@ -578,7 +549,14 @@ export default function DashboardPage() {
         if (isRefresh) {
           await fetch('/api/dashboard/revalidate', { method: 'POST' }).catch(() => {});
         }
-        const fmt = (d: Date) => d.toISOString().split('T')[0];
+        // ローカルカレンダー日付を YYYY-MM-DD に。toISOString() を使うと
+        // JST(+09:00) → UTC 変換で前日にずれてしまうので使わない
+        const fmt = (d: Date) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+        };
         const { main, compare, compareEnabled } = dateRange;
         const summaryParams = new URLSearchParams({
           start: fmt(main.start),
@@ -590,9 +568,19 @@ export default function DashboardPage() {
           summaryParams.set('compareStart', fmt(compare.start));
           summaryParams.set('compareEnd', fmt(compare.end));
         }
-        const trendParams = new URLSearchParams({ start: fmt(main.start), end: fmt(main.end), platform });
+        const trendParams = new URLSearchParams({
+          start: fmt(main.start),
+          end: fmt(main.end),
+          platform,
+          adType,
+        });
         const cmpTrendParams = compareEnabled && compare
-          ? new URLSearchParams({ start: fmt(compare.start), end: fmt(compare.end), platform })
+          ? new URLSearchParams({
+              start: fmt(compare.start),
+              end: fmt(compare.end),
+              platform,
+              adType,
+            })
           : null;
 
         const fetches: Promise<Response>[] = [
@@ -633,33 +621,14 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  const isMock = !summary?.current.impressions;
-  // モック時はcampaign-mock-dataからadType対応で集計
-  const mockSummary: SummaryData = React.useMemo(() => {
-    const curr = aggregateCampaigns({ platform, adType });
-    // 前期間はダミーで10%減
-    const prev = {
-      impressions: Math.round(curr.impressions * 0.9),
-      clicks: Math.round(curr.clicks * 0.9),
-      cost: Math.round(curr.cost * 0.92),
-      conversions: Math.round(curr.conversions * 0.88),
-      ctr: curr.ctr * 0.98,
-      cpc: curr.cpc * 1.02,
-      cpa: curr.cpa * 1.05,
-      cvr: curr.cvr * 0.97,
-    };
-    return {
-      platform,
-      current: curr,
-      previous: prev,
-      byPlatform: aggregateCampaignsByPlatform({ adType }),
-    };
-  }, [platform, adType]);
-  const displaySummary = isMock ? mockSummary : summary!;
-  const displayTrend = trend.length > 0 ? trend : getMockTrendData(dateRange.main);
-  const { current, previous, byPlatform } = displaySummary;
+  const hasSummary = summary !== null && summary.current.impressions > 0;
+  const hasTrend = trend.length > 0;
+  const current: Metrics = summary?.current ?? EMPTY_METRICS;
+  const previous: Metrics = summary?.previous ?? EMPTY_METRICS;
+  const byPlatform: PlatformMetrics[] = summary?.byPlatform ?? [];
+  const displayTrend = trend;
   const deltaLabel = dateRange.compareEnabled ? '比較期間比' : '前期間比';
-  const anomalies = isMock ? [] : buildAnomalies(current, previous, budget, cpaTarget);
+  const anomalies = hasSummary ? buildAnomalies(current, previous, budget, cpaTarget) : [];
 
   // 比較トレンドをインデックス合わせでマージ + 累積計算
   const showCompare = dateRange.compareEnabled && compareTrend.length > 0;
@@ -756,7 +725,8 @@ export default function DashboardPage() {
 
           {/* 媒体プルダウン */}
           <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-40" aria-label="媒体">
+              <span className="text-xs text-muted-foreground/70 mr-1.5 shrink-0">媒体</span>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -769,7 +739,8 @@ export default function DashboardPage() {
 
           {/* 種別プルダウン */}
           <Select value={adType} onValueChange={(v) => setAdType(v as AdType | 'all')}>
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-44" aria-label="種別">
+              <span className="text-xs text-muted-foreground/70 mr-1.5 shrink-0">種別</span>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -947,16 +918,21 @@ export default function DashboardPage() {
               <CardTitle className="text-base flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   CPA推移
+                  <span className="text-xs font-normal text-muted-foreground/60">広告経由のCV</span>
                   {cpaTarget && (
                     <span className="text-xs font-normal text-muted-foreground/60 tabular-nums">
                       目標 {jpyFormat.format(cpaTarget)}
                     </span>
                   )}
                 </span>
-                <TrendModeToggle mode={trendMode} onChange={setTrendMode} />
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {!hasTrend ? (
+                <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                  選択期間のデータがありません
+                </div>
+              ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
@@ -972,21 +948,15 @@ export default function DashboardPage() {
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
                       const d = payload[0].payload as typeof chartData[0];
-                      const isCum = trendMode === 'cumulative';
-                      const cpaVal = isCum ? d.cpa_cum : d.cpa;
-                      const cmpCpaVal = isCum ? d.cmp_cpa_cum : d.cmp_cpa;
                       return (
                         <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
-                          <p className="font-medium text-foreground">
-                            {label}
-                            {isCum && <span className="ml-1.5 text-muted-foreground font-normal">（期間累計）</span>}
-                          </p>
+                          <p className="font-medium text-foreground">{label}</p>
                           <div className="flex justify-between gap-4">
                             <span className="flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-[#6366f1] shrink-0" />
-                              <span className="text-muted-foreground">表示期間</span>
+                              <span className="text-muted-foreground">当日</span>
                             </span>
-                            <span className="tabular-nums font-semibold">{cpaVal != null ? jpyFormat.format(cpaVal) : '—'}</span>
+                            <span className="tabular-nums font-semibold">{d.cpa != null ? jpyFormat.format(d.cpa) : '—'}</span>
                           </div>
                           {showCompare && (
                             <div className="flex justify-between gap-4">
@@ -996,13 +966,13 @@ export default function DashboardPage() {
                                   比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
                                 </span>
                               </span>
-                              <span className="tabular-nums">{cmpCpaVal != null ? jpyFormat.format(cmpCpaVal) : '—'}</span>
+                              <span className="tabular-nums">{d.cmp_cpa != null ? jpyFormat.format(d.cmp_cpa) : '—'}</span>
                             </div>
                           )}
                           {platform === 'all' && (
                             <div className="pt-1 border-t border-border/50 space-y-1.5">
                               {(['google', 'yahoo', 'bing'] as const).map((p) => {
-                                const v = isCum ? d[`${p}_cpa_cum`] : d[`${p}_cpa`];
+                                const v = d[`${p}_cpa`];
                                 return (
                                   <div key={p} className="flex justify-between gap-4">
                                     <span className="flex items-center gap-1.5">
@@ -1041,7 +1011,7 @@ export default function DashboardPage() {
                   {showCompare && (
                     <Line
                       type="monotone"
-                      dataKey={trendMode === 'cumulative' ? 'cmp_cpa_cum' : 'cmp_cpa'}
+                      dataKey="cmp_cpa"
                       name="比較期間"
                       stroke="#f97316"
                       strokeWidth={1.5}
@@ -1051,18 +1021,35 @@ export default function DashboardPage() {
                       isAnimationActive={!reducedMotion}
                     />
                   )}
-                  <Line
-                    type="monotone"
-                    dataKey={trendMode === 'cumulative' ? 'cpa_cum' : 'cpa'}
-                    name="表示期間"
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                    dot={trendMode === 'cumulative' ? false : { r: 3, fill: '#6366f1' }}
-                    connectNulls
-                    isAnimationActive={!reducedMotion}
-                  />
+                  {platform === 'all' ? (
+                    (['google', 'yahoo', 'bing'] as const).map((p) => (
+                      <Line
+                        key={p}
+                        type="monotone"
+                        dataKey={`${p}_cpa`}
+                        name={PLATFORM_LABELS[p]}
+                        stroke={PLATFORM_COLORS[p]}
+                        strokeWidth={1.75}
+                        dot={{ r: 2.5, fill: PLATFORM_COLORS[p] }}
+                        connectNulls
+                        isAnimationActive={!reducedMotion}
+                      />
+                    ))
+                  ) : (
+                    <Line
+                      type="monotone"
+                      dataKey="cpa"
+                      name="当日"
+                      stroke="#6366f1"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: '#6366f1' }}
+                      connectNulls
+                      isAnimationActive={!reducedMotion}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
@@ -1070,11 +1057,19 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between gap-2">
-                CV推移
+                <span className="flex items-center gap-2">
+                  CV推移
+                  <span className="text-xs font-normal text-muted-foreground/60">広告経由のCV</span>
+                </span>
                 <TrendModeToggle mode={trendMode} onChange={setTrendMode} />
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {!hasTrend ? (
+                <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                  選択期間のデータがありません
+                </div>
+              ) : (
               <ResponsiveContainer width="100%" height={220}>
                 {trendMode === 'cumulative' ? (
                   <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -1107,12 +1102,12 @@ export default function DashboardPage() {
                           <div className="rounded-lg border border-border bg-background shadow-md p-3 text-xs space-y-1.5 min-w-[180px]">
                             <p className="font-medium text-foreground">
                               {label}
-                              <span className="ml-1.5 text-muted-foreground font-normal">（期間累計）</span>
+                              <span className="ml-1.5 text-muted-foreground font-normal">までの累計</span>
                             </p>
                             <div className="flex justify-between gap-4">
                               <span className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[#10b981] shrink-0" />
-                                <span className="text-muted-foreground">表示期間</span>
+                                <span className="text-muted-foreground">期間累計</span>
                               </span>
                               <span className="tabular-nums font-semibold">{numFormat.format(d.cv_cum)}</span>
                             </div>
@@ -1121,7 +1116,7 @@ export default function DashboardPage() {
                                 <span className="flex items-center gap-1.5">
                                   <span className="w-2 h-2 rounded-full bg-[#f97316] shrink-0" />
                                   <span className="text-muted-foreground">
-                                    比較{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
+                                    比較期間累計{d.cmp_date ? `（${dateShort.format(new Date(d.cmp_date))}）` : ''}
                                   </span>
                                 </span>
                                 <span className="tabular-nums">{d.cmp_cv_cum != null ? numFormat.format(d.cmp_cv_cum) : '—'}</span>
@@ -1175,7 +1170,7 @@ export default function DashboardPage() {
                       <Area
                         type="monotone"
                         dataKey="cv_cum"
-                        name="表示期間"
+                        name="期間累計"
                         stroke="#10b981"
                         strokeWidth={2}
                         fill="url(#cv-cum-single)"
@@ -1204,7 +1199,7 @@ export default function DashboardPage() {
                             <div className="flex justify-between gap-4">
                               <span className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[#10b981] shrink-0" />
-                                <span className="text-muted-foreground">表示期間</span>
+                                <span className="text-muted-foreground">当日</span>
                               </span>
                               <span className="tabular-nums font-semibold">{numFormat.format(d.conversions)}</span>
                             </div>
@@ -1252,7 +1247,7 @@ export default function DashboardPage() {
                     <Line
                       type="monotone"
                       dataKey="conversions"
-                      name="表示期間"
+                      name="当日"
                       stroke="#10b981"
                       strokeWidth={2}
                       dot={{ r: 3, fill: '#10b981' }}
@@ -1262,6 +1257,7 @@ export default function DashboardPage() {
                   </LineChart>
                 )}
               </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
           </div>
@@ -1270,7 +1266,7 @@ export default function DashboardPage() {
         {/* ─── 媒体別サマリー（全媒体時のみ） ─── */}
         {platform === 'all' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {(isMock ? mockSummary.byPlatform : byPlatform).map((s) => {
+            {byPlatform.map((s) => {
               const budgetRow = budget?.byPlatform.find((b) => b.platform === s.platform);
               const utilPct = budgetRow ? budgetRow.utilization * 100 : null;
               const meterColor: 'success' | 'warning' | 'danger' =
