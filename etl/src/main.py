@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import argparse
 import sys
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -122,21 +123,113 @@ def _sync_budget_logs(campaigns, daily_metrics, bq: BigQueryClient) -> None:
         bq.upsert("adm_budget_logs", budget_logs, add_synced_at=False)
 
 
+def _parse_args() -> argparse.Namespace:
+    """CLI 引数を解析する.
+
+    --start-date / --end-date を両方指定するとバックフィルモードになり、
+    sync_days_back の 90 日上限を超えた範囲も取得できる。
+    指定しない場合は既存の sync_days_back ベースの日次運用ロジックで動く。
+    """
+    parser = argparse.ArgumentParser(
+        description="広告データ ETL パイプライン (Google Ads / Yahoo!広告 / Bing Ads → BigQuery)"
+    )
+    parser.add_argument(
+        "--start-date",
+        type=date.fromisoformat,
+        default=None,
+        help="取得開始日 (YYYY-MM-DD)。--end-date とセットで指定するとバックフィルモード",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=date.fromisoformat,
+        default=None,
+        help="取得終了日 (YYYY-MM-DD)。--start-date とセットで指定",
+    )
+    parser.add_argument(
+        "--platform",
+        choices=["all", "google", "yahoo", "bing"],
+        default=None,
+        help="対象プラットフォーム。指定時は SYNC_PLATFORM を上書き",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="dry_run を有効化（BQ への書き込みをスキップ）",
+    )
+    return parser.parse_args()
+
+
+def _resolve_date_range(
+    settings: Settings, args: argparse.Namespace
+) -> tuple[date, date, str]:
+    """CLI 引数 / 環境変数 / sync_days_back から取得日付範囲を決定する.
+
+    優先順位: CLI 引数 > 環境変数 (SYNC_START_DATE / SYNC_END_DATE) > sync_days_back
+
+    Returns: (start_date, end_date, mode) — mode は "backfill" or "daily"
+    """
+    start = args.start_date or settings.sync_start_date
+    end = args.end_date or settings.sync_end_date
+
+    if (start is None) ^ (end is None):
+        logger.error(
+            "--start-date と --end-date は両方指定してください "
+            "(start=%s, end=%s)",
+            start,
+            end,
+        )
+        sys.exit(1)
+
+    if start is not None and end is not None:
+        if start > end:
+            logger.error(
+                "--start-date (%s) は --end-date (%s) 以前にしてください",
+                start,
+                end,
+            )
+            sys.exit(1)
+        return start, end, "backfill"
+
+    # 通常モード: 昨日までの sync_days_back 日分
+    end = date.today() - timedelta(days=1)
+    start = end - timedelta(days=settings.sync_days_back - 1)
+    return start, end, "daily"
+
+
 def main() -> None:
     """メインエントリポイント."""
+    args = _parse_args()
     settings = get_settings()
+
+    # CLI 引数で settings を上書き
+    if args.platform is not None:
+        settings.sync_platform = args.platform
+    if args.dry_run:
+        settings.dry_run = True
+
     setup_logging(settings.log_level)
 
-    logger.info(
-        "ETL パイプラインを開始します (platform=%s, days_back=%d, dry_run=%s)",
-        settings.sync_platform,
-        settings.sync_days_back,
-        settings.dry_run,
-    )
+    start_date, end_date, mode = _resolve_date_range(settings, args)
 
-    # 日付範囲
-    end_date = date.today() - timedelta(days=1)  # 昨日まで
-    start_date = end_date - timedelta(days=settings.sync_days_back - 1)
+    if mode == "backfill":
+        days = (end_date - start_date).days + 1
+        logger.info(
+            "ETL パイプラインを開始します "
+            "(platform=%s, mode=backfill, range=%s〜%s, days=%d, dry_run=%s)",
+            settings.sync_platform,
+            start_date,
+            end_date,
+            days,
+            settings.dry_run,
+        )
+    else:
+        logger.info(
+            "ETL パイプラインを開始します "
+            "(platform=%s, mode=daily, days_back=%d, dry_run=%s)",
+            settings.sync_platform,
+            settings.sync_days_back,
+            settings.dry_run,
+        )
 
     oauth = OAuthManager(settings)
     bq = BigQueryClient(settings)
@@ -153,11 +246,12 @@ def main() -> None:
         sync_log_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
 
-        # SyncLog 開始
+        # SyncLog 開始（バックフィルモードは手動実行扱いとして "manual" で記録）
+        sync_type = "manual" if mode == "backfill" else "auto"
         sync_log = SyncLogRow(
             id=sync_log_id,
             platform=client.platform,
-            sync_type="auto",
+            sync_type=sync_type,
             status="running",
             started_at=now,
         )
