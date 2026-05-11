@@ -64,13 +64,20 @@ type Metrics = {
   cvr: number;
 };
 
-type PlatformMetrics = Metrics & { platform: string };
+type PlatformMetrics = Metrics & {
+  platform: string;
+  /** ad_type='all' のとき、検索/ディスプレイ別の媒体内訳 */
+  search?: Metrics;
+  display?: Metrics;
+};
 
 type SummaryData = {
   platform: Platform;
   current: Metrics;
   previous: Metrics;
   byPlatform: PlatformMetrics[];
+  /** 全媒体合計の検索/ディスプレイ内訳 */
+  byAdType?: { search: Metrics; display: Metrics };
 };
 
 type TrendPoint = {
@@ -87,6 +94,13 @@ type TrendPoint = {
   google_cpa: number | null;
   yahoo_cpa: number | null;
   bing_cpa: number | null;
+  // 検索/ディスプレイ別の合計（全媒体）
+  search_cost: number;
+  display_cost: number;
+  search_cv: number;
+  display_cv: number;
+  search_cpa: number | null;
+  display_cpa: number | null;
 };
 
 type BudgetUsage = {
@@ -298,6 +312,7 @@ function KpiCard({
   actual,
   onSetTarget,
   progress,
+  breakdown,
 }: {
   title: string;
   value?: string;
@@ -315,6 +330,12 @@ function KpiCard({
   actual?: number;
   onSetTarget?: (val: number | null) => void;
   progress?: KpiProgress | null;
+  /** 検索/ディスプレイ並列表示（合計値の下に表示）*/
+  breakdown?: {
+    search: number | null;
+    display: number | null;
+    format: (v: number) => string;
+  };
 }) {
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState('');
@@ -431,6 +452,24 @@ function KpiCard({
             {sub && !onSetTarget && (
               <p className="text-xs text-muted-foreground/60 mt-1">{sub}</p>
             )}
+
+            {/* 検索/ディスプレイ並列表示 */}
+            {breakdown && (
+              <div className="mt-2 flex gap-3 text-xs">
+                <span className="text-muted-foreground">
+                  検索{' '}
+                  <span className="font-medium text-foreground tabular-nums">
+                    {breakdown.search != null ? breakdown.format(breakdown.search) : '—'}
+                  </span>
+                </span>
+                <span className="text-muted-foreground">
+                  ディスプレイ{' '}
+                  <span className="font-medium text-foreground tabular-nums">
+                    {breakdown.display != null ? breakdown.format(breakdown.display) : '—'}
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
           {progress ? (
             <div className="relative grid place-items-center size-11 shrink-0">
@@ -468,6 +507,32 @@ function KpiCard({
 
 
 
+/** 媒体別カード内の指標セル（adType='all' のとき検索/ディスプレイ並列表示）*/
+function PlatformMetricCell({
+  label,
+  value,
+  search,
+  display,
+}: {
+  label: string;
+  value: string;
+  search?: string | null;
+  display?: string | null;
+}) {
+  const showBreakdown = search != null || display != null;
+  return (
+    <div>
+      <p className="text-muted-foreground text-xs mb-0.5">{label}</p>
+      <p className="font-semibold tabular-nums">{value}</p>
+      {showBreakdown && (
+        <p className="text-[10px] text-muted-foreground/70 tabular-nums mt-0.5 leading-tight">
+          検索 {search ?? '—'} / D {display ?? '—'}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── メインページ ───────────────────────────────────────────
 
 const TODAY = new Date();
@@ -486,7 +551,7 @@ function defaultDateRange(): DateRangeValue {
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeValue>(defaultDateRange);
   const [platform, setPlatform] = useState<Platform>('all');
-  const [adType, setAdType] = useState<AdType | 'all'>('search');
+  const [adType, setAdType] = useState<AdType | 'all'>('all');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [compareTrend, setCompareTrend] = useState<TrendPoint[]>([]);
@@ -641,6 +706,10 @@ export default function DashboardPage() {
     let cumGoogleCv = 0;
     let cumYahooCv = 0;
     let cumBingCv = 0;
+    let cumSearchCost = 0;
+    let cumDisplayCost = 0;
+    let cumSearchCv = 0;
+    let cumDisplayCv = 0;
     let cumCmpCost = 0;
     let cumCmpCv = 0;
     return displayTrend.map((d, i) => {
@@ -653,6 +722,10 @@ export default function DashboardPage() {
       cumGoogleCv += d.google_cv;
       cumYahooCv += d.yahoo_cv;
       cumBingCv += d.bing_cv;
+      cumSearchCost += d.search_cost;
+      cumDisplayCost += d.display_cost;
+      cumSearchCv += d.search_cv;
+      cumDisplayCv += d.display_cv;
       if (cmp) {
         cumCmpCost += cmp.cost;
         cumCmpCv += cmp.conversions;
@@ -672,6 +745,10 @@ export default function DashboardPage() {
         google_cpa_cum: cumGoogleCv > 0 ? Math.round(cumGoogleCost / cumGoogleCv) : null,
         yahoo_cpa_cum: cumYahooCv > 0 ? Math.round(cumYahooCost / cumYahooCv) : null,
         bing_cpa_cum: cumBingCv > 0 ? Math.round(cumBingCost / cumBingCv) : null,
+        search_cv_cum: cumSearchCv,
+        display_cv_cum: cumDisplayCv,
+        search_cpa_cum: cumSearchCv > 0 ? Math.round(cumSearchCost / cumSearchCv) : null,
+        display_cpa_cum: cumDisplayCv > 0 ? Math.round(cumDisplayCost / cumDisplayCv) : null,
         cmp_cpa_cum: cmp ? (cumCmpCv > 0 ? Math.round(cumCmpCost / cumCmpCv) : null) : null,
         cmp_cv_cum: cmp ? cumCmpCv : null,
       };
@@ -838,6 +915,15 @@ export default function DashboardPage() {
             icon={Wallet}
             delta={calcDelta(current.cost, previous.cost)}
             deltaLabel={deltaLabel}
+            breakdown={
+              adType === 'all' && summary?.byAdType
+                ? {
+                    search: Math.round(summary.byAdType.search.cost),
+                    display: Math.round(summary.byAdType.display.cost),
+                    format: (v) => jpyCompact.format(v),
+                  }
+                : undefined
+            }
             progress={(() => {
               if (!budget?.totalBudget) return null;
               const rawPct = (budget.totalSpent / budget.totalBudget) * 100;
@@ -860,6 +946,15 @@ export default function DashboardPage() {
             targetFormat={(v) => numFormat.format(v) + '件'}
             actual={current.conversions}
             onSetTarget={handleSetCvTarget}
+            breakdown={
+              adType === 'all' && summary?.byAdType
+                ? {
+                    search: Math.round(summary.byAdType.search.conversions),
+                    display: Math.round(summary.byAdType.display.conversions),
+                    format: (v) => numFormat.format(v) + '件',
+                  }
+                : undefined
+            }
             progress={(() => {
               if (!cvTarget || cvTarget <= 0) return null;
               const rawPct = (current.conversions / cvTarget) * 100;
@@ -883,6 +978,15 @@ export default function DashboardPage() {
             targetFormat={(v) => jpyFormat.format(v)}
             actual={current.cpa}
             onSetTarget={handleSetCpaTarget}
+            breakdown={
+              adType === 'all' && summary?.byAdType
+                ? {
+                    search: summary.byAdType.search.cpa > 0 ? Math.round(summary.byAdType.search.cpa) : null,
+                    display: summary.byAdType.display.cpa > 0 ? Math.round(summary.byAdType.display.cpa) : null,
+                    format: (v) => jpyCompact.format(v),
+                  }
+                : undefined
+            }
             progress={(() => {
               if (!cpaTarget || cpaTarget <= 0 || current.cpa <= 0) return null;
               const ratio = cpaTarget / current.cpa;
@@ -906,6 +1010,15 @@ export default function DashboardPage() {
             icon={MousePointerClick}
             delta={calcDelta(current.cvr, previous.cvr)}
             deltaLabel={deltaLabel}
+            breakdown={
+              adType === 'all' && summary?.byAdType
+                ? {
+                    search: summary.byAdType.search.cvr > 0 ? summary.byAdType.search.cvr : null,
+                    display: summary.byAdType.display.cvr > 0 ? summary.byAdType.display.cvr : null,
+                    format: (v) => pct1Format.format(v),
+                  }
+                : undefined
+            }
           />
         </div>
 
@@ -1021,7 +1134,25 @@ export default function DashboardPage() {
                       isAnimationActive={!reducedMotion}
                     />
                   )}
-                  {platform === 'all' ? (
+                  {adType === 'all' ? (
+                    // 検索/ディスプレイ 2本ライン
+                    [
+                      { key: 'search_cpa', label: '検索', color: '#8b5cf6' },
+                      { key: 'display_cpa', label: 'ディスプレイ', color: '#f59e0b' },
+                    ].map((p) => (
+                      <Line
+                        key={p.key}
+                        type="monotone"
+                        dataKey={p.key}
+                        name={p.label}
+                        stroke={p.color}
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: p.color }}
+                        connectNulls
+                        isAnimationActive={!reducedMotion}
+                      />
+                    ))
+                  ) : platform === 'all' ? (
                     (['google', 'yahoo', 'bing'] as const).map((p) => (
                       <Line
                         key={p}
@@ -1152,7 +1283,26 @@ export default function DashboardPage() {
                         isAnimationActive={!reducedMotion}
                       />
                     )}
-                    {platform === 'all' ? (
+                    {adType === 'all' ? (
+                      // 検索/ディスプレイ 並列（積み上げ）
+                      [
+                        { key: 'search_cv_cum', label: '検索', color: '#8b5cf6' },
+                        { key: 'display_cv_cum', label: 'ディスプレイ', color: '#f59e0b' },
+                      ].map((p) => (
+                        <Area
+                          key={p.key}
+                          type="monotone"
+                          dataKey={p.key}
+                          name={p.label}
+                          stackId="cv"
+                          stroke={p.color}
+                          strokeWidth={1.5}
+                          fill={p.color}
+                          fillOpacity={0.15}
+                          isAnimationActive={!reducedMotion}
+                        />
+                      ))
+                    ) : platform === 'all' ? (
                       (['google', 'yahoo', 'bing'] as const).map((p) => (
                         <Area
                           key={p}
@@ -1244,16 +1394,35 @@ export default function DashboardPage() {
                         isAnimationActive={!reducedMotion}
                       />
                     )}
-                    <Line
-                      type="monotone"
-                      dataKey="conversions"
-                      name="当日"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      dot={{ r: 3, fill: '#10b981' }}
-                      connectNulls
-                      isAnimationActive={!reducedMotion}
-                    />
+                    {adType === 'all' ? (
+                      [
+                        { key: 'search_cv', label: '検索', color: '#8b5cf6' },
+                        { key: 'display_cv', label: 'ディスプレイ', color: '#f59e0b' },
+                      ].map((p) => (
+                        <Line
+                          key={p.key}
+                          type="monotone"
+                          dataKey={p.key}
+                          name={p.label}
+                          stroke={p.color}
+                          strokeWidth={2}
+                          dot={{ r: 2.5, fill: p.color }}
+                          connectNulls
+                          isAnimationActive={!reducedMotion}
+                        />
+                      ))
+                    ) : (
+                      <Line
+                        type="monotone"
+                        dataKey="conversions"
+                        name="当日"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: '#10b981' }}
+                        connectNulls
+                        isAnimationActive={!reducedMotion}
+                      />
+                    )}
                   </LineChart>
                 )}
               </ResponsiveContainer>
@@ -1287,42 +1456,42 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-0.5">費用</p>
-                      <p className="font-semibold tabular-nums">
-                        {jpyFormat.format(Math.round(s.cost))}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-0.5">CV数</p>
-                      <p className="font-semibold tabular-nums">
-                        {numFormat.format(Math.round(s.conversions))}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-0.5">CPA</p>
-                      <p className="font-semibold tabular-nums">
-                        {s.cpa > 0 ? jpyFormat.format(Math.round(s.cpa)) : '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-0.5">CVR</p>
-                      <p className="font-semibold tabular-nums">
-                        {s.cvr > 0 ? pctFormat.format(s.cvr) : '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-0.5">CTR</p>
-                      <p className="font-semibold tabular-nums">
-                        {s.ctr > 0 ? pctFormat.format(s.ctr) : '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-0.5">CPC</p>
-                      <p className="font-semibold tabular-nums">
-                        {s.cpc > 0 ? jpyFormat.format(Math.round(s.cpc)) : '—'}
-                      </p>
-                    </div>
+                    <PlatformMetricCell
+                      label="費用"
+                      value={jpyFormat.format(Math.round(s.cost))}
+                      search={adType === 'all' && s.search ? jpyCompact.format(Math.round(s.search.cost)) : null}
+                      display={adType === 'all' && s.display ? jpyCompact.format(Math.round(s.display.cost)) : null}
+                    />
+                    <PlatformMetricCell
+                      label="CV数"
+                      value={numFormat.format(Math.round(s.conversions))}
+                      search={adType === 'all' && s.search ? numFormat.format(Math.round(s.search.conversions)) : null}
+                      display={adType === 'all' && s.display ? numFormat.format(Math.round(s.display.conversions)) : null}
+                    />
+                    <PlatformMetricCell
+                      label="CPA"
+                      value={s.cpa > 0 ? jpyFormat.format(Math.round(s.cpa)) : '—'}
+                      search={adType === 'all' && s.search && s.search.cpa > 0 ? jpyCompact.format(Math.round(s.search.cpa)) : null}
+                      display={adType === 'all' && s.display && s.display.cpa > 0 ? jpyCompact.format(Math.round(s.display.cpa)) : null}
+                    />
+                    <PlatformMetricCell
+                      label="CVR"
+                      value={s.cvr > 0 ? pctFormat.format(s.cvr) : '—'}
+                      search={adType === 'all' && s.search && s.search.cvr > 0 ? pct1Format.format(s.search.cvr) : null}
+                      display={adType === 'all' && s.display && s.display.cvr > 0 ? pct1Format.format(s.display.cvr) : null}
+                    />
+                    <PlatformMetricCell
+                      label="CTR"
+                      value={s.ctr > 0 ? pctFormat.format(s.ctr) : '—'}
+                      search={adType === 'all' && s.search && s.search.ctr > 0 ? pct1Format.format(s.search.ctr) : null}
+                      display={adType === 'all' && s.display && s.display.ctr > 0 ? pct1Format.format(s.display.ctr) : null}
+                    />
+                    <PlatformMetricCell
+                      label="CPC"
+                      value={s.cpc > 0 ? jpyFormat.format(Math.round(s.cpc)) : '—'}
+                      search={adType === 'all' && s.search && s.search.cpc > 0 ? jpyCompact.format(Math.round(s.search.cpc)) : null}
+                      display={adType === 'all' && s.display && s.display.cpc > 0 ? jpyCompact.format(Math.round(s.display.cpc)) : null}
+                    />
                   </div>
                   {budgetRow && utilPct != null && (
                     <div className="mt-4 pt-3 border-t border-border/50 space-y-1.5">

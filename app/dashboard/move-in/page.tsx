@@ -183,12 +183,14 @@ export default function MoveInPivotPage() {
     const periodStart = months[0] ?? '';
     const map = new Map<string, PivotRow[]>();
     for (const r of data?.pivot ?? []) {
-      if (r.cvMonth >= periodStart) continue;
+      // 受付日時が NULL のレコード（cvMonth=null）も除外
+      if (!r.cvMonth || r.cvMonth >= periodStart) continue;
       const list = map.get(r.moveInMonth) ?? [];
       list.push(r);
       map.set(r.moveInMonth, list);
     }
-    for (const list of map.values()) list.sort((a, b) => b.cvMonth.localeCompare(a.cvMonth));
+    for (const list of map.values())
+      list.sort((a, b) => (b.cvMonth ?? '').localeCompare(a.cvMonth ?? ''));
     return map;
   }, [data, months]);
 
@@ -197,7 +199,7 @@ export default function MoveInPivotPage() {
     const periodStart = months[0] ?? '';
     const agg = new Map<string, { cv: number; cvRooms: number; requestRoomDays: number }>();
     for (const r of data?.pivot ?? []) {
-      if (r.cvMonth >= periodStart) continue;
+      if (!r.cvMonth || r.cvMonth >= periodStart) continue;
       const cur = agg.get(r.cvMonth) ?? { cv: 0, cvRooms: 0, requestRoomDays: 0 };
       cur.cv += r.cv;
       cur.cvRooms += r.cvRooms;

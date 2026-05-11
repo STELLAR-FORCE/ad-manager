@@ -128,16 +128,17 @@ export function IntegratedFunnel({
       key: 'sf_lead',
       group: 'sales',
       label: 'リード',
-      value: sfLeads?.total ?? null,
+      value: sfLeads?.adTotal ?? null,
       format: (v) => numFormat.format(Math.round(v)),
+      note: '広告経由のみ（流入元_媒体別 OR 流入元_LP反響でヒット）。bizdev/紹介は除外',
     },
     {
       key: 'sf_converted',
       group: 'sales',
       label: '商談化',
-      value: sfLeads?.converted ?? null,
+      value: sfLeads?.adConverted ?? null,
       format: (v) => numFormat.format(Math.round(v)),
-      note: 'sf_Lead.IsConverted = TRUE',
+      note: '広告経由リードのうち IsConverted=TRUE',
     },
     {
       key: 'sf_won',
@@ -185,7 +186,7 @@ export function IntegratedFunnel({
     {
       key: 'opp_rate',
       label: '商談化率',
-      value: ratio(sfLeads?.converted ?? null, sfLeads?.total ?? null),
+      value: ratio(sfLeads?.adConverted ?? null, sfLeads?.adTotal ?? null),
     },
     {
       key: 'win_rate',
@@ -200,8 +201,8 @@ export function IntegratedFunnel({
       ? adMetrics.cost / sfSummary.won
       : null;
   const cpl =
-    sfLeads?.total && sfLeads.total > 0 && adMetrics.cost > 0
-      ? adMetrics.cost / sfLeads.total
+    sfLeads?.adTotal && sfLeads.adTotal > 0 && adMetrics.cost > 0
+      ? adMetrics.cost / sfLeads.adTotal
       : null;
 
   return (

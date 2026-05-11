@@ -4,6 +4,7 @@ import { cached } from '@/lib/dashboard-cache';
 
 type PlatformAggregateRow = {
   platform: string;
+  ad_type: string | null;
   impressions: number | null;
   clicks: number | null;
   cost: number | null;
@@ -73,26 +74,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    const adTypeJoin =
-      adTypeParam !== 'all'
-        ? `JOIN ${table('adm_campaigns')} c ON c.id = m.campaign_id AND c.platform = m.platform`
-        : '';
+    // adType フィルタ有無に関わらず、ad_type を取得して platform × ad_type で集計する。
+    // クライアントで「検索/ディスプレイ並列表示」が必要なので常に内訳を返す。
     const adTypeFilter = adTypeParam !== 'all' ? `AND c.ad_type = @adType` : '';
     const platformFilter = platformParam !== 'all' ? `AND m.platform = @platform` : '';
 
     const sql = `
       SELECT
         m.platform AS platform,
+        c.ad_type AS ad_type,
         SUM(m.impressions) AS impressions,
         SUM(m.clicks) AS clicks,
         SUM(m.cost) AS cost,
         SUM(m.conversions) AS conversions
       FROM ${table('adm_daily_metrics')} m
-      ${adTypeJoin}
+      LEFT JOIN ${table('adm_campaigns')} c ON c.id = m.campaign_id AND c.platform = m.platform
       WHERE m.date BETWEEN DATE(@start) AND DATE(@end)
         ${platformFilter}
         ${adTypeFilter}
-      GROUP BY m.platform
+      GROUP BY m.platform, c.ad_type
     `;
 
     const cacheKeyBase = `summary:${platformParam}:${adTypeParam}`;
@@ -117,14 +117,39 @@ export async function GET(request: Request) {
 
     const current = aggregateMetrics(currentResult.value);
     const previous = aggregateMetrics(prevResult.value);
-    const byPlatform = currentResult.value.map((m) => ({
-      platform: m.platform,
-      ...aggregateMetrics([m]),
-    }));
+
+    // 媒体別の合計（ad_type を畳む）
+    const platformGroups = new Map<string, PlatformAggregateRow[]>();
+    for (const row of currentResult.value) {
+      if (!platformGroups.has(row.platform)) platformGroups.set(row.platform, []);
+      platformGroups.get(row.platform)!.push(row);
+    }
+    const byPlatform = Array.from(platformGroups.entries()).map(
+      ([platform, rows]) => {
+        const search = rows.filter((r) => r.ad_type === 'search');
+        const display = rows.filter((r) => r.ad_type === 'display');
+        return {
+          platform,
+          ...aggregateMetrics(rows),
+          search: aggregateMetrics(search),
+          display: aggregateMetrics(display),
+        };
+      },
+    );
+
+    // 検索/ディスプレイ別の全媒体合計
+    const byAdType = {
+      search: aggregateMetrics(
+        currentResult.value.filter((r) => r.ad_type === 'search'),
+      ),
+      display: aggregateMetrics(
+        currentResult.value.filter((r) => r.ad_type === 'display'),
+      ),
+    };
 
     const fetchedAt = Math.min(currentResult.fetchedAt, prevResult.fetchedAt);
     return NextResponse.json(
-      { platform: platformParam, current, previous, byPlatform },
+      { platform: platformParam, current, previous, byPlatform, byAdType },
       {
         headers: {
           'X-Cache-Fetched-At': new Date(fetchedAt).toISOString(),
