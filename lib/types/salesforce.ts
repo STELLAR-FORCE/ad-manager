@@ -45,8 +45,10 @@ export type SfLeadSummary = {
   total: number;
   converted: number;
   conversionRate: number | null;
-  /** 広告経由リード件数（TrafficSourceMedia__c が Google/Yahoo/Bing 系） */
+  /** 広告経由リード件数（流入元_媒体別 が Google/Yahoo/Bing 系 OR 流入元_LP反響 が LP値） */
   adTotal: number;
+  /** 広告経由かつコンバート済み（IsConverted=TRUE）の件数 */
+  adConverted: number;
   byMedia: { media: string; count: number }[];
 };
 

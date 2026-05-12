@@ -5,6 +5,7 @@ import { cached } from '@/lib/dashboard-cache';
 type TrendRow = {
   date: { value: string } | string;
   platform: string;
+  ad_type: string | null;
   cost: number | null;
   conversions: number | null;
 };
@@ -25,10 +26,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
-  const adTypeJoin =
-    adTypeParam !== 'all'
-      ? `JOIN ${table('adm_campaigns')} c ON c.id = m.campaign_id AND c.platform = m.platform`
-      : '';
+  // 検索/ディスプレイ並列表示のため常に ad_type を含めて集計する
   const adTypeFilter = adTypeParam !== 'all' ? 'AND c.ad_type = @adType' : '';
   const platformFilter = platformParam !== 'all' ? 'AND m.platform = @platform' : '';
 
@@ -37,14 +35,15 @@ export async function GET(request: Request) {
       SELECT
         m.date AS date,
         m.platform AS platform,
+        c.ad_type AS ad_type,
         SUM(m.cost) AS cost,
         SUM(m.conversions) AS conversions
       FROM ${table('adm_daily_metrics')} m
-      ${adTypeJoin}
+      LEFT JOIN ${table('adm_campaigns')} c ON c.id = m.campaign_id AND c.platform = m.platform
       WHERE m.date BETWEEN DATE(@start) AND DATE(@end)
         ${platformFilter}
         ${adTypeFilter}
-      GROUP BY date, platform
+      GROUP BY date, platform, ad_type
       ORDER BY date ASC
     `;
 
@@ -65,6 +64,8 @@ export async function GET(request: Request) {
         google: number; yahoo: number; bing: number;
         cost: number; conversions: number;
         google_cv: number; yahoo_cv: number; bing_cv: number;
+        search_cost: number; display_cost: number;
+        search_cv: number; display_cv: number;
       }
     >();
 
@@ -74,6 +75,8 @@ export async function GET(request: Request) {
         google: 0, yahoo: 0, bing: 0,
         cost: 0, conversions: 0,
         google_cv: 0, yahoo_cv: 0, bing_cv: 0,
+        search_cost: 0, display_cost: 0,
+        search_cv: 0, display_cv: 0,
       };
       const c = Number(row.cost ?? 0);
       const cv = Number(row.conversions ?? 0);
@@ -82,6 +85,8 @@ export async function GET(request: Request) {
       if (row.platform === 'google') { existing.google += c; existing.google_cv += cv; }
       if (row.platform === 'yahoo')  { existing.yahoo  += c; existing.yahoo_cv  += cv; }
       if (row.platform === 'bing')   { existing.bing   += c; existing.bing_cv   += cv; }
+      if (row.ad_type === 'search')  { existing.search_cost  += c; existing.search_cv  += cv; }
+      if (row.ad_type === 'display') { existing.display_cost += c; existing.display_cv += cv; }
       byDate.set(dateStr, existing);
     }
 
@@ -101,6 +106,12 @@ export async function GET(request: Request) {
         google_cpa: d.google_cv > 0 ? Math.round(d.google / d.google_cv) : null,
         yahoo_cpa:  d.yahoo_cv  > 0 ? Math.round(d.yahoo  / d.yahoo_cv)  : null,
         bing_cpa:   d.bing_cv   > 0 ? Math.round(d.bing   / d.bing_cv)   : null,
+        search_cost: d.search_cost,
+        display_cost: d.display_cost,
+        search_cv: d.search_cv,
+        display_cv: d.display_cv,
+        search_cpa:  d.search_cv  > 0 ? Math.round(d.search_cost  / d.search_cv)  : null,
+        display_cpa: d.display_cv > 0 ? Math.round(d.display_cost / d.display_cv) : null,
       }));
 
     return NextResponse.json(result, {

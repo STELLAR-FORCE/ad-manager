@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/bigquery';
-import { SF_MART, SF_COLS, mapMediaToPlatform } from '@/lib/salesforce/queries';
+import {
+  SF_MART,
+  SF_COLS,
+  mapMediaToPlatform,
+  lpRyuunyuumotoSqlList,
+} from '@/lib/salesforce/queries';
 import type { SfLeadSummary, SfPlatform } from '@/lib/types/salesforce';
 
 function parseDate(s: string | null): string | null {
@@ -14,6 +19,7 @@ type TotalsRow = {
   total: number | null;
   converted: number | null;
   ad_total: number | null;
+  ad_converted: number | null;
 };
 type MediaRow = { media: string | null; count: number | null };
 
@@ -27,12 +33,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
+  // 広告経由リードの判定: 流入元_媒体別 が広告媒体 OR 流入元_LP反響 が LP 値
+  // どちらか片方でもマッチすれば「広告経由」と見なす（業務感覚に合わせる広め判定）
   const adMediaList = AD_MEDIA_VALUES.map((v) => `'${v}'`).join(', ');
+  const adSourcePredicate = `(
+    LOWER(IFNULL(${SF_COLS.media}, '')) IN (${adMediaList})
+    OR ${SF_COLS.lpSource} IN (${lpRyuunyuumotoSqlList()})
+  )`;
   const totalsSql = `
     SELECT
       COUNT(*) AS total,
       COUNTIF(${SF_COLS.convertedFlag} = TRUE) AS converted,
-      COUNTIF(LOWER(IFNULL(${SF_COLS.media}, '')) IN (${adMediaList})) AS ad_total
+      COUNTIF(${adSourcePredicate}) AS ad_total,
+      COUNTIF(${adSourcePredicate} AND ${SF_COLS.convertedFlag} = TRUE) AS ad_converted
     FROM ${SF_MART}
     WHERE DATE(${SF_COLS.receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
   `;
@@ -52,10 +65,11 @@ export async function GET(request: Request) {
       query<MediaRow>(mediaSql, { start, end }),
     ]);
 
-    const t = totalsRows[0] ?? { total: 0, converted: 0, ad_total: 0 };
+    const t = totalsRows[0] ?? { total: 0, converted: 0, ad_total: 0, ad_converted: 0 };
     const total = Number(t.total ?? 0);
     const converted = Number(t.converted ?? 0);
     const adTotal = Number(t.ad_total ?? 0);
+    const adConverted = Number(t.ad_converted ?? 0);
 
     // 媒体ラベルを Platform にマッピングして集約
     const platformCounts = new Map<SfPlatform | string, number>();
@@ -75,6 +89,7 @@ export async function GET(request: Request) {
       converted,
       conversionRate: total > 0 ? converted / total : null,
       adTotal,
+      adConverted,
       byMedia,
     };
     return NextResponse.json(result);
