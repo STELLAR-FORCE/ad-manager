@@ -52,7 +52,10 @@ class Settings(BaseSettings):
     bing_ads_developer_token: str = ""
 
     # ── 実行設定 ──
-    sync_days_back: int = Field(default=7, ge=1, le=90)
+    # 日次運用で取得する過去日数。Google Ads などの CV モデリング遅延
+    # （クリック日に紐付く CV が数日後に確定する）を吸収するため 30 日を既定値とする。
+    # 毎日 30 日分を MERGE することで、過去日付の CV 確定値が自動反映される。
+    sync_days_back: int = Field(default=30, ge=1, le=90)
     sync_platform: str = "all"  # "all" | "google" | "yahoo" | "bing"
     dry_run: bool = False
     log_level: str = "INFO"
