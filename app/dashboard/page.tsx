@@ -38,6 +38,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from 'recharts';
 import { Chip, Meter, ProgressCircle } from '@heroui/react';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
@@ -551,7 +552,7 @@ function defaultDateRange(): DateRangeValue {
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeValue>(defaultDateRange);
   const [platform, setPlatform] = useState<Platform>('all');
-  const [adType, setAdType] = useState<AdType | 'all'>('all');
+  const [adType, setAdType] = useState<AdType | 'all'>('search');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [compareTrend, setCompareTrend] = useState<TrendPoint[]>([]);
@@ -1108,6 +1109,11 @@ export default function DashboardPage() {
                       );
                     }}
                   />
+                  <Legend
+                    wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
+                    iconType="line"
+                    iconSize={14}
+                  />
                   {/* 目標ライン */}
                   {cpaTarget && (
                     <Line
@@ -1118,6 +1124,7 @@ export default function DashboardPage() {
                       strokeWidth={1.5}
                       strokeDasharray="5 4"
                       dot={false}
+                      legendType="none"
                       isAnimationActive={!reducedMotion}
                     />
                   )}
@@ -1131,6 +1138,7 @@ export default function DashboardPage() {
                       strokeDasharray="5 3"
                       dot={false}
                       connectNulls
+                      legendType="none"
                       isAnimationActive={!reducedMotion}
                     />
                   )}
@@ -1270,6 +1278,11 @@ export default function DashboardPage() {
                         );
                       }}
                     />
+                    <Legend
+                      wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
+                      iconType="rect"
+                      iconSize={12}
+                    />
                     {showCompare && (
                       <Area
                         type="monotone"
@@ -1280,6 +1293,7 @@ export default function DashboardPage() {
                         strokeDasharray="5 3"
                         fill="#f97316"
                         fillOpacity={0.05}
+                        legendType="none"
                         isAnimationActive={!reducedMotion}
                       />
                     )}
@@ -1381,6 +1395,11 @@ export default function DashboardPage() {
                         );
                       }}
                     />
+                    <Legend
+                      wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
+                      iconType="line"
+                      iconSize={14}
+                    />
                     {showCompare && (
                       <Line
                         type="monotone"
@@ -1391,6 +1410,7 @@ export default function DashboardPage() {
                         strokeDasharray="5 3"
                         dot={false}
                         connectNulls
+                        legendType="none"
                         isAnimationActive={!reducedMotion}
                       />
                     )}

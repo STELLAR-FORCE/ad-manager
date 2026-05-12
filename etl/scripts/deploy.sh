@@ -134,7 +134,7 @@ if gcloud run jobs describe "$JOB_NAME" \
     --region="$REGION" \
     --image="${IMAGE}:latest" \
     --service-account="$SA_EMAIL" \
-    --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},BQ_DATASET=ad_manager,BQ_LOCATION=${REGION},SYNC_PLATFORM=all,SYNC_DAYS_BACK=7,DRY_RUN=false,LOG_LEVEL=INFO" \
+    --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},BQ_DATASET=ad_manager,BQ_LOCATION=${REGION},SYNC_PLATFORM=all,SYNC_DAYS_BACK=30,DRY_RUN=false,LOG_LEVEL=INFO" \
     --set-secrets="$SECRETS_ARGS" \
     --memory="1Gi" \
     --cpu="1" \
@@ -147,7 +147,7 @@ else
     --region="$REGION" \
     --image="${IMAGE}:latest" \
     --service-account="$SA_EMAIL" \
-    --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},BQ_DATASET=ad_manager,BQ_LOCATION=${REGION},SYNC_PLATFORM=all,SYNC_DAYS_BACK=7,DRY_RUN=false,LOG_LEVEL=INFO" \
+    --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},BQ_DATASET=ad_manager,BQ_LOCATION=${REGION},SYNC_PLATFORM=all,SYNC_DAYS_BACK=30,DRY_RUN=false,LOG_LEVEL=INFO" \
     --set-secrets="$SECRETS_ARGS" \
     --memory="1Gi" \
     --cpu="1" \
