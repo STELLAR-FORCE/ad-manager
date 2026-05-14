@@ -1,7 +1,7 @@
 /**
  * POST /api/targets/yearly
  *
- * 年次目標を 12 ヶ月に均等按分して dashboard.targets_monthly に MERGE する。
+ * 年次目標を 12 ヶ月に均等に分けて dashboard.targets_monthly に MERGE する。
  * 既存の月別個別編集は /api/targets PUT がそのまま使える（本 API で書き込んだ後に
  * 月別調整も可能）。
  *

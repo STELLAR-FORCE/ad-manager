@@ -113,7 +113,7 @@ export function YearlyTargetForm({ onSaved }: { onSaved?: () => void }) {
       if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
       setMessage({
         type: 'success',
-        text: `${year}年の目標を 12 ヶ月に按分して保存しました`,
+        text: `${year}年の目標を 12 ヶ月に均等に分けて保存しました`,
       });
       setValues({});
       onSaved?.();
@@ -135,7 +135,7 @@ export function YearlyTargetForm({ onSaved }: { onSaved?: () => void }) {
           年次目標を一括入力
         </CardTitle>
         <p className="text-xs text-muted-foreground/70 mt-1">
-          入力した年次目標を 12 ヶ月に均等按分して保存します。月別の個別調整は下の月別テーブルで可能です。
+          入力した年次目標を 12 ヶ月に均等に分けて保存します。月別の個別調整は下の月別テーブルで可能です。
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -189,7 +189,7 @@ export function YearlyTargetForm({ onSaved }: { onSaved?: () => void }) {
 
         <div className="flex items-center gap-2 pt-2">
           <Button onClick={save} disabled={saving} size="sm">
-            {saving ? '保存中…' : '12 ヶ月に按分して保存'}
+            {saving ? '保存中…' : '12 ヶ月に均等に分けて保存'}
           </Button>
           <Button onClick={clear} variant="outline" size="sm" disabled={saving}>
             クリア

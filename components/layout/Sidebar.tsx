@@ -53,6 +53,7 @@ const navSections: NavSection[] = [
   {
     label: '統合ビュー',
     items: [
+      { href: '/dashboard/ad-detail', label: '広告詳細', icon: TrendingUp, badge: 'NEW' },
       { href: '/dashboard/move-in', label: '入居日ベース', icon: CalendarDays, badge: 'NEW' },
       { href: '/dashboard/cv-based', label: 'CV発生日ベース', icon: Activity, badge: 'NEW' },
       { href: '/dashboard/cv-daily', label: '日次CV詳細', icon: LineChart, badge: 'NEW' },

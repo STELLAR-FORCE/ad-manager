@@ -74,7 +74,7 @@ export function LeadActivityFeed() {
         ) : data.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">直近 7 日に新規依頼はありません</p>
         ) : (
-          <ul className="divide-y divide-border/50 max-h-96 overflow-y-auto">
+          <ul className="divide-y divide-border/50 max-h-96 overflow-y-auto pr-2">
             {data.items.map((item) => (
               <li key={item.leadId} className="py-2 flex items-start gap-3 text-sm">
                 <span className="text-xs text-muted-foreground/70 tabular-nums shrink-0 w-10 mt-0.5">
@@ -85,10 +85,7 @@ export function LeadActivityFeed() {
                     {item.companyName ?? item.contactName ?? '—'}
                   </p>
                   <p className="text-xs text-muted-foreground/70 truncate">
-                    {item.contactName && item.companyName
-                      ? `${item.contactName}`
-                      : '担当者未設定'}
-                    <span className="ml-1.5 text-muted-foreground/50">
+                    <span className="text-muted-foreground/50">
                       [{lpLabel(item.lpSource)}
                       {item.mediaSource ? ` / ${item.mediaSource}` : ''}]
                     </span>
@@ -105,9 +102,9 @@ export function LeadActivityFeed() {
                     )}
                   </p>
                 </div>
-                <div className="shrink-0 text-right">
+                <div className="shrink-0 text-right pr-1">
                   <p className="text-xs text-muted-foreground/70 tabular-nums">必要</p>
-                  <p className="text-sm font-semibold tabular-nums">
+                  <p className="text-sm font-semibold tabular-nums whitespace-nowrap">
                     {numFormat.format(item.needRooms)} 室
                   </p>
                 </div>

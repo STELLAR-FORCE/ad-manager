@@ -3,9 +3,9 @@
  *
  * ダッシュボードのサマリー（進捗ビュー）用 API。
  *
- * 入居日ベース（mart の `利用期間_始期`）で、以下 5 期間 × 4 指標を集計する:
+ * 入居日ベース（mart の `利用期間_始期`）で、以下 5 期間 × 5 指標を集計する:
  *   期間: 今週 / 今月 / Q / 上期下期 / 年（いずれも開始日 〜 today までの累計）
- *   指標: 粗利 / ルームデイズ / CV / 成約数
+ *   指標: CV / CV室数 / ルームデイズ / 成約数 / 粗利
  *
  * 各値について「current（今期間）」「previous（前期間の同経過日数）」を返す。
  * 目標 (target) は `dashboard.targets_monthly` を期間ごとに合算した値を入れる。
@@ -28,6 +28,7 @@ type AggregateRow = {
   gross_profit: number | null;
   room_days: number | null;
   cv: number | null;
+  cv_rooms: number | null;
   won: number | null;
 };
 
@@ -55,6 +56,7 @@ export type ProgressResponse = {
     grossProfit: ProgressMetric;
     roomDays: ProgressMetric;
     cv: ProgressMetric;
+    cvRooms: ProgressMetric;
     won: ProgressMetric;
   };
 };
@@ -65,6 +67,7 @@ const aggregateSql = `
     IFNULL(SUM(${SF_COLS.grossProfit}), 0) AS gross_profit,
     IFNULL(SUM(IFNULL(${SF_COLS.useDaysContracted}, 0) * IFNULL(${SF_COLS.contractedRooms}, 0)), 0) AS room_days,
     COUNT(*) AS cv,
+    IFNULL(SUM(${SF_COLS.needRooms}), 0) AS cv_rooms,
     COUNT(DISTINCT IF(${SF_COLS.contractId} IS NOT NULL, ${SF_COLS.leadId}, NULL)) AS won
   FROM ${SF_MART}
   WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN DATE(@start) AND DATE(@end)
@@ -72,7 +75,7 @@ const aggregateSql = `
 
 async function aggregate(start: string, end: string): Promise<AggregateRow> {
   const rows = await query<AggregateRow>(aggregateSql, { start, end });
-  return rows[0] ?? { gross_profit: 0, room_days: 0, cv: 0, won: 0 };
+  return rows[0] ?? { gross_profit: 0, room_days: 0, cv: 0, cv_rooms: 0, won: 0 };
 }
 
 /**
@@ -190,6 +193,7 @@ export async function GET() {
       const grossProfit: ProgressMetric = { ...empty };
       const roomDays: ProgressMetric = { ...empty };
       const cv: ProgressMetric = { ...empty };
+      const cvRooms: ProgressMetric = { ...empty };
       const won: ProgressMetric = { ...empty };
 
       for (const { key, cur, prev, tgt } of aggregatePairs) {
@@ -208,10 +212,17 @@ export async function GET() {
           previous: Number(prev.cv ?? 0),
           target: tgt.cv > 0 ? tgt.cv : null,
         };
+        // 室数目標 (room_target) は「CV 室数の目標」として CV 室数側に紐付ける。
+        // 成約 (won) は専用の目標カラムが無いため、目標なし（前期間比表示）。
+        cvRooms[key] = {
+          current: Number(cur.cv_rooms ?? 0),
+          previous: Number(prev.cv_rooms ?? 0),
+          target: tgt.rooms > 0 ? tgt.rooms : null,
+        };
         won[key] = {
           current: Number(cur.won ?? 0),
           previous: Number(prev.won ?? 0),
-          target: tgt.rooms > 0 ? tgt.rooms : null,
+          target: null,
         };
       }
 
@@ -232,7 +243,7 @@ export async function GET() {
           },
           year: { start: ranges.year.start, end: ranges.year.end, label: ranges.year.label },
         },
-        metrics: { grossProfit, roomDays, cv, won },
+        metrics: { grossProfit, roomDays, cv, cvRooms, won },
       };
       return result;
     });

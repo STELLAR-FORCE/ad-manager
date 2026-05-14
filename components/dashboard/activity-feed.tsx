@@ -88,11 +88,11 @@ export function ActivityFeed() {
                     )}
                   </p>
                 </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-xs text-muted-foreground/70 tabular-nums">
+                <div className="shrink-0 flex items-baseline gap-3 text-right">
+                  <p className="text-sm font-semibold tabular-nums whitespace-nowrap">
                     {item.contractedRooms} 室
                   </p>
-                  <p className="text-sm font-semibold tabular-nums">
+                  <p className="text-sm font-semibold tabular-nums whitespace-nowrap">
                     {jpyFormat.format(item.grossProfit)}
                   </p>
                 </div>
