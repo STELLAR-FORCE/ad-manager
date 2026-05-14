@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, TrendingDown, Wallet, BedDouble, Target, Trophy } from 'lucide-react';
+import {
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  BedDouble,
+  Target,
+  Trophy,
+  DoorOpen,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ProgressResponse } from '@/app/api/dashboard/progress/route';
 
@@ -34,13 +42,21 @@ const PERIOD_TABS: { key: PeriodKey; label: string }[] = [
   { key: 'year', label: '年次' },
 ];
 
+// 並び順: CV → CV室数 → ルームデイズ → 成約 → 粗利
 const METRICS = [
   {
-    key: 'grossProfit' as const,
-    label: '粗利',
-    icon: Wallet,
-    format: (v: number) => jpyFormat.format(v),
-    formatCompact: (v: number) => jpyCompact.format(v),
+    key: 'cv' as const,
+    label: 'CV',
+    icon: Target,
+    format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
+    formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
+  },
+  {
+    key: 'cvRooms' as const,
+    label: 'CV 室数',
+    icon: DoorOpen,
+    format: (v: number) => numFormat.format(Math.round(v)) + ' 室',
+    formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 室',
   },
   {
     key: 'roomDays' as const,
@@ -50,18 +66,18 @@ const METRICS = [
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' RD',
   },
   {
-    key: 'cv' as const,
-    label: 'CV',
-    icon: Target,
-    format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
-    formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
-  },
-  {
     key: 'won' as const,
     label: '成約',
     icon: Trophy,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
+  },
+  {
+    key: 'grossProfit' as const,
+    label: '粗利',
+    icon: Wallet,
+    format: (v: number) => jpyFormat.format(v),
+    formatCompact: (v: number) => jpyCompact.format(v),
   },
 ] as const;
 
@@ -155,7 +171,7 @@ export function ProgressView() {
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {METRICS.map(({ key, label, icon: Icon, format }) => {
             const m = data.metrics[key][activeTab];
             const delta = deltaPct(m.current, m.previous);
