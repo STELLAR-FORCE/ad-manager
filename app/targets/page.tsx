@@ -28,6 +28,7 @@ import { Save, RefreshCw, Plus } from 'lucide-react';
 import { Chip } from '@heroui/react';
 import { jpyCompact, formatMonthLabel, pctFormat } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { YearlyTargetForm } from '@/components/targets/yearly-target-form';
 
 type Platform = 'all' | 'google' | 'yahoo' | 'bing';
 
@@ -222,6 +223,8 @@ export default function TargetsPage() {
           </CardContent>
         </Card>
       )}
+
+      <YearlyTargetForm onSaved={fetchData} />
 
       <Card>
         <CardHeader>
