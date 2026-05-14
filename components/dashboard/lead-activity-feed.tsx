@@ -2,37 +2,47 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trophy } from 'lucide-react';
-import type { ActivitiesResponse } from '@/app/api/dashboard/activities/route';
+import { Inbox } from 'lucide-react';
+import type { LeadActivitiesResponse } from '@/app/api/dashboard/lead-activities/route';
 
-const jpyFormat = new Intl.NumberFormat('ja-JP', {
-  style: 'currency',
-  currency: 'JPY',
-  maximumFractionDigits: 0,
-});
+const numFormat = new Intl.NumberFormat('ja-JP');
 const dateShort = new Intl.DateTimeFormat('ja-JP', {
   month: 'numeric',
   day: 'numeric',
 });
 
-function fmtDate(iso: string): string {
+function fmtDate(iso: string | null): string {
   if (!iso) return '';
   return dateShort.format(new Date(iso));
 }
 
-const numFormat = new Intl.NumberFormat('ja-JP');
+/** LP コードから日本語ラベルへ */
+function lpLabel(lp: string | null): string {
+  switch (lp) {
+    case 'monthly-order':
+      return '依頼用 LP';
+    case 'express':
+      return '速達 LP';
+    case 'standard':
+      return '標準 LP';
+    case 'site':
+      return '資料 DL';
+    default:
+      return lp ?? '';
+  }
+}
 
-export function ActivityFeed() {
-  const [data, setData] = useState<ActivitiesResponse | null>(null);
+export function LeadActivityFeed() {
+  const [data, setData] = useState<LeadActivitiesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/dashboard/activities', { signal: controller.signal })
+    fetch('/api/dashboard/lead-activities', { signal: controller.signal })
       .then(async (r) => {
         const json = await r.json();
         if (!r.ok) throw new Error(json?.error ?? `HTTP ${r.status}`);
-        return json as ActivitiesResponse;
+        return json as LeadActivitiesResponse;
       })
       .then(setData)
       .catch((err) => {
@@ -46,11 +56,9 @@ export function ActivityFeed() {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <Trophy className="h-4 w-4 text-primary" aria-hidden="true" />
-          直近 7 日の新規成約
-          <span className="text-xs font-normal text-muted-foreground/60">
-            LP 経由のみ
-          </span>
+          <Inbox className="h-4 w-4 text-primary" aria-hidden="true" />
+          直近 7 日の新規依頼
+          <span className="text-xs font-normal text-muted-foreground/60">LP 経由のみ</span>
           {data && (
             <span className="text-xs font-normal text-muted-foreground/60 tabular-nums ml-auto">
               {data.items.length} 件
@@ -64,36 +72,43 @@ export function ActivityFeed() {
         ) : !data ? (
           <p className="text-sm text-muted-foreground">読み込み中…</p>
         ) : data.items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">直近 7 日に新規成約はありません</p>
+          <p className="text-sm text-muted-foreground">直近 7 日に新規依頼はありません</p>
         ) : (
-          <ul className="divide-y divide-border/50">
+          <ul className="divide-y divide-border/50 max-h-96 overflow-y-auto">
             {data.items.map((item) => (
-              <li key={item.contractId} className="py-2 flex items-start gap-3 text-sm">
+              <li key={item.leadId} className="py-2 flex items-start gap-3 text-sm">
                 <span className="text-xs text-muted-foreground/70 tabular-nums shrink-0 w-10 mt-0.5">
-                  {fmtDate(item.decisionDate)}
+                  {fmtDate(item.receivedAt)}
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">
-                    {item.tenantName ?? '—'}
+                    {item.companyName ?? item.contactName ?? '—'}
                   </p>
                   <p className="text-xs text-muted-foreground/70 truncate">
-                    {item.propertyName ?? '物件名未設定'}
+                    {item.contactName && item.companyName
+                      ? `${item.contactName}`
+                      : '担当者未設定'}
+                    <span className="ml-1.5 text-muted-foreground/50">
+                      [{lpLabel(item.lpSource)}
+                      {item.mediaSource ? ` / ${item.mediaSource}` : ''}]
+                    </span>
                   </p>
                   <p className="text-[10px] text-muted-foreground/60 tabular-nums mt-0.5 flex gap-2">
-                    {item.contractStart && (
-                      <span>入居予定 {fmtDate(item.contractStart)}</span>
+                    {item.useStart && (
+                      <span>
+                        入居予定 {fmtDate(item.useStart)}
+                        {item.useEnd && ` 〜 ${fmtDate(item.useEnd)}`}
+                      </span>
                     )}
-                    {item.useDaysContracted > 0 && (
-                      <span>利用 {numFormat.format(item.useDaysContracted)} 日</span>
+                    {item.useDays > 0 && (
+                      <span>利用 {numFormat.format(item.useDays)} 日</span>
                     )}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-xs text-muted-foreground/70 tabular-nums">
-                    {item.contractedRooms} 室
-                  </p>
+                  <p className="text-xs text-muted-foreground/70 tabular-nums">必要</p>
                   <p className="text-sm font-semibold tabular-nums">
-                    {jpyFormat.format(item.grossProfit)}
+                    {numFormat.format(item.needRooms)} 室
                   </p>
                 </div>
               </li>

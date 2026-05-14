@@ -14,7 +14,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/bigquery';
 import { cached } from '@/lib/dashboard-cache';
-import { SF_MART, SF_COLS } from '@/lib/salesforce/queries';
+import { SF_MART, SF_COLS, lpRyuunyuumotoSqlList } from '@/lib/salesforce/queries';
 
 type Row = {
   decision_date: { value: string } | string;
@@ -23,6 +23,7 @@ type Row = {
   tenant_name: string | null;
   property_name: string | null;
   contracted_rooms: number | null;
+  use_days_contracted: number | null;
   gross_profit: number | null;
   contract_start: { value: string } | string | null;
 };
@@ -34,7 +35,10 @@ export type ActivityItem = {
   tenantName: string | null;
   propertyName: string | null;
   contractedRooms: number;
+  /** 利用日数（成約） */
+  useDaysContracted: number;
   grossProfit: number;
+  /** 入居予定日（= 契約開始日） */
   contractStart: string | null;
 };
 
@@ -62,7 +66,8 @@ export async function GET() {
   startDate.setDate(startDate.getDate() - 6); // 直近 7 日（today 含む）
   const start = fmt(startDate);
 
-  // 同じ 契約管理ID に対して mart は複数行持ち得るので ANY_VALUE / MAX で集約
+  // LP 関連リードに紐付く成約のみに絞る（bizdev / 紹介などを除外）
+  // 同じ 契約管理ID に対して mart は複数行持ち得るので集約する
   const sql = `
     SELECT
       ANY_VALUE(${SF_COLS.decisionDate}) AS decision_date,
@@ -71,11 +76,13 @@ export async function GET() {
       ANY_VALUE(\`借主名\`) AS tenant_name,
       ANY_VALUE(\`物件名称\`) AS property_name,
       ANY_VALUE(${SF_COLS.contractedRooms}) AS contracted_rooms,
+      ANY_VALUE(${SF_COLS.useDaysContracted}) AS use_days_contracted,
       ANY_VALUE(${SF_COLS.grossProfit}) AS gross_profit,
       ANY_VALUE(${SF_COLS.contractStart}) AS contract_start
     FROM ${SF_MART}
     WHERE ${SF_COLS.contractId} IS NOT NULL
       AND ${SF_COLS.decisionDate} BETWEEN DATE(@start) AND DATE(@end)
+      AND ${SF_COLS.lpSource} IN (${lpRyuunyuumotoSqlList()})
     GROUP BY ${SF_COLS.contractId}
     ORDER BY decision_date DESC, ${SF_COLS.contractId} DESC
   `;
@@ -91,6 +98,7 @@ export async function GET() {
         tenantName: r.tenant_name,
         propertyName: r.property_name,
         contractedRooms: Number(r.contracted_rooms ?? 0),
+        useDaysContracted: Number(r.use_days_contracted ?? 0),
         grossProfit: Number(r.gross_profit ?? 0),
         contractStart: isoDate(r.contract_start),
       }));

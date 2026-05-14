@@ -46,6 +46,7 @@ import { IntegratedFunnel } from '@/components/dashboard/integrated-funnel';
 import { SalesforceSection } from '@/components/dashboard/salesforce-section';
 import { ProgressView } from '@/components/dashboard/progress-view';
 import { ActivityFeed } from '@/components/dashboard/activity-feed';
+import { LeadActivityFeed } from '@/components/dashboard/lead-activity-feed';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 import { useSidebarCollapsed } from '@/components/layout/MainLayout';
@@ -894,8 +895,11 @@ export default function DashboardPage() {
         {/* ─── サマリー: 進捗ビュー ─── */}
         <ProgressView />
 
-        {/* ─── サマリー: 直近 7 日の新規成約 ─── */}
-        <ActivityFeed />
+        {/* ─── サマリー: 直近 7 日のフィード（成約 / 依頼） ─── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ActivityFeed />
+          <LeadActivityFeed />
+        </div>
 
         {/* ───────────────────────────────────────────
             以下は詳細セクション（Phase 2 で /dashboard/ad-detail 等に移植予定）

@@ -6,6 +6,11 @@ import { TrendingUp, TrendingDown, Wallet, BedDouble, Target, Trophy } from 'luc
 import { cn } from '@/lib/utils';
 import type { ProgressResponse } from '@/app/api/dashboard/progress/route';
 
+const jpyFormat = new Intl.NumberFormat('ja-JP', {
+  style: 'currency',
+  currency: 'JPY',
+  maximumFractionDigits: 0,
+});
 const jpyCompact = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
   currency: 'JPY',
@@ -21,32 +26,42 @@ const pct1Format = new Intl.NumberFormat('ja-JP', {
 
 type PeriodKey = keyof ProgressResponse['metrics']['grossProfit'];
 
-const PERIOD_ORDER: PeriodKey[] = ['week', 'month', 'quarter', 'halfYear', 'year'];
+const PERIOD_TABS: { key: PeriodKey; label: string }[] = [
+  { key: 'week', label: '今週' },
+  { key: 'month', label: '今月' },
+  { key: 'quarter', label: 'Q' },
+  { key: 'halfYear', label: '半期' },
+  { key: 'year', label: '年次' },
+];
 
 const METRICS = [
   {
     key: 'grossProfit' as const,
     label: '粗利',
     icon: Wallet,
-    format: (v: number) => jpyCompact.format(v),
+    format: (v: number) => jpyFormat.format(v),
+    formatCompact: (v: number) => jpyCompact.format(v),
   },
   {
     key: 'roomDays' as const,
     label: 'ルームデイズ',
     icon: BedDouble,
     format: (v: number) => numFormat.format(Math.round(v)) + ' RD',
+    formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' RD',
   },
   {
     key: 'cv' as const,
     label: 'CV',
     icon: Target,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
+    formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
   },
   {
     key: 'won' as const,
     label: '成約',
     icon: Trophy,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
+    formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
   },
 ] as const;
 
@@ -56,16 +71,16 @@ function deltaPct(current: number, previous: number): number | null {
 }
 
 function DeltaBadge({ delta }: { delta: number | null }) {
-  if (delta == null) return <span className="text-[10px] text-muted-foreground/40">—</span>;
+  if (delta == null) return <span className="text-xs text-muted-foreground/40">—</span>;
   const positive = delta > 0;
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-0.5 text-[10px] tabular-nums',
+        'inline-flex items-center gap-0.5 text-xs tabular-nums',
         positive ? 'text-green-600' : 'text-red-500',
       )}
     >
-      {positive ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+      {positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
       {positive ? '+' : ''}
       {pct1Format.format(delta)}
     </span>
@@ -75,6 +90,7 @@ function DeltaBadge({ delta }: { delta: number | null }) {
 export function ProgressView() {
   const [data, setData] = useState<ProgressResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<PeriodKey>('month');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -105,77 +121,86 @@ export function ProgressView() {
   if (!data) {
     return (
       <Card>
-        <CardContent className="pt-6 text-sm text-muted-foreground">
-          読み込み中…
-        </CardContent>
+        <CardContent className="pt-6 text-sm text-muted-foreground">読み込み中…</CardContent>
       </Card>
     );
   }
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {METRICS.map(({ key, label, icon: Icon, format }) => {
-        const metric = data.metrics[key];
-        return (
-          <Card key={key}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
-                {label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {PERIOD_ORDER.map((pkey) => {
-                const m = metric[pkey];
-                const period = data.periods[pkey];
-                const delta = deltaPct(m.current, m.previous);
-                const achievementPct =
-                  m.target != null && m.target > 0 ? m.current / m.target : null;
+  const period = data.periods[activeTab];
 
-                return (
-                  <div
-                    key={pkey}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <span className="text-xs text-muted-foreground w-12 shrink-0">
-                      {period.label}
-                    </span>
-                    <span className="font-semibold tabular-nums tracking-tight w-28 shrink-0">
-                      {format(m.current)}
-                    </span>
-                    {achievementPct != null ? (
-                      <div className="flex-1 min-w-0 flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className={cn(
-                              'h-full rounded-full',
-                              achievementPct >= 1
-                                ? 'bg-green-500'
-                                : achievementPct >= 0.7
-                                  ? 'bg-yellow-500'
-                                  : 'bg-blue-500',
-                            )}
-                            style={{
-                              width: `${Math.min(100, achievementPct * 100)}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-                          {pct1Format.format(achievementPct)} / {format(m.target!)}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex-1 min-w-0 flex items-center justify-end">
-                        <DeltaBadge delta={delta} />
-                      </div>
-                    )}
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center justify-between gap-3">
+          <span>進捗</span>
+          <div className="flex gap-1">
+            {PERIOD_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  'text-xs px-2 py-1 rounded-md transition-colors tabular-nums',
+                  activeTab === tab.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </CardTitle>
+        <p className="text-xs text-muted-foreground/70 tabular-nums mt-1">
+          {period.label}: {period.start} 〜 {period.end}
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {METRICS.map(({ key, label, icon: Icon, format }) => {
+            const m = data.metrics[key][activeTab];
+            const delta = deltaPct(m.current, m.previous);
+            const achievementPct =
+              m.target != null && m.target > 0 ? m.current / m.target : null;
+
+            return (
+              <div key={key} className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                </div>
+                <p className="text-lg font-bold tabular-nums tracking-tight">
+                  {format(m.current)}
+                </p>
+                {achievementPct != null ? (
+                  <>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all',
+                          achievementPct >= 1
+                            ? 'bg-green-500'
+                            : achievementPct >= 0.7
+                              ? 'bg-yellow-500'
+                              : 'bg-blue-500',
+                        )}
+                        style={{ width: `${Math.min(100, achievementPct * 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/70 tabular-nums">
+                      {pct1Format.format(achievementPct)} / 目標 {format(m.target!)}
+                    </p>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <DeltaBadge delta={delta} />
+                    <span className="text-[10px] text-muted-foreground/50">前期間比</span>
                   </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
