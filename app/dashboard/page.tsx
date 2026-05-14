@@ -44,6 +44,8 @@ import { Chip, Meter, ProgressCircle } from '@heroui/react';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
 import { IntegratedFunnel } from '@/components/dashboard/integrated-funnel';
 import { SalesforceSection } from '@/components/dashboard/salesforce-section';
+import { ProgressView } from '@/components/dashboard/progress-view';
+import { ActivityFeed } from '@/components/dashboard/activity-feed';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 import { useSidebarCollapsed } from '@/components/layout/MainLayout';
@@ -888,6 +890,16 @@ export default function DashboardPage() {
             {refreshing ? '読み込み中…' : '再読み込み'}
           </Button>
         </div>
+
+        {/* ─── サマリー: 進捗ビュー ─── */}
+        <ProgressView />
+
+        {/* ─── サマリー: 直近 7 日の新規成約 ─── */}
+        <ActivityFeed />
+
+        {/* ───────────────────────────────────────────
+            以下は詳細セクション（Phase 2 で /dashboard/ad-detail 等に移植予定）
+            ─────────────────────────────────────────── */}
 
         {/* ─── ファネルフロー ─── */}
         {loading ? (
