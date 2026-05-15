@@ -33,6 +33,7 @@ const pct1Format = new Intl.NumberFormat('ja-JP', {
 });
 
 type PeriodKey = keyof ProgressResponse['metrics']['grossProfit'];
+type Axis = 'movein' | 'received';
 
 const PERIOD_TABS: { key: PeriodKey; label: string }[] = [
   { key: 'week', label: '今週' },
@@ -40,6 +41,11 @@ const PERIOD_TABS: { key: PeriodKey; label: string }[] = [
   { key: 'quarter', label: 'Q' },
   { key: 'halfYear', label: '半期' },
   { key: 'year', label: '年次' },
+];
+
+const AXIS_TABS: { key: Axis; label: string; hint: string }[] = [
+  { key: 'movein', label: '入居日', hint: '利用期間始期が期間内' },
+  { key: 'received', label: '発生日', hint: '受付日時が期間内' },
 ];
 
 // 並び順: CV → CV室数 → ルームデイズ → 成約 → 粗利
@@ -107,10 +113,13 @@ export function ProgressView() {
   const [data, setData] = useState<ProgressResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<PeriodKey>('month');
+  const [axis, setAxis] = useState<Axis>('movein');
 
   useEffect(() => {
+    setData(null);
+    setError(null);
     const controller = new AbortController();
-    fetch('/api/dashboard/progress', { signal: controller.signal })
+    fetch(`/api/dashboard/progress?axis=${axis}`, { signal: controller.signal })
       .then(async (r) => {
         const json = await r.json();
         if (!r.ok) throw new Error(json?.error ?? `HTTP ${r.status}`);
@@ -122,7 +131,7 @@ export function ProgressView() {
         setError(err instanceof Error ? err.message : String(err));
       });
     return () => controller.abort();
-  }, []);
+  }, [axis]);
 
   if (error) {
     return (
@@ -147,8 +156,30 @@ export function ProgressView() {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center justify-between gap-3">
-          <span>進捗</span>
+        <CardTitle className="text-base flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span>進捗</span>
+            <div className="flex gap-1" role="tablist" aria-label="集計軸">
+              {AXIS_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={axis === tab.key}
+                  title={tab.hint}
+                  onClick={() => setAxis(tab.key)}
+                  className={cn(
+                    'text-xs px-2 py-1 rounded-md transition-colors',
+                    axis === tab.key
+                      ? 'bg-primary/15 text-primary border border-primary/30'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground border border-transparent',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-1">
             {PERIOD_TABS.map((tab) => (
               <button
@@ -168,6 +199,9 @@ export function ProgressView() {
         </CardTitle>
         <p className="text-xs text-muted-foreground/70 tabular-nums mt-1">
           {period.label}: {period.start} 〜 {period.end}
+          <span className="ml-2 text-muted-foreground/50">
+            ({axis === 'movein' ? '入居日ベース' : '発生日ベース'})
+          </span>
         </p>
       </CardHeader>
       <CardContent>
