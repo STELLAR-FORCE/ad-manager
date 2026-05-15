@@ -44,6 +44,7 @@ import { Chip, Meter, ProgressCircle } from '@heroui/react';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
 import { IntegratedFunnel } from '@/components/dashboard/integrated-funnel';
 import { SalesforceSection } from '@/components/dashboard/salesforce-section';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
 import { useSidebarCollapsed } from '@/components/layout/MainLayout';
@@ -786,7 +787,22 @@ export default function DashboardPage() {
         {/* ─── ヘッダー ─── */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight">広告詳細</h1>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              広告詳細
+              <DataSourceTooltip
+                info={{
+                  label: '広告詳細',
+                  source:
+                    'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns) + Salesforce (mart.salesforce_all_obj)',
+                  filters: '画面上の媒体・種別・期間で絞り込み可能',
+                  target:
+                    '広告メトリクス (Imp/Click/Cost/CV/CPA/CPC) + Salesforce KPI (CV/室数/RD/成約/粗利)',
+                  period: '画面上の日付範囲ピッカーで指定された期間',
+                  axis: '広告 date (adm_daily_metrics.date) ベース',
+                  cache: '1 時間キャッシュ (再読み込みで更新)',
+                }}
+              />
+            </h1>
             {lastUpdated && (
               <p className="text-xs text-muted-foreground/50 tabular-nums mt-0.5">
                 {formatLastUpdated(lastUpdated)}
@@ -1032,6 +1048,18 @@ export default function DashboardPage() {
               <CardTitle className="text-base flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   CPA推移
+                  <DataSourceTooltip
+                    info={{
+                      label: 'CPA推移',
+                      source: 'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns)',
+                      filters: '画面上の媒体・種別・期間で絞り込み',
+                      target: '日別 cost ÷ conversions を媒体ごとに線描画',
+                      period: '画面上の日付範囲',
+                      axis: '広告 date',
+                      cache: '1 時間キャッシュ',
+                      note: '目標 CPA は dashboard.targets_monthly / cv_target × gross_profit_target など',
+                    }}
+                  />
                   <span className="text-xs font-normal text-muted-foreground/60">広告経由のCV</span>
                   {cpaTarget && (
                     <span className="text-xs font-normal text-muted-foreground/60 tabular-nums">
@@ -1198,6 +1226,17 @@ export default function DashboardPage() {
               <CardTitle className="text-base flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   CV推移
+                  <DataSourceTooltip
+                    info={{
+                      label: 'CV推移',
+                      source: 'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns)',
+                      filters: '画面上の媒体・種別・期間で絞り込み',
+                      target: '日別 SUM(conversions) を媒体ごとに線/積み上げ描画',
+                      period: '画面上の日付範囲',
+                      axis: '広告 date',
+                      cache: '1 時間キャッシュ',
+                    }}
+                  />
                   <span className="text-xs font-normal text-muted-foreground/60">広告経由のCV</span>
                 </span>
                 <TrendModeToggle mode={trendMode} onChange={setTrendMode} />
