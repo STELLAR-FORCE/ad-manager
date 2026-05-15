@@ -11,6 +11,7 @@ import { ProgressView } from '@/components/dashboard/progress-view';
 import { ActivityFeed } from '@/components/dashboard/activity-feed';
 import { LeadActivityFeed } from '@/components/dashboard/lead-activity-feed';
 import { SearchKeywordsSection } from '@/components/dashboard/search-keywords-section';
+import { MediaBreakdownCard } from '@/components/dashboard/media-breakdown-card';
 
 export default function DashboardPage() {
   return (
@@ -24,6 +25,9 @@ export default function DashboardPage() {
 
       {/* 進捗ビュー（期間タブ切替: 今週 / 今月 / Q / 半期 / 年次） */}
       <ProgressView />
+
+      {/* 媒体ブレイクダウン（発生日ベース / 今週 vs 先週） */}
+      <MediaBreakdownCard />
 
       {/* 直近 7 日のフィード（新規成約 / 新規依頼を左右 2 カラム） */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
