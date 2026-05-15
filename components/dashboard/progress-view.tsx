@@ -193,11 +193,12 @@ export function ProgressView() {
                       <div
                         className={cn(
                           'h-full rounded-full transition-all',
-                          achievementPct >= 1
+                          // 30% 未満: 赤 / 70% 未満: 黄 / 70% 以上: 緑
+                          achievementPct >= 0.7
                             ? 'bg-green-500'
-                            : achievementPct >= 0.7
+                            : achievementPct >= 0.3
                               ? 'bg-yellow-500'
-                              : 'bg-blue-500',
+                              : 'bg-red-500',
                         )}
                         style={{ width: `${Math.min(100, achievementPct * 100)}%` }}
                       />
