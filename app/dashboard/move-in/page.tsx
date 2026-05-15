@@ -48,6 +48,7 @@ import {
 } from '@/components/dashboard/move-in-summary-card';
 import { jpyFormat, jpyCompact, numFormat, pctFormat, formatMonthLabel } from '@/lib/format';
 import { currentPeriod, periodRange, type Period } from '@/lib/period';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 import { cn } from '@/lib/utils';
 
 const TODAY = new Date();
@@ -321,7 +322,23 @@ export default function MoveInPivotPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">入居日ベース</h1>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            入居日ベース
+            <DataSourceTooltip
+              info={{
+                label: '入居日ベース',
+                source: 'Salesforce (mart.salesforce_all_obj)',
+                filters:
+                  'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)',
+                target:
+                  'リード件数 / 必要戸数_数値 SUM / 利用日数 / 成約件数・室数 / 粗利・売上',
+                period: '画面上の期間セレクタで指定した範囲を入居月別に集計',
+                axis: '利用期間_始期 が期間内 (入居日ベース)',
+                cache: '1 時間キャッシュ (再読み込みで更新)',
+                note: '入居月合計と当月以前累計を集計。目標値は dashboard.targets_monthly',
+              }}
+            />
+          </h1>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
             入居月ごとの着地見込み（LP流入の案件のみ）。営業/経営は時系列、マーケはリードタイム逆算で施策タイミングを判断。
           </p>
@@ -431,7 +448,21 @@ export default function MoveInPivotPage() {
 
           {/* ─── 並び替えトグル ─── */}
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-muted-foreground">入居月別サマリー</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">入居月別サマリー</h2>
+              <DataSourceTooltip
+                info={{
+                  label: '入居月別サマリー (ピボット)',
+                  source: 'Salesforce (mart.salesforce_all_obj) /api/dashboard/move-in/pivot',
+                  filters: 'LP 経由のみ',
+                  target:
+                    '入居月 × 受付月のリード件数 / 室数 を縦横ピボット表示。目標は targets_monthly',
+                  period: '画面上の期間セレクタで指定した範囲',
+                  axis: '利用期間_始期 (入居日)',
+                  cache: '1 時間キャッシュ',
+                }}
+              />
+            </div>
             <div className="inline-flex rounded-md border bg-background p-0.5 text-xs">
               <button
                 type="button"

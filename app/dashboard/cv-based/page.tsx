@@ -37,6 +37,7 @@ import {
 } from 'recharts';
 import { jpyFormat, jpyCompact, numFormat, formatMonthLabel } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 
 type Platform = 'all' | 'google' | 'yahoo' | 'bing';
 
@@ -229,7 +230,22 @@ export default function CvBasedPage() {
       {/* 月次トレンド */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">月別 CV / 成約 / 粗利 / 売上</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            月別 CV / 成約 / 粗利 / 売上
+            <DataSourceTooltip
+              info={{
+                label: '月別 CV / 成約 / 粗利 / 売上',
+                source:
+                  'Salesforce (mart.salesforce_all_obj) + BigQuery 広告メトリクス (CV_BASED_SQL)',
+                filters: 'LP フィルタなし (全リード対象)',
+                target:
+                  'CV: リード件数 / 成約CV: 契約管理ID NOT NULL / 粗利: 総売上_粗利 SUM / 売上: 借主への請求額 SUM',
+                period: '画面上の期間ピッカーで指定された範囲を月別に集計',
+                axis: '受付日 (発生日ベース)',
+                cache: '1 時間キャッシュ',
+              }}
+            />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
@@ -275,7 +291,23 @@ export default function CvBasedPage() {
       {/* 媒体×月 詳細テーブル */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">媒体 × 月 詳細</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            媒体 × 月 詳細
+            <DataSourceTooltip
+              info={{
+                label: '媒体 × 月 詳細',
+                source:
+                  'Salesforce (mart.salesforce_all_obj) + BigQuery 広告メトリクス (CV_BASED_SQL)',
+                filters:
+                  'LP フィルタなし。媒体は 流入元_媒体別 を Platform に正規化',
+                target:
+                  'Imp / Click / Cost (広告メトリクス) + CV / CV室数 / RD / 成約CV / 成約室数 / 粗利 / 売上 (Salesforce)',
+                period: '画面上の期間ピッカーで指定された範囲を月別に集計',
+                axis: '受付日 (発生日ベース)',
+                cache: '1 時間キャッシュ',
+              }}
+            />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
