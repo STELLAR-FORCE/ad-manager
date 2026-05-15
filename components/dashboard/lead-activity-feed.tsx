@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Inbox } from 'lucide-react';
 import type { LeadActivitiesResponse } from '@/app/api/dashboard/lead-activities/route';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 
 const numFormat = new Intl.NumberFormat('ja-JP');
 const dateShort = new Intl.DateTimeFormat('ja-JP', {
@@ -58,6 +59,17 @@ export function LeadActivityFeed() {
         <CardTitle className="text-base flex items-center gap-2">
           <Inbox className="h-4 w-4 text-primary" aria-hidden="true" />
           直近 7 日の新規依頼
+          <DataSourceTooltip
+            info={{
+              label: '直近 7 日の新規依頼',
+              source: 'Salesforce (mart.salesforce_all_obj)',
+              filters:
+                'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)',
+              target: 'リードを 1 件として表示。希望室数・利用期間・LP 種別を併記',
+              period: '受付日時 が直近 7 日',
+              cache: '1 時間キャッシュ',
+            }}
+          />
           <span className="text-xs font-normal text-muted-foreground/60">LP 経由のみ</span>
           {data && (
             <span className="text-xs font-normal text-muted-foreground/60 tabular-nums ml-auto">
