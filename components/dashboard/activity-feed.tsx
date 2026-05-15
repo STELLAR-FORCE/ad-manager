@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy } from 'lucide-react';
 import type { ActivitiesResponse } from '@/app/api/dashboard/activities/route';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 
 const jpyFormat = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
@@ -48,6 +49,17 @@ export function ActivityFeed() {
         <CardTitle className="text-base flex items-center gap-2">
           <Trophy className="h-4 w-4 text-primary" aria-hidden="true" />
           直近 7 日の新規成約
+          <DataSourceTooltip
+            info={{
+              label: '直近 7 日の新規成約',
+              source: 'Salesforce (mart.salesforce_all_obj)',
+              filters:
+                'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site) + 契約管理ID NOT NULL',
+              target: '決定済みリードを 1 件として表示。粗利・室数・入居予定日を併記',
+              period: '決定日_粗利益計上日 が直近 7 日',
+              cache: '1 時間キャッシュ',
+            }}
+          />
           <span className="text-xs font-normal text-muted-foreground/60">
             LP 経由のみ
           </span>

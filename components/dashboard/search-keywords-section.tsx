@@ -27,6 +27,7 @@ import type {
   CvKeywordItem,
   NewKeywordItem,
 } from '@/app/api/dashboard/search-keywords/route';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 
 // 「キラーワード」= フレーズ一致で意図的に取りに行っているメインターゲット語群。
 // デフォルトの CV あり語句リストでは折り畳んでサマリ行にし、クリックで詳細展開する。
@@ -148,6 +149,18 @@ function CvKeywordList({ items }: { items: CvKeywordItem[] }) {
       <div className="flex items-center gap-2 mb-2">
         <Search className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
         <h3 className="text-sm font-semibold">CV あり語句</h3>
+        <DataSourceTooltip
+          info={{
+            label: 'CV あり語句',
+            source: 'BigQuery (ad_manager.adm_search_term_reports)',
+            filters:
+              'is_excluded=false。マンスリ/ウィークリ系も含む (1 行に折り畳み)',
+            target: 'conversions > 0 の語句。conversions 降順 (TOP 500)',
+            period: '直近 30 日 (asOf-29 〜 asOf)',
+            axis: 'asOf = 媒体ごとの MAX(date)',
+            cache: '1 時間キャッシュ',
+          }}
+        />
         <span className="text-[11px] text-muted-foreground/60">
           直近 30 日 / {items.length} 件
         </span>
@@ -213,6 +226,19 @@ function NewKeywordList({ items }: { items: NewKeywordItem[] }) {
       <div className="flex items-center gap-2 mb-2">
         <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
         <h3 className="text-sm font-semibold">新規語句</h3>
+        <DataSourceTooltip
+          info={{
+            label: '新規語句',
+            source: 'BigQuery (ad_manager.adm_search_term_reports)',
+            filters:
+              'is_excluded=false + キラーワード (マンスリ/ウィークリ系) 除外',
+            target:
+              'clicks≥1 で直近 7 日に出現 + 過去 30 日窓 (asOf-37〜asOf-7) に未出現の語句 (TOP 30)',
+            period: '直近 7 日 vs 過去 30 日窓',
+            axis: 'asOf = 媒体ごとの MAX(date)',
+            cache: '1 時間キャッシュ',
+          }}
+        />
         <span className="text-[11px] text-muted-foreground/60">
           直近 7 日 / TOP {items.length}
         </span>

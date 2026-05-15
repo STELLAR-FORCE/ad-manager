@@ -18,6 +18,7 @@ import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Layers, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 import type {
   MediaBreakdownResponse,
   MediaBreakdownItem,
@@ -158,6 +159,20 @@ export function MediaBreakdownCard() {
         <CardTitle className="text-base flex items-center gap-2">
           <Layers className="h-4 w-4 text-primary" aria-hidden="true" />
           媒体ブレイクダウン
+          <DataSourceTooltip
+            info={{
+              label: '媒体ブレイクダウン',
+              source: 'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns)',
+              filters: 'platform ∈ {google, yahoo, bing} / ad_type ∈ {search, display}',
+              target:
+                'CV: SUM(conversions) / cost: SUM(cost) / CPA: cost÷CV / 前週比: CV の対先週比 / spark: 14 日の CV 日次合計',
+              period:
+                '今週 = 月起点〜今日。先週 = 前週月曜〜前週同曜日。spark は過去 14 日',
+              axis: '広告の発生日 (adm_daily_metrics.date)',
+              cache: '1 時間キャッシュ',
+              note: '6 行 = google/yahoo/bing × search/display。ETL 未対応の組合せは「—」',
+            }}
+          />
           <span className="text-xs font-normal text-muted-foreground/60">
             発生日 / 今週 (月起点) vs 先週
           </span>
