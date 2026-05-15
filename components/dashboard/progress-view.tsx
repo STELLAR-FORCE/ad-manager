@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ProgressResponse } from '@/app/api/dashboard/progress/route';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 
 const jpyFormat = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
@@ -56,6 +57,7 @@ const METRICS = [
     icon: Target,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
+    target: 'リード件数 (mart の全行を COUNT)',
   },
   {
     key: 'cvRooms' as const,
@@ -63,6 +65,7 @@ const METRICS = [
     icon: DoorOpen,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 室',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 室',
+    target: '必要戸数_数値 の合計 (SUM)',
   },
   {
     key: 'roomDays' as const,
@@ -70,6 +73,7 @@ const METRICS = [
     icon: BedDouble,
     format: (v: number) => numFormat.format(Math.round(v)) + ' RD',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' RD',
+    target: '利用日数_成約 × 成約室数 の合計 (SUM)',
   },
   {
     key: 'won' as const,
@@ -77,6 +81,7 @@ const METRICS = [
     icon: Trophy,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
+    target: '契約管理ID が NOT NULL のリードを COUNT DISTINCT',
   },
   {
     key: 'grossProfit' as const,
@@ -84,6 +89,7 @@ const METRICS = [
     icon: Wallet,
     format: (v: number) => jpyFormat.format(v),
     formatCompact: (v: number) => jpyCompact.format(v),
+    target: '総売上_粗利 の合計 (SUM)',
   },
 ] as const;
 
@@ -206,7 +212,7 @@ export function ProgressView() {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {METRICS.map(({ key, label, icon: Icon, format }) => {
+          {METRICS.map(({ key, label, icon: Icon, format, target: aggTarget }) => {
             const m = data.metrics[key][activeTab];
             const delta = deltaPct(m.current, m.previous);
             const achievementPct =
@@ -217,6 +223,24 @@ export function ProgressView() {
                 <div className="flex items-center gap-1.5">
                   <Icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                   <span className="text-xs text-muted-foreground">{label}</span>
+                  <DataSourceTooltip
+                    info={{
+                      label,
+                      source: 'Salesforce (mart.salesforce_all_obj)',
+                      filters: 'LP フィルタなし (全リード)',
+                      target: aggTarget,
+                      period: `${period.start} 〜 ${period.end}`,
+                      axis:
+                        axis === 'movein'
+                          ? '利用期間_始期 が期間内 (入居日ベース)'
+                          : '受付日時 が期間内 (発生日ベース)',
+                      cache: '1 時間キャッシュ',
+                      note:
+                        m.target != null
+                          ? `目標は dashboard.targets_monthly を ${activeTab === 'week' ? '月目標 ÷ 4 (週相当)' : '期間合算'}`
+                          : undefined,
+                    }}
+                  />
                 </div>
                 <p className="text-lg font-bold tabular-nums tracking-tight">
                   {format(m.current)}
