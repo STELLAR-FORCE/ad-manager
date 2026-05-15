@@ -1,15 +1,19 @@
 /**
- * GET /api/dashboard/progress
+ * GET /api/dashboard/progress?axis=movein|received
  *
  * ダッシュボードのサマリー（進捗ビュー）用 API。
  *
- * 入居日ベース（mart の `利用期間_始期`）で、以下 5 期間 × 5 指標を集計する:
+ * 集計の「軸」を 2 種類サポート (Phase 3c):
+ *   - axis=movein (デフォルト): 入居日ベース。`利用期間_始期` が期間内
+ *   - axis=received:           発生日ベース。`受付日時` が期間内 (マーケ視点)
+ *
+ * 以下 5 期間 × 5 指標を集計する:
  *   期間: 今週 / 今月 / Q / 上期下期 / 年（いずれも開始日 〜 today までの累計）
  *   指標: CV / CV室数 / ルームデイズ / 成約数 / 粗利
  *
  * 各値について「current（今期間）」「previous（前期間の同経過日数）」を返す。
  * 目標 (target) は `dashboard.targets_monthly` を期間ごとに合算した値を入れる。
- * 月次目標が無い月は 0 として扱う（合算しても OK）。
+ * 月次目標が無い月は 0 として扱う（合算しても OK）。両軸で同じ目標を共有する。
  */
 
 import { NextResponse } from 'next/server';
@@ -61,20 +65,30 @@ export type ProgressResponse = {
   };
 };
 
-/** 1 期間 (start, end) で mart を集計する SQL */
-const aggregateSql = `
-  SELECT
-    IFNULL(SUM(${SF_COLS.grossProfit}), 0) AS gross_profit,
-    IFNULL(SUM(IFNULL(${SF_COLS.useDaysContracted}, 0) * IFNULL(${SF_COLS.contractedRooms}, 0)), 0) AS room_days,
-    COUNT(*) AS cv,
-    IFNULL(SUM(${SF_COLS.needRooms}), 0) AS cv_rooms,
-    COUNT(DISTINCT IF(${SF_COLS.contractId} IS NOT NULL, ${SF_COLS.leadId}, NULL)) AS won
-  FROM ${SF_MART}
-  WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN DATE(@start) AND DATE(@end)
-`;
+type Axis = 'movein' | 'received';
 
-async function aggregate(start: string, end: string): Promise<AggregateRow> {
-  const rows = await query<AggregateRow>(aggregateSql, { start, end });
+/** 軸に応じた WHERE 句の日付カラム */
+function axisDateColumn(axis: Axis): string {
+  return axis === 'received' ? SF_COLS.receivedAt : SF_COLS.usePeriodStart;
+}
+
+/** 1 期間 (start, end) で mart を集計する SQL（軸ごとに日付カラムを差し替え） */
+function buildAggregateSql(axis: Axis): string {
+  const dateCol = axisDateColumn(axis);
+  return `
+    SELECT
+      IFNULL(SUM(${SF_COLS.grossProfit}), 0) AS gross_profit,
+      IFNULL(SUM(IFNULL(${SF_COLS.useDaysContracted}, 0) * IFNULL(${SF_COLS.contractedRooms}, 0)), 0) AS room_days,
+      COUNT(*) AS cv,
+      IFNULL(SUM(${SF_COLS.needRooms}), 0) AS cv_rooms,
+      COUNT(DISTINCT IF(${SF_COLS.contractId} IS NOT NULL, ${SF_COLS.leadId}, NULL)) AS won
+    FROM ${SF_MART}
+    WHERE DATE(${dateCol}) BETWEEN DATE(@start) AND DATE(@end)
+  `;
+}
+
+async function aggregate(axis: Axis, start: string, end: string): Promise<AggregateRow> {
+  const rows = await query<AggregateRow>(buildAggregateSql(axis), { start, end });
   return rows[0] ?? { gross_profit: 0, room_days: 0, cv: 0, cv_rooms: 0, won: 0 };
 }
 
@@ -162,11 +176,15 @@ async function aggregateTargetsForPeriod(
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const axisParam = searchParams.get('axis');
+  const axis: Axis = axisParam === 'received' ? 'received' : 'movein';
+
   const now = new Date();
   const ranges = calcProgressRanges(now);
 
-  const cacheKey = `dashboard-progress:${ranges.year.end}`;
+  const cacheKey = `dashboard-progress:${axis}:${ranges.year.end}`;
   try {
     const cacheResult = await cached(cacheKey, async () => {
       // 各期間 × current/previous の集計を並列実行
@@ -175,8 +193,8 @@ export async function GET() {
         keys.map(async (k) => {
           const r = ranges[k];
           const [cur, prev, tgt] = await Promise.all([
-            aggregate(r.start, r.end),
-            aggregate(r.prevStart, r.prevEnd),
+            aggregate(axis, r.start, r.end),
+            aggregate(axis, r.prevStart, r.prevEnd),
             aggregateTargetsForPeriod(k, now),
           ]);
           return { key: k, cur, prev, tgt };
