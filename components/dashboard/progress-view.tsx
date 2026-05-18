@@ -57,7 +57,7 @@ const METRICS = [
     icon: Target,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
-    target: 'リード件数 (mart の全行を COUNT)',
+    target: 'LP 経由リード件数 (COUNT)',
   },
   {
     key: 'cvRooms' as const,
@@ -73,7 +73,7 @@ const METRICS = [
     icon: BedDouble,
     format: (v: number) => numFormat.format(Math.round(v)) + ' RD',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' RD',
-    target: '利用日数_成約 × 成約室数 の合計 (SUM)',
+    target: '利用期間_日数 × 必要戸数_数値 の合計 (CV ルームデイズ / SUM)',
   },
   {
     key: 'won' as const,
@@ -227,7 +227,8 @@ export function ProgressView() {
                     info={{
                       label,
                       source: 'Salesforce (mart.salesforce_all_obj)',
-                      filters: 'LP フィルタなし (全リード)',
+                      filters:
+                        'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)',
                       target: aggTarget,
                       period: `${period.start} 〜 ${period.end}`,
                       axis:
@@ -237,7 +238,7 @@ export function ProgressView() {
                       cache: '1 時間キャッシュ',
                       note:
                         m.target != null
-                          ? `目標は dashboard.targets_monthly を ${activeTab === 'week' ? '月目標 ÷ 4 (週相当)' : '期間合算'}`
+                          ? `目標は dashboard.targets_monthly を ${activeTab === 'week' ? '月目標 ÷ 4 (週相当)' : '期間合算'}。※ 現状は入居日/発生日で同じ目標値を共有 (Issue 化予定)`
                           : undefined,
                     }}
                   />
