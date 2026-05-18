@@ -13,12 +13,18 @@
  * API から返るので「—」表示にして「ETL 未対応」が混乱しないようにする。
  */
 
-import { useEffect, useState } from 'react';
-import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Layers, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
+
+type AdTypeFilter = 'search' | 'display' | 'all';
+const AD_TYPE_TABS: { key: AdTypeFilter; label: string }[] = [
+  { key: 'search', label: '検索' },
+  { key: 'display', label: 'ディスプレイ' },
+  { key: 'all', label: '両方' },
+];
 import type {
   MediaBreakdownResponse,
   MediaBreakdownItem,
@@ -80,54 +86,38 @@ function DeltaCell({ delta }: { delta: number | null }) {
   );
 }
 
-function Sparkline({ data }: { data: { date: string; cv: number }[] }) {
-  // 全部 0 のときは線が描けないので「—」を表示
-  const hasAny = data.some((d) => d.cv > 0);
-  if (!hasAny) {
-    return <span className="text-xs text-muted-foreground/40">—</span>;
-  }
+function PrevLine({ children }: { children: React.ReactNode }) {
   return (
-    <div className="h-7 w-24">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 2, bottom: 2, left: 0, right: 0 }}>
-          <YAxis hide domain={[0, 'dataMax']} />
-          <Line
-            type="monotone"
-            dataKey="cv"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+    <p className="text-[10px] text-muted-foreground/60 tabular-nums mt-0.5">
+      先週 {children}
+    </p>
   );
 }
 
 function Row({ item }: { item: MediaBreakdownItem }) {
-  const { current, cvDeltaPct } = item;
+  const { current, previous, cvDeltaPct } = item;
   const hasData = current.cost > 0 || current.conversions > 0;
+  const hasPrev = previous.cost > 0 || previous.conversions > 0;
   return (
-    <tr className="border-t border-border/50">
+    <tr className="border-t border-border/50 align-top">
       <td className="py-2 pr-2 text-sm">{PLATFORM_LABEL[item.platform]}</td>
       <td className="py-2 pr-2 text-sm text-muted-foreground">
         {ADTYPE_LABEL[item.adType]}
       </td>
       <td className="py-2 pr-2 text-sm tabular-nums text-right">
-        {hasData ? numFormat.format(current.conversions) : '—'}
+        <p>{hasData ? numFormat.format(current.conversions) : '—'}</p>
+        {hasPrev && <PrevLine>{numFormat.format(previous.conversions)}</PrevLine>}
       </td>
       <td className="py-2 pr-2 text-sm tabular-nums text-right">
-        {hasData ? jpyFormat.format(current.cost) : '—'}
+        <p>{hasData ? jpyFormat.format(current.cost) : '—'}</p>
+        {hasPrev && <PrevLine>{jpyFormat.format(previous.cost)}</PrevLine>}
       </td>
       <td className="py-2 pr-2 text-sm tabular-nums text-right">
-        {current.cpa != null ? jpyFormat.format(current.cpa) : '—'}
+        <p>{current.cpa != null ? jpyFormat.format(current.cpa) : '—'}</p>
+        {previous.cpa != null && <PrevLine>{jpyFormat.format(previous.cpa)}</PrevLine>}
       </td>
       <td className="py-2 pr-2 text-right">
         <DeltaCell delta={cvDeltaPct} />
-      </td>
-      <td className="py-2 pl-2 text-primary">
-        <Sparkline data={item.sparkline} />
       </td>
     </tr>
   );
@@ -136,6 +126,7 @@ function Row({ item }: { item: MediaBreakdownItem }) {
 export function MediaBreakdownCard() {
   const [data, setData] = useState<MediaBreakdownResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [adTypeFilter, setAdTypeFilter] = useState<AdTypeFilter>('search');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -153,6 +144,12 @@ export function MediaBreakdownCard() {
     return () => controller.abort();
   }, []);
 
+  const visibleItems = useMemo(() => {
+    if (!data) return [];
+    if (adTypeFilter === 'all') return data.items;
+    return data.items.filter((i) => i.adType === adTypeFilter);
+  }, [data, adTypeFilter]);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -165,9 +162,8 @@ export function MediaBreakdownCard() {
               source: 'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns)',
               filters: 'platform ∈ {google, yahoo, bing} / ad_type ∈ {search, display}',
               target:
-                'CV: SUM(conversions) / cost: SUM(cost) / CPA: cost÷CV / 前週比: CV の対先週比 / spark: 14 日の CV 日次合計',
-              period:
-                '今週 = 月起点〜今日。先週 = 前週月曜〜前週同曜日。spark は過去 14 日',
+                'CV: SUM(conversions) / cost: SUM(cost) / CPA: cost÷CV / 前週比: CV の対先週比 / 各セル下に先週分を併記',
+              period: '今週 = 月起点〜今日。先週 = 前週月曜〜前週同曜日',
               axis: '広告の発生日 (adm_daily_metrics.date)',
               cache: '1 時間キャッシュ',
               note: '6 行 = google/yahoo/bing × search/display。ETL 未対応の組合せは「—」',
@@ -176,11 +172,32 @@ export function MediaBreakdownCard() {
           <span className="text-xs font-normal text-muted-foreground/60">
             発生日 / 今週 (月起点) vs 先週
           </span>
-          {data && (
-            <span className="text-xs font-normal text-muted-foreground/60 tabular-nums ml-auto">
-              {fmtRangeLabel(data.current.start)}〜{fmtRangeLabel(data.current.end)}
-            </span>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            <div className="inline-flex rounded-md border bg-background p-0.5 text-xs" role="tablist" aria-label="種別フィルタ">
+              {AD_TYPE_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={adTypeFilter === tab.key}
+                  onClick={() => setAdTypeFilter(tab.key)}
+                  className={cn(
+                    'px-2 py-0.5 rounded transition-colors font-normal',
+                    adTypeFilter === tab.key
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted/50',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {data && (
+              <span className="text-xs font-normal text-muted-foreground/60 tabular-nums">
+                {fmtRangeLabel(data.current.start)}〜{fmtRangeLabel(data.current.end)}
+              </span>
+            )}
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -188,6 +205,8 @@ export function MediaBreakdownCard() {
           <p className="text-sm text-red-600">取得エラー: {error}</p>
         ) : !data ? (
           <p className="text-sm text-muted-foreground">読み込み中…</p>
+        ) : visibleItems.length === 0 ? (
+          <p className="text-sm text-muted-foreground">該当データがありません</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -199,11 +218,10 @@ export function MediaBreakdownCard() {
                   <th className="py-1 pr-2 text-right font-medium">cost</th>
                   <th className="py-1 pr-2 text-right font-medium">CPA</th>
                   <th className="py-1 pr-2 text-right font-medium">前週比 (CV)</th>
-                  <th className="py-1 pl-2 text-left font-medium">14 日 CV 推移</th>
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((item) => (
+                {visibleItems.map((item) => (
                   <Row key={`${item.platform}:${item.adType}`} item={item} />
                 ))}
               </tbody>
