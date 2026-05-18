@@ -19,7 +19,7 @@
 import { NextResponse } from 'next/server';
 import { query, tableIn } from '@/lib/bigquery';
 import { cached } from '@/lib/dashboard-cache';
-import { SF_MART, SF_COLS } from '@/lib/salesforce/queries';
+import { SF_MART, SF_COLS, LP_LEAD_FILTER_SQL } from '@/lib/salesforce/queries';
 import {
   calcProgressRanges,
   type ProgressPeriodKey,
@@ -72,18 +72,27 @@ function axisDateColumn(axis: Axis): string {
   return axis === 'received' ? SF_COLS.receivedAt : SF_COLS.usePeriodStart;
 }
 
-/** 1 期間 (start, end) で mart を集計する SQL（軸ごとに日付カラムを差し替え） */
+/**
+ * 1 期間 (start, end) で mart を集計する SQL（軸ごとに日付カラムを差し替え）
+ *
+ * このダッシュボードは LP 経由のみを対象とするので、Salesforce 由来の集計には
+ * すべて LP_LEAD_FILTER_SQL を適用する（流入元_LP反響 ∈ monthly-order/express/standard/site）。
+ *
+ * ルームデイズは「リード時点の希望」= 利用期間_日数 × 必要戸数_数値 の SUM。
+ * （成約後の 利用日数_成約 × 成約室数 ではなく CV ルームデイズを採用）
+ */
 function buildAggregateSql(axis: Axis): string {
   const dateCol = axisDateColumn(axis);
   return `
     SELECT
       IFNULL(SUM(${SF_COLS.grossProfit}), 0) AS gross_profit,
-      IFNULL(SUM(IFNULL(${SF_COLS.useDaysContracted}, 0) * IFNULL(${SF_COLS.contractedRooms}, 0)), 0) AS room_days,
+      IFNULL(SUM(IFNULL(${SF_COLS.usePeriodDays}, 0) * IFNULL(${SF_COLS.needRooms}, 0)), 0) AS room_days,
       COUNT(*) AS cv,
       IFNULL(SUM(${SF_COLS.needRooms}), 0) AS cv_rooms,
       COUNT(DISTINCT IF(${SF_COLS.contractId} IS NOT NULL, ${SF_COLS.leadId}, NULL)) AS won
     FROM ${SF_MART}
     WHERE DATE(${dateCol}) BETWEEN DATE(@start) AND DATE(@end)
+      AND ${LP_LEAD_FILTER_SQL}
   `;
 }
 
@@ -184,7 +193,8 @@ export async function GET(request: Request) {
   const now = new Date();
   const ranges = calcProgressRanges(now);
 
-  const cacheKey = `dashboard-progress:${axis}:${ranges.year.end}`;
+  // v2: LP フィルタ追加 + ルームデイズを 利用期間_日数 × 必要戸数_数値 に変更
+  const cacheKey = `dashboard-progress:v2:${axis}:${ranges.year.end}`;
   try {
     const cacheResult = await cached(cacheKey, async () => {
       // 各期間 × current/previous の集計を並列実行
