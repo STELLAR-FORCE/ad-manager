@@ -73,7 +73,7 @@ const METRICS = [
     icon: BedDouble,
     format: (v: number) => numFormat.format(Math.round(v)) + ' RD',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' RD',
-    target: '利用期間_日数 × 必要戸数_数値 の合計 (CV ルームデイズ / SUM)',
+    target: '利用期間_日数 の合計 (SUM) — このカラムは SF 側で既に 日数 × 必要戸数 で算出済',
   },
   {
     key: 'won' as const,

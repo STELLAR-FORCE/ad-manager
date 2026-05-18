@@ -78,15 +78,16 @@ function axisDateColumn(axis: Axis): string {
  * このダッシュボードは LP 経由のみを対象とするので、Salesforce 由来の集計には
  * すべて LP_LEAD_FILTER_SQL を適用する（流入元_LP反響 ∈ monthly-order/express/standard/site）。
  *
- * ルームデイズは「リード時点の希望」= 利用期間_日数 × 必要戸数_数値 の SUM。
- * （成約後の 利用日数_成約 × 成約室数 ではなく CV ルームデイズを採用）
+ * ルームデイズは「リード時点の希望」= 利用期間_日数 の SUM。
+ * `利用期間_日数` は SF 側で既に「日数 × 必要戸数」で算出される計算項目なので、
+ * needRooms を掛け直すとダブルカウントになる。
  */
 function buildAggregateSql(axis: Axis): string {
   const dateCol = axisDateColumn(axis);
   return `
     SELECT
       IFNULL(SUM(${SF_COLS.grossProfit}), 0) AS gross_profit,
-      IFNULL(SUM(IFNULL(${SF_COLS.usePeriodDays}, 0) * IFNULL(${SF_COLS.needRooms}, 0)), 0) AS room_days,
+      IFNULL(SUM(${SF_COLS.usePeriodDays}), 0) AS room_days,
       COUNT(*) AS cv,
       IFNULL(SUM(${SF_COLS.needRooms}), 0) AS cv_rooms,
       COUNT(DISTINCT IF(${SF_COLS.contractId} IS NOT NULL, ${SF_COLS.leadId}, NULL)) AS won
@@ -193,8 +194,8 @@ export async function GET(request: Request) {
   const now = new Date();
   const ranges = calcProgressRanges(now);
 
-  // v2: LP フィルタ追加 + ルームデイズを 利用期間_日数 × 必要戸数_数値 に変更
-  const cacheKey = `dashboard-progress:v2:${axis}:${ranges.year.end}`;
+  // v3: ルームデイズを SUM(利用期間_日数) に修正 (SF 側で既に日数×必要戸数の計算済)
+  const cacheKey = `dashboard-progress:v3:${axis}:${ranges.year.end}`;
   try {
     const cacheResult = await cached(cacheKey, async () => {
       // 各期間 × current/previous の集計を並列実行
