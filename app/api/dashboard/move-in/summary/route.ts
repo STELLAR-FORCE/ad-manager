@@ -41,19 +41,31 @@ const TARGETS_TABLE = `\`${PROJECT_ID}.dashboard.targets_monthly\``;
  * LP 経由リードの CV / 室数 / RD を入居月別に集計する SQL。
  * MOVE_IN_SUMMARY_SQL は LP フィルタ無しで全リードを集計しているため、
  * サマリーカード用には LP 限定の集計を別に取る。
+ *
+ * 重要 (Issue #97): mart は契約管理単位で行展開されているため、リード単位の
+ * 集計はサブクエリで先にリード単位に集約する。`利用期間_日数` は計算済なので
+ * SUM(利用期間_日数) のみ（× 必要戸数_数値 を掛けない）。
  */
 const LP_LEAD_AGG_SQL = `
   SELECT
-    FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart})) AS move_in_month,
+    move_in_month,
     COUNT(*) AS cv,
-    SUM(IFNULL(${SF_COLS.needRooms}, 0)) AS cv_rooms,
-    SUM(IFNULL(${SF_COLS.usePeriodDays}, 0) * IFNULL(${SF_COLS.needRooms}, 0)) AS request_room_days
-  FROM ${SF_MART}
-  WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
-    AND ${SF_COLS.oppId} IS NOT NULL
-    AND ${LP_LEAD_FILTER_SQL}
-  GROUP BY 1
-  ORDER BY 1
+    SUM(IFNULL(need_rooms, 0)) AS cv_rooms,
+    SUM(IFNULL(use_period_days, 0)) AS request_room_days
+  FROM (
+    SELECT
+      ${SF_COLS.leadId} AS lead_id,
+      ANY_VALUE(FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart}))) AS move_in_month,
+      ANY_VALUE(${SF_COLS.needRooms}) AS need_rooms,
+      ANY_VALUE(${SF_COLS.usePeriodDays}) AS use_period_days
+    FROM ${SF_MART}
+    WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
+      AND ${SF_COLS.oppId} IS NOT NULL
+      AND ${LP_LEAD_FILTER_SQL}
+    GROUP BY lead_id
+  )
+  GROUP BY move_in_month
+  ORDER BY move_in_month
 `;
 
 type LpLeadAggRow = {

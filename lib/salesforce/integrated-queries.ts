@@ -32,24 +32,41 @@ import {
  * Lead / Opportunity 集計 CTE。集計軸を `dateExpr` で切り替えて再利用する。
  *
  * dateExpr は `利用期間_始期` (入居日ベース) または `受付日時` (CV発生日ベース)。
- * mart は 1 リード 1 行なので JOIN 不要。
+ *
+ * 重要: mart は「1リード1行」ではなく、契約管理レコード単位で行展開されている
+ * （1リード最大22行）。リード単位の値 (cv / cv_rooms / room_days / won_cv) は
+ * `GROUP BY リードID` で先に集約してから集計する必要がある（Issue #97）。
+ *
+ * また `利用期間_日数` は SF 側で既に「日数 × 必要戸数」で計算済の数式項目なので、
+ * room_days は SUM(利用期間_日数) のみで OK（× 必要戸数_数値 を掛け直さない）。
  */
 function leadCte(dateExpr: string, granularity: 'month' | 'day'): string {
   const bucket =
     granularity === 'month'
-      ? `FORMAT_DATE('%Y-%m', DATE(${dateExpr}))`
-      : `DATE(${dateExpr})`;
+      ? `FORMAT_DATE('%Y-%m', date_value)`
+      : `date_value`;
+  // サブクエリで先にリード単位に集約。WITH 句はネストできないので FROM (...) を使う
   return `
     SELECT
       ${bucket} AS bucket,
-      ${PLATFORM_FROM_MEDIA_CASE} AS platform,
+      platform,
       COUNT(*) AS cv,
-      SUM(IFNULL(${SF_COLS.needRooms}, 0)) AS cv_rooms,
-      SUM(IFNULL(${SF_COLS.usePeriodDays}, 0) * IFNULL(${SF_COLS.needRooms}, 0)) AS room_days,
-      COUNTIF(${SF_COLS.oppStage} = @wonStage) AS won_cv
-    FROM ${SF_MART}
-    WHERE DATE(${dateExpr}) BETWEEN @start AND @end
-    GROUP BY 1, 2
+      SUM(IFNULL(need_rooms, 0)) AS cv_rooms,
+      SUM(IFNULL(use_period_days, 0)) AS room_days,
+      SUM(won_flag) AS won_cv
+    FROM (
+      SELECT
+        ${SF_COLS.leadId} AS lead_id,
+        ANY_VALUE(${PLATFORM_FROM_MEDIA_CASE}) AS platform,
+        ANY_VALUE(DATE(${dateExpr})) AS date_value,
+        ANY_VALUE(${SF_COLS.needRooms}) AS need_rooms,
+        ANY_VALUE(${SF_COLS.usePeriodDays}) AS use_period_days,
+        MAX(IF(${SF_COLS.oppStage} = @wonStage, 1, 0)) AS won_flag
+      FROM ${SF_MART}
+      WHERE DATE(${dateExpr}) BETWEEN @start AND @end
+      GROUP BY lead_id
+    )
+    GROUP BY bucket, platform
   `;
 }
 
@@ -243,14 +260,23 @@ export const QUERY_PARAMS = { wonStage: SF_STAGE_WON } as const;
  */
 export const MOVE_IN_PIVOT_SQL = `
   SELECT
-    FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart})) AS move_in_month,
-    FORMAT_DATE('%Y-%m', DATE(${SF_COLS.receivedAt})) AS cv_month,
+    move_in_month,
+    cv_month,
     COUNT(*) AS cv,
-    SUM(IFNULL(${SF_COLS.needRooms}, 0)) AS cv_rooms,
-    SUM(IFNULL(${SF_COLS.usePeriodDays}, 0) * IFNULL(${SF_COLS.needRooms}, 0)) AS request_room_days
-  FROM ${SF_MART}
-  WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
-  GROUP BY 1, 2
+    SUM(IFNULL(need_rooms, 0)) AS cv_rooms,
+    SUM(IFNULL(use_period_days, 0)) AS request_room_days
+  FROM (
+    SELECT
+      ${SF_COLS.leadId} AS lead_id,
+      ANY_VALUE(FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart}))) AS move_in_month,
+      ANY_VALUE(FORMAT_DATE('%Y-%m', DATE(${SF_COLS.receivedAt}))) AS cv_month,
+      ANY_VALUE(${SF_COLS.needRooms}) AS need_rooms,
+      ANY_VALUE(${SF_COLS.usePeriodDays}) AS use_period_days
+    FROM ${SF_MART}
+    WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
+    GROUP BY lead_id
+  )
+  GROUP BY move_in_month, cv_month
   ORDER BY move_in_month, cv_month
 `;
 

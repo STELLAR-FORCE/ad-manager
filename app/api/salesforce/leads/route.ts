@@ -40,22 +40,37 @@ export async function GET(request: Request) {
     LOWER(IFNULL(${SF_COLS.media}, '')) IN (${adMediaList})
     OR ${SF_COLS.lpSource} IN (${lpRyuunyuumotoSqlList()})
   )`;
+  // Issue #97: mart は契約管理単位で行展開されているため、リード件数集計には
+  // サブクエリで先にリード単位に集約してから COUNT する。
   const totalsSql = `
     SELECT
       COUNT(*) AS total,
-      COUNTIF(${SF_COLS.convertedFlag} = TRUE) AS converted,
-      COUNTIF(${adSourcePredicate}) AS ad_total,
-      COUNTIF(${adSourcePredicate} AND ${SF_COLS.convertedFlag} = TRUE) AS ad_converted
-    FROM ${SF_MART}
-    WHERE DATE(${SF_COLS.receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
+      COUNTIF(is_converted) AS converted,
+      COUNTIF(is_ad_source) AS ad_total,
+      COUNTIF(is_ad_source AND is_converted) AS ad_converted
+    FROM (
+      SELECT
+        ${SF_COLS.leadId} AS lead_id,
+        MAX(IF(${SF_COLS.convertedFlag} = TRUE, TRUE, FALSE)) AS is_converted,
+        MAX(IF(${adSourcePredicate}, TRUE, FALSE)) AS is_ad_source
+      FROM ${SF_MART}
+      WHERE DATE(${SF_COLS.receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
+      GROUP BY lead_id
+    )
   `;
 
   const mediaSql = `
-    SELECT ${SF_COLS.media} AS media, COUNT(*) AS count
-    FROM ${SF_MART}
-    WHERE DATE(${SF_COLS.receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
-      AND ${SF_COLS.media} IS NOT NULL
-    GROUP BY ${SF_COLS.media}
+    SELECT media, COUNT(*) AS count
+    FROM (
+      SELECT
+        ${SF_COLS.leadId} AS lead_id,
+        ANY_VALUE(${SF_COLS.media}) AS media
+      FROM ${SF_MART}
+      WHERE DATE(${SF_COLS.receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
+        AND ${SF_COLS.media} IS NOT NULL
+      GROUP BY lead_id
+    )
+    GROUP BY media
     ORDER BY count DESC
   `;
 
