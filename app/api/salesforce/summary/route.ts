@@ -30,16 +30,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
+  // Issue #97: mart は契約管理単位で行展開されているため、案件件数集計には
+  // サブクエリで先に案件単位に集約してから COUNT する。
   // mart の `経過リードタイム` (= elapsed_lead_time__c) を平均リードタイムに使う
   const sql = `
     SELECT
       COUNT(*) AS total,
-      COUNTIF(${SF_COLS.oppStage} = @wonStage) AS won,
-      COUNTIF(${SF_COLS.oppStage} IN (${lostStagesSqlList()})) AS lost,
-      AVG(IF(${SF_COLS.oppStage} = @wonStage, ${SF_COLS.elapsedLeadTime}, NULL)) AS avg_lead_time_days
-    FROM ${SF_MART}
-    WHERE ${SF_COLS.oppId} IS NOT NULL
-      AND DATE(${SF_COLS.oppReceptionDate}) BETWEEN DATE(@start) AND DATE(@end)
+      COUNTIF(stage = @wonStage) AS won,
+      COUNTIF(stage IN (${lostStagesSqlList()})) AS lost,
+      AVG(IF(stage = @wonStage, elapsed_lead_time, NULL)) AS avg_lead_time_days
+    FROM (
+      SELECT
+        ${SF_COLS.oppId} AS opp_id,
+        ANY_VALUE(${SF_COLS.oppStage}) AS stage,
+        ANY_VALUE(${SF_COLS.elapsedLeadTime}) AS elapsed_lead_time
+      FROM ${SF_MART}
+      WHERE ${SF_COLS.oppId} IS NOT NULL
+        AND DATE(${SF_COLS.oppReceptionDate}) BETWEEN DATE(@start) AND DATE(@end)
+      GROUP BY opp_id
+    )
   `;
 
   try {

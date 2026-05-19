@@ -78,22 +78,41 @@ function axisDateColumn(axis: Axis): string {
  * このダッシュボードは LP 経由のみを対象とするので、Salesforce 由来の集計には
  * すべて LP_LEAD_FILTER_SQL を適用する（流入元_LP反響 ∈ monthly-order/express/standard/site）。
  *
- * ルームデイズは「リード時点の希望」= 利用期間_日数 の SUM。
- * `利用期間_日数` は SF 側で既に「日数 × 必要戸数」で算出される計算項目なので、
- * needRooms を掛け直すとダブルカウントになる。
+ * 重要 (Issue #97): mart は契約管理単位で行展開されているため、リード単位の集計
+ * (cv / cv_rooms / room_days) はサブクエリで先にリード単位に集約してから集計する。
+ *
+ * 粗利は契約管理単位の値なので SUM のままで OK（複数契約合算）。
+ * 成約数は元から COUNT DISTINCT リードID で対応済。
+ *
+ * `利用期間_日数` は SF 側で既に「日数 × 必要戸数」で算出される計算項目。
  */
 function buildAggregateSql(axis: Axis): string {
   const dateCol = axisDateColumn(axis);
   return `
+    WITH lead_level AS (
+      SELECT
+        ${SF_COLS.leadId} AS lead_id,
+        ANY_VALUE(${SF_COLS.needRooms}) AS need_rooms,
+        ANY_VALUE(${SF_COLS.usePeriodDays}) AS use_period_days,
+        MAX(IF(${SF_COLS.contractId} IS NOT NULL, 1, 0)) AS has_contract
+      FROM ${SF_MART}
+      WHERE DATE(${dateCol}) BETWEEN DATE(@start) AND DATE(@end)
+        AND ${LP_LEAD_FILTER_SQL}
+      GROUP BY lead_id
+    ),
+    gross AS (
+      SELECT IFNULL(SUM(${SF_COLS.grossProfit}), 0) AS gross_profit
+      FROM ${SF_MART}
+      WHERE DATE(${dateCol}) BETWEEN DATE(@start) AND DATE(@end)
+        AND ${LP_LEAD_FILTER_SQL}
+    )
     SELECT
-      IFNULL(SUM(${SF_COLS.grossProfit}), 0) AS gross_profit,
-      IFNULL(SUM(${SF_COLS.usePeriodDays}), 0) AS room_days,
+      (SELECT gross_profit FROM gross) AS gross_profit,
+      IFNULL(SUM(use_period_days), 0) AS room_days,
       COUNT(*) AS cv,
-      IFNULL(SUM(${SF_COLS.needRooms}), 0) AS cv_rooms,
-      COUNT(DISTINCT IF(${SF_COLS.contractId} IS NOT NULL, ${SF_COLS.leadId}, NULL)) AS won
-    FROM ${SF_MART}
-    WHERE DATE(${dateCol}) BETWEEN DATE(@start) AND DATE(@end)
-      AND ${LP_LEAD_FILTER_SQL}
+      IFNULL(SUM(need_rooms), 0) AS cv_rooms,
+      SUM(has_contract) AS won
+    FROM lead_level
   `;
 }
 
@@ -194,8 +213,8 @@ export async function GET(request: Request) {
   const now = new Date();
   const ranges = calcProgressRanges(now);
 
-  // v3: ルームデイズを SUM(利用期間_日数) に修正 (SF 側で既に日数×必要戸数の計算済)
-  const cacheKey = `dashboard-progress:v3:${axis}:${ranges.year.end}`;
+  // v4: リード単位 GROUP BY でダブルカウント解消 (Issue #97)
+  const cacheKey = `dashboard-progress:v4:${axis}:${ranges.year.end}`;
   try {
     const cacheResult = await cached(cacheKey, async () => {
       // 各期間 × current/previous の集計を並列実行
