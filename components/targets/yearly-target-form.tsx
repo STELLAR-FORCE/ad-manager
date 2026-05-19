@@ -5,6 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CalendarRange, Calculator } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+type Axis = 'movein' | 'received';
+const AXIS_TABS: { key: Axis; label: string; hint: string }[] = [
+  { key: 'movein', label: '入居日ベース', hint: '利用期間_始期 が期間内の集計に紐付く目標' },
+  { key: 'received', label: '発生日ベース', hint: '受付日時 が期間内の集計に紐付く目標' },
+];
 
 const jpyFormat = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
@@ -69,23 +76,32 @@ const FIELDS: { key: FieldKey; label: string; placeholder: string; unit: string;
 export function YearlyTargetForm({ onSaved }: { onSaved?: () => void }) {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState<number>(currentYear);
-  const [values, setValues] = useState<Partial<Record<FieldKey, string>>>({});
+  const [axis, setAxis] = useState<Axis>('movein');
+  // axis ごとに入力値を分けて保持。タブ切替時の入力消失を防ぐ
+  const [valuesByAxis, setValuesByAxis] = useState<Record<Axis, Partial<Record<FieldKey, string>>>>({
+    movein: {},
+    received: {},
+  });
+  const values = valuesByAxis[axis];
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   function update(key: FieldKey, value: string) {
-    setValues((prev) => ({ ...prev, [key]: value }));
+    setValuesByAxis((prev) => ({
+      ...prev,
+      [axis]: { ...prev[axis], [key]: value },
+    }));
     setMessage(null);
   }
 
   function clear() {
-    setValues({});
+    setValuesByAxis((prev) => ({ ...prev, [axis]: {} }));
     setMessage(null);
   }
 
   async function save() {
     // 入力されたフィールドのみ送信
-    const payload: Record<string, number | string | null> = { year, platform: null };
+    const payload: Record<string, number | string | null> = { year, platform: null, axis };
     let hasInput = false;
     for (const { key } of FIELDS) {
       const v = values[key];
@@ -111,11 +127,12 @@ export function YearlyTargetForm({ onSaved }: { onSaved?: () => void }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+      const axisLabel = axis === 'movein' ? '入居日ベース' : '発生日ベース';
       setMessage({
         type: 'success',
-        text: `${year}年の目標を 12 ヶ月に均等に分けて保存しました`,
+        text: `${year}年 / ${axisLabel} の目標を 12 ヶ月に均等に分けて保存しました`,
       });
-      setValues({});
+      setValuesByAxis((prev) => ({ ...prev, [axis]: {} }));
       onSaved?.();
     } catch (err) {
       setMessage({
@@ -135,23 +152,48 @@ export function YearlyTargetForm({ onSaved }: { onSaved?: () => void }) {
           年次目標を一括入力
         </CardTitle>
         <p className="text-xs text-muted-foreground/70 mt-1">
-          入力した年次目標を 12 ヶ月に均等に分けて保存します。月別の個別調整は下の月別テーブルで可能です。
+          入力した年次目標を 12 ヶ月に均等に分けて保存します。集計軸（入居日 / 発生日）ごとに別々に保存されます。月別の個別調整は下の月別テーブルで可能です。
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex items-center gap-2">
-          <label htmlFor="yearly-target-year" className="text-sm shrink-0">
-            対象年
-          </label>
-          <Input
-            id="yearly-target-year"
-            type="number"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            min={2020}
-            max={2100}
-            className="w-24 h-8 text-sm"
-          />
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label htmlFor="yearly-target-year" className="text-sm shrink-0">
+              対象年
+            </label>
+            <Input
+              id="yearly-target-year"
+              type="number"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              min={2020}
+              max={2100}
+              className="w-24 h-8 text-sm"
+            />
+          </div>
+          <div className="flex gap-1" role="tablist" aria-label="集計軸">
+            {AXIS_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={axis === tab.key}
+                title={tab.hint}
+                onClick={() => {
+                  setAxis(tab.key);
+                  setMessage(null);
+                }}
+                className={cn(
+                  'text-xs px-3 py-1 rounded-md transition-colors',
+                  axis === tab.key
+                    ? 'bg-primary/15 text-primary border border-primary/30'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground border border-transparent',
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

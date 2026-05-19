@@ -31,6 +31,11 @@ import { cn } from '@/lib/utils';
 import { YearlyTargetForm } from '@/components/targets/yearly-target-form';
 
 type Platform = 'all' | 'google' | 'yahoo' | 'bing';
+type Axis = 'movein' | 'received';
+const AXIS_TABS: { key: Axis; label: string; hint: string }[] = [
+  { key: 'movein', label: '入居日ベース', hint: '利用期間_始期 が期間内の集計に紐付く目標' },
+  { key: 'received', label: '発生日ベース', hint: '受付日時 が期間内の集計に紐付く目標' },
+];
 
 type TargetRow = {
   month: string;
@@ -66,6 +71,7 @@ function key(row: { month: string; platform: string | null }): string {
 
 export default function TargetsPage() {
   const [platform, setPlatform] = useState<Platform>('all');
+  const [axis, setAxis] = useState<Axis>('movein');
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -78,7 +84,7 @@ export default function TargetsPage() {
     try {
       const from = months[0];
       const to = months[months.length - 1];
-      const res = await fetch(`/api/targets?from=${from}&to=${to}`);
+      const res = await fetch(`/api/targets?from=${from}&to=${to}&axis=${axis}`);
       const data = await res.json();
       setWarning(data.warning ?? null);
 
@@ -120,7 +126,7 @@ export default function TargetsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [months, platform]);
+  }, [months, platform, axis]);
 
   useEffect(() => {
     fetchData();
@@ -146,6 +152,7 @@ export default function TargetsPage() {
         body: JSON.stringify({
           month: r.month,
           platform: r.platform,
+          axis,
           cvTarget: r.cvTarget,
           roomTarget: r.roomTarget,
           roomDaysTarget: r.roomDaysTarget,
@@ -188,6 +195,26 @@ export default function TargetsPage() {
             dashboard.targets_monthly を編集します。Sheets 脱却の本丸。
           </p>
         </div>
+        <div className="flex gap-1" role="tablist" aria-label="集計軸">
+          {AXIS_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={axis === tab.key}
+              title={tab.hint}
+              onClick={() => setAxis(tab.key)}
+              className={cn(
+                'text-xs px-3 py-1.5 rounded-md transition-colors',
+                axis === tab.key
+                  ? 'bg-primary/15 text-primary border border-primary/30'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground border border-transparent',
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
         <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
           <SelectTrigger className="w-32">
             <SelectValue />
@@ -228,7 +255,10 @@ export default function TargetsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">月別目標値（{platform === 'all' ? '全体' : platform}）</CardTitle>
+          <CardTitle className="text-base">
+            月別目標値（{platform === 'all' ? '全体' : platform} /{' '}
+            {axis === 'movein' ? '入居日ベース' : '発生日ベース'}）
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (

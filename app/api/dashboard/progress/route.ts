@@ -175,8 +175,10 @@ function targetMonthsForPeriod(
 async function aggregateTargetsForPeriod(
   key: 'week' | 'month' | 'quarter' | 'halfYear' | 'year',
   today: Date,
+  axis: Axis,
 ): Promise<{ gross: number; rooms: number; days: number; cv: number }> {
   const { firstMonth, lastMonth, weekDivisor } = targetMonthsForPeriod(key, today);
+  // axis 別の目標を取る (Issue #93)。既存レコードは axis IS NULL → 'movein' 扱い
   const sql = `
     SELECT
       IFNULL(SUM(gross_profit_target), 0) AS gross,
@@ -186,11 +188,12 @@ async function aggregateTargetsForPeriod(
     FROM ${TARGETS_TABLE}
     WHERE month BETWEEN DATE(@firstMonth) AND DATE(@lastMonth)
       AND platform IS NULL
+      AND IFNULL(axis, 'movein') = @axis
   `;
   try {
     const rows = await query<{ gross: number; rooms: number; days: number; cv: number }>(
       sql,
-      { firstMonth, lastMonth },
+      { firstMonth, lastMonth, axis },
     );
     const r = rows[0] ?? { gross: 0, rooms: 0, days: 0, cv: 0 };
     return {
@@ -213,8 +216,8 @@ export async function GET(request: Request) {
   const now = new Date();
   const ranges = calcProgressRanges(now);
 
-  // v4: リード単位 GROUP BY でダブルカウント解消 (Issue #97)
-  const cacheKey = `dashboard-progress:v4:${axis}:${ranges.year.end}`;
+  // v5: 目標値も axis 別に取得 (Issue #93)
+  const cacheKey = `dashboard-progress:v5:${axis}:${ranges.year.end}`;
   try {
     const cacheResult = await cached(cacheKey, async () => {
       // 各期間 × current/previous の集計を並列実行
@@ -225,7 +228,7 @@ export async function GET(request: Request) {
           const [cur, prev, tgt] = await Promise.all([
             aggregate(axis, r.start, r.end),
             aggregate(axis, r.prevStart, r.prevEnd),
-            aggregateTargetsForPeriod(k, now),
+            aggregateTargetsForPeriod(k, now, axis),
           ]);
           return { key: k, cur, prev, tgt };
         }),
