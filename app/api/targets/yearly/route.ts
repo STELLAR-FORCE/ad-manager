@@ -9,6 +9,7 @@
  *   {
  *     year: 2026,
  *     platform: 'google' | 'yahoo' | 'bing' | null,  // 通常 null = 全媒体合計
+ *     axis: 'movein' | 'received',                    // Issue #93、デフォルト 'movein'
  *     cvTarget?: number,
  *     roomTarget?: number,
  *     roomDaysTarget?: number,
@@ -20,7 +21,7 @@
  * 動作:
  *   - 各値を 12 等分（端数は最終月で吸収）して 1月〜12月の MERGE を実行
  *   - 値が undefined / null のフィールドは MERGE で更新しない（既存値を尊重）
- *   - 既に当該月にレコードがあれば値を上書き、無ければ新規挿入
+ *   - 既に当該月 × platform × axis にレコードがあれば値を上書き、無ければ新規挿入
  */
 
 import { NextResponse } from 'next/server';
@@ -33,6 +34,7 @@ const TARGETS_TABLE = `\`${PROJECT_ID}.dashboard.targets_monthly\``;
 const LOCATION = process.env.BQ_LOCATION ?? 'asia-northeast1';
 
 const VALID_PLATFORMS = new Set(['google', 'yahoo', 'bing']);
+const VALID_AXES = new Set(['movein', 'received']);
 
 type DivideResult = { values: (number | null)[]; total: number | null };
 
@@ -83,6 +85,9 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  const rawAxis = body.axis;
+  const axis: 'movein' | 'received' =
+    typeof rawAxis === 'string' && VALID_AXES.has(rawAxis) ? (rawAxis as 'movein' | 'received') : 'movein';
 
   const numOrNull = (k: string): number | null => {
     const v = body[k];
@@ -120,6 +125,7 @@ export async function POST(request: Request) {
       SELECT
         s.month,
         @platform AS platform,
+        @axis AS axis,
         s.cv AS cv_target,
         s.room AS room_target,
         s.room_days AS room_days_target,
@@ -129,7 +135,9 @@ export async function POST(request: Request) {
         @updatedBy AS updated_by
       FROM UNNEST([${monthsArray}]) AS s
     ) S
-    ON T.month = S.month AND IFNULL(T.platform, '') = IFNULL(S.platform, '')
+    ON T.month = S.month
+      AND IFNULL(T.platform, '') = IFNULL(S.platform, '')
+      AND IFNULL(T.axis, 'movein') = S.axis
     WHEN MATCHED THEN
       UPDATE SET
         cv_target           = IFNULL(S.cv_target,           T.cv_target),
@@ -138,13 +146,14 @@ export async function POST(request: Request) {
         gross_profit_target = IFNULL(S.gross_profit_target, T.gross_profit_target),
         revenue_target      = IFNULL(S.revenue_target,      T.revenue_target),
         use_days_target     = IFNULL(S.use_days_target,     T.use_days_target),
+        axis                = S.axis,
         updated_at          = CURRENT_TIMESTAMP(),
         updated_by          = S.updated_by
     WHEN NOT MATCHED THEN
-      INSERT (month, platform, cv_target, room_target, room_days_target,
+      INSERT (month, platform, axis, cv_target, room_target, room_days_target,
               gross_profit_target, revenue_target, use_days_target,
               updated_at, updated_by)
-      VALUES (S.month, S.platform, S.cv_target, S.room_target, S.room_days_target,
+      VALUES (S.month, S.platform, S.axis, S.cv_target, S.room_target, S.room_days_target,
               S.gross_profit_target, S.revenue_target, S.use_days_target,
               CURRENT_TIMESTAMP(), S.updated_by)
   `;
@@ -155,10 +164,12 @@ export async function POST(request: Request) {
       location: LOCATION,
       params: {
         platform,
+        axis,
         updatedBy: email,
       },
       types: {
         platform: 'STRING',
+        axis: 'STRING',
         updatedBy: 'STRING',
       },
     });
@@ -166,6 +177,7 @@ export async function POST(request: Request) {
       ok: true,
       year,
       platform,
+      axis,
       totals: {
         cvTarget: cv.total,
         roomTarget: room.total,
