@@ -24,6 +24,7 @@ import type {
   SfLeadSummary,
   SfOpportunitySummary,
 } from '@/lib/types/salesforce';
+import { DataSourceTooltip, type DataSourceInfo } from '@/components/ui/data-source-tooltip';
 
 const dateShort = new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'numeric' });
 const numFormat = new Intl.NumberFormat('ja-JP');
@@ -85,12 +86,14 @@ function SfKpiCard<T>({
   state,
   render,
   subRender,
+  info,
 }: {
   title: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   state: LoadState<T>;
   render: (data: T) => string;
   subRender?: (data: T) => string;
+  info?: DataSourceInfo;
 }) {
   const main =
     state.status === 'success'
@@ -111,7 +114,10 @@ function SfKpiCard<T>({
       <CardContent className="pt-6">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-muted-foreground">{title}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm text-muted-foreground">{title}</p>
+              {info && <DataSourceTooltip info={info} />}
+            </div>
             <p className="text-2xl font-bold mt-1 tabular-nums tracking-tight">{main}</p>
             {sub && (
               <p className="text-xs text-muted-foreground/70 mt-1.5 truncate" title={sub}>
@@ -269,6 +275,15 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
           state={summary}
           render={(d) => numFormat.format(d.total) + '件'}
           subRender={(d) => `期間内に作成された案件（うち成立 ${numFormat.format(d.won)}件）`}
+          info={{
+            label: '案件',
+            source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/summary',
+            filters: 'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)',
+            target: '案件ID NOT NULL の件数 (リード単位で集約後 → 案件単位 COUNT)',
+            period: '画面上の日付ピッカーの範囲',
+            axis: '受付日時 (発生日ベース) — ダッシュボードと同じ',
+            cache: '1 時間キャッシュ',
+          }}
         />
         <SfKpiCard
           title="案件成立"
@@ -276,6 +291,16 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
           state={summary}
           render={(d) => numFormat.format(d.won) + '件'}
           subRender={(d) => `失注 ${numFormat.format(d.lost)}件 / 進行中 ${numFormat.format(d.open)}件`}
+          info={{
+            label: '案件成立',
+            source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/summary',
+            filters: 'LP 経由のみ',
+            target:
+              '契約管理ID NOT NULL のリード単位カウント (ダッシュボード「成約」と完全一致)',
+            period: '画面上の日付ピッカーの範囲',
+            axis: '受付日時 (発生日ベース)',
+            cache: '1 時間キャッシュ',
+          }}
         />
         <SfKpiCard
           title="Win率"
@@ -283,6 +308,16 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
           state={summary}
           render={(d) => (d.winRate != null ? pct1Format.format(d.winRate) : '—')}
           subRender={() => '成立 / (成立 + 失注)'}
+          info={{
+            label: 'Win率',
+            source: 'Salesforce (mart.salesforce_all_obj)',
+            filters: 'LP 経由のみ',
+            target: '成立件数 ÷ (成立 + 失注) — 失注は案件フェーズが失注/キャンセル系',
+            period: '画面上の日付ピッカーの範囲',
+            axis: '受付日時 (発生日ベース)',
+            cache: '1 時間キャッシュ',
+            note: '進行中は分母に含めない (closed deal の勝率)',
+          }}
         />
         <SfKpiCard
           title="平均リードタイム"
@@ -292,13 +327,35 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
             d.avgLeadTimeDays != null ? `${days1Format.format(d.avgLeadTimeDays)} 日` : '—'
           }
           subRender={() => '案件成立までの所要日数'}
+          info={{
+            label: '平均リードタイム',
+            source: 'Salesforce (mart.salesforce_all_obj.経過リードタイム)',
+            filters: 'LP 経由のみ + 案件フェーズ = 案件成立',
+            target: 'AVG(経過リードタイム) — 案件ごとの日数',
+            period: '画面上の日付ピッカーの範囲',
+            axis: '受付日時 (発生日ベース)',
+            cache: '1 時間キャッシュ',
+          }}
         />
       </div>
 
       {/* 日別推移 */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">商談 日別推移</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            商談 日別推移
+            <DataSourceTooltip
+              info={{
+                label: '商談 日別推移',
+                source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/trend',
+                target:
+                  '新規: 案件作成数 / 成約: 案件フェーズ = 案件成立 / 失注: 失注系フェーズ',
+                period: '画面上の日付ピッカーの範囲を日次で集計',
+                axis: '案件作成日 (案件単位の集計)',
+                cache: '1 時間キャッシュ',
+              }}
+            />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {trend.status === 'success' && trendChartData.length > 0 ? (
@@ -330,7 +387,20 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">ステージ別件数</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              ステージ別件数
+              <DataSourceTooltip
+                info={{
+                  label: 'ステージ別件数',
+                  source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/pipeline',
+                  target:
+                    '案件フェーズ別の案件件数。進行中 / 成約 (案件成立) / 失注 (理由別) に色分け',
+                  period: '画面上の日付ピッカーの範囲',
+                  axis: '案件単位の集計',
+                  cache: '1 時間キャッシュ',
+                }}
+              />
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {pipeline.status === 'success' && stageBarData.length > 0 ? (
@@ -419,7 +489,20 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">媒体別リード件数</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              媒体別リード件数
+              <DataSourceTooltip
+                info={{
+                  label: '媒体別リード件数',
+                  source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/leads',
+                  filters: 'LP 経由判定 (流入元_媒体別 が広告媒体 OR 流入元_LP反響 が LP)',
+                  target: 'リード件数を 流入元_媒体別 で集計し Platform にマッピング',
+                  period: '画面上の日付ピッカーの範囲',
+                  axis: '受付日時 (発生日ベース)',
+                  cache: '1 時間キャッシュ',
+                }}
+              />
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {leads.status === 'success' && mediaBarData.length > 0 ? (
