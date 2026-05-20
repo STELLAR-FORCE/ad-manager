@@ -4,6 +4,7 @@ import {
   SF_MART,
   SF_COLS,
   SF_STAGE_WON,
+  LP_LEAD_FILTER_SQL,
   lostStagesSqlList,
 } from '@/lib/salesforce/queries';
 import type { SfOpportunitySummary } from '@/lib/types/salesforce';
@@ -30,25 +31,40 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'start and end are required' }, { status: 400 });
   }
 
-  // Issue #97: mart は契約管理単位で行展開されているため、案件件数集計には
-  // サブクエリで先に案件単位に集約してから COUNT する。
-  // mart の `経過リードタイム` (= elapsed_lead_time__c) を平均リードタイムに使う
+  // ad-detail の成約 (won) はダッシュボードと条件を揃える:
+  //   - LP フィルタあり (流入元_LP反響 ∈ monthly-order/express/standard/site)
+  //   - リード単位 (mart は契約管理単位で行展開されてる)
+  //   - won 判定 = 契約管理ID NOT NULL のリード
+  // 案件件数 (total) / 失注 (lost) / 平均リードタイムは案件単位の集計を維持する。
+  // 軸はリードの 受付日時 (= ダッシュボードの「発生日ベース」と同じ)。
   const sql = `
-    SELECT
-      COUNT(*) AS total,
-      COUNTIF(stage = @wonStage) AS won,
-      COUNTIF(stage IN (${lostStagesSqlList()})) AS lost,
-      AVG(IF(stage = @wonStage, elapsed_lead_time, NULL)) AS avg_lead_time_days
-    FROM (
+    WITH lead_level AS (
       SELECT
-        ${SF_COLS.oppId} AS opp_id,
+        ${SF_COLS.leadId} AS lead_id,
+        ANY_VALUE(${SF_COLS.oppId}) AS opp_id,
         ANY_VALUE(${SF_COLS.oppStage}) AS stage,
-        ANY_VALUE(${SF_COLS.elapsedLeadTime}) AS elapsed_lead_time
+        ANY_VALUE(${SF_COLS.elapsedLeadTime}) AS elapsed_lead_time,
+        MAX(IF(${SF_COLS.contractId} IS NOT NULL, 1, 0)) AS has_contract
       FROM ${SF_MART}
-      WHERE ${SF_COLS.oppId} IS NOT NULL
-        AND DATE(${SF_COLS.oppReceptionDate}) BETWEEN DATE(@start) AND DATE(@end)
+      WHERE DATE(${SF_COLS.receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
+        AND ${LP_LEAD_FILTER_SQL}
+      GROUP BY lead_id
+    ),
+    opp_level AS (
+      -- 案件単位の集計 (1 案件 1 行)
+      SELECT
+        opp_id,
+        ANY_VALUE(stage) AS stage,
+        ANY_VALUE(elapsed_lead_time) AS elapsed_lead_time
+      FROM lead_level
+      WHERE opp_id IS NOT NULL
       GROUP BY opp_id
     )
+    SELECT
+      (SELECT COUNT(*) FROM opp_level) AS total,
+      (SELECT IFNULL(SUM(has_contract), 0) FROM lead_level) AS won,
+      (SELECT COUNTIF(stage IN (${lostStagesSqlList()})) FROM opp_level) AS lost,
+      (SELECT AVG(IF(stage = @wonStage, elapsed_lead_time, NULL)) FROM opp_level) AS avg_lead_time_days
   `;
 
   try {
