@@ -540,13 +540,12 @@ function PlatformMetricCell({
 const TODAY = new Date();
 
 function defaultDateRange(): DateRangeValue {
-  // デフォルト：先月
-  const prevMonth = new Date(TODAY.getFullYear(), TODAY.getMonth() - 1, 1);
-  const prevMonthEnd = new Date(TODAY.getFullYear(), TODAY.getMonth(), 0);
+  // デフォルト：今月 (1 日 〜 今日)
+  const start = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
   return {
-    main: { start: prevMonth, end: prevMonthEnd },
+    main: { start, end: TODAY },
     compareEnabled: false,
-    preset: 'lastmonth',
+    preset: 'thismonth_incl',
   };
 }
 

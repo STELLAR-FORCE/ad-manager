@@ -75,9 +75,9 @@ const PLATFORM_COLORS: Record<string, string> = {
 const TODAY = new Date();
 
 function defaultRange(): DateRangeValue {
-  const start = new Date(TODAY.getFullYear(), TODAY.getMonth() - 5, 1);
-  const end = new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0);
-  return { main: { start, end }, compareEnabled: false, preset: 'last6months' };
+  // デフォルト: 今月 (1 日 〜 今日)
+  const start = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+  return { main: { start, end: TODAY }, compareEnabled: false, preset: 'thismonth_incl' };
 }
 
 export default function CvBasedPage() {
