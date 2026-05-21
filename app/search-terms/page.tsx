@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table'
 import { InfoIcon, ArrowUpIcon, ArrowDownIcon, MinusIcon, SearchXIcon } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip'
 
 interface SearchTerm {
   id: string
@@ -154,7 +155,22 @@ export default function SearchTermsPage() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">検索語句分析</h1>
+          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+            検索語句分析
+            <DataSourceTooltip
+              info={{
+                label: '検索語句分析',
+                source: 'BigQuery (ad_manager.adm_search_term_reports)',
+                filters: '画面上の媒体 / ステータスで絞り込み。is_excluded=true は除外候補',
+                target:
+                  '検索語句ごとの Imp/Click/Cost/CV/CPA。除外候補 (CV 0 / 高 cost) を判定',
+                period: '画面上の期間',
+                axis: '広告 date',
+                cache: '1 時間キャッシュ',
+                note: 'マンスリ・ウィークリ系などキラーワードは別途ダッシュボードで折り畳み表示',
+              }}
+            />
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">検索語句ごとのパフォーマンスと除外候補を管理します</p>
         </div>
 

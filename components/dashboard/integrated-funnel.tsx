@@ -13,6 +13,7 @@ import { CountingNumber } from '@/components/animate-ui/counting-number';
 import type { DateRangeValue } from '@/components/ui/date-range-picker';
 import type { SfOpportunitySummary, SfLeadSummary } from '@/lib/types/salesforce';
 import { cn } from '@/lib/utils';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 
 const numFormat = new Intl.NumberFormat('ja-JP');
 const jpyFormat = new Intl.NumberFormat('ja-JP', {
@@ -210,6 +211,20 @@ export function IntegratedFunnel({
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           広告 → 営業 統合ファネル
+          <DataSourceTooltip
+            info={{
+              label: '広告 → 営業 統合ファネル',
+              source:
+                'BigQuery (ad_manager.adm_daily_metrics) + Salesforce (mart.salesforce_all_obj)',
+              filters:
+                '広告: 画面上の媒体 / 種別 / 期間。営業: SF /api/salesforce/summary・leads (LP 経由)',
+              target:
+                'Imp → Click → Cost → 広告CV → SF リード → 案件 → 成立 のファネル + CPL / CPA',
+              period: '画面上の日付ピッカーの範囲',
+              axis: '広告は date、SF は 受付日時 (発生日)',
+              cache: '1 時間キャッシュ',
+            }}
+          />
         </CardTitle>
       </CardHeader>
       <CardContent>
