@@ -46,6 +46,7 @@ type TargetRow = {
   grossProfitTarget: number | null;
   revenueTarget: number | null;
   useDaysTarget: number | null;
+  wonTarget: number | null;
   inhouseUnitPrice: number | null;
 };
 
@@ -113,6 +114,7 @@ export default function TargetsPage() {
             grossProfitTarget: existing?.grossProfitTarget ?? null,
             revenueTarget: existing?.revenueTarget ?? null,
             useDaysTarget: existing?.useDaysTarget ?? null,
+            wonTarget: existing?.wonTarget ?? null,
             inhouseUnitPrice: existing?.inhouseUnitPrice ?? null,
             dirty: false,
             saving: false,
@@ -159,6 +161,7 @@ export default function TargetsPage() {
           grossProfitTarget: r.grossProfitTarget,
           revenueTarget: r.revenueTarget,
           useDaysTarget: r.useDaysTarget,
+          wonTarget: r.wonTarget,
           inhouseUnitPrice: r.inhouseUnitPrice,
         }),
       });
@@ -270,11 +273,12 @@ export default function TargetsPage() {
                   <TableHead>月</TableHead>
                   <TableHead>媒体</TableHead>
                   <TableHead className="text-right">CV目標</TableHead>
-                  <TableHead className="text-right">室数目標</TableHead>
+                  <TableHead className="text-right">CV室数目標</TableHead>
                   <TableHead className="text-right">RD目標</TableHead>
                   <TableHead className="text-right">粗利目標(円)</TableHead>
                   <TableHead className="text-right">売上目標(円)</TableHead>
                   <TableHead className="text-right">利用日数目標</TableHead>
+                  <TableHead className="text-right">成約数目標</TableHead>
                   <TableHead className="text-right">自社単価(円/日)</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
@@ -307,6 +311,10 @@ export default function TargetsPage() {
                     <NumCell
                       value={r.useDaysTarget}
                       onChange={(v) => updateField(i, 'useDaysTarget', v)}
+                    />
+                    <NumCell
+                      value={r.wonTarget}
+                      onChange={(v) => updateField(i, 'wonTarget', v)}
                     />
                     <NumCell
                       value={r.inhouseUnitPrice}

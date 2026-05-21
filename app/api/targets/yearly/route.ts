@@ -103,6 +103,7 @@ export async function POST(request: Request) {
   const grossProfit = divide12(numOrNull('grossProfitTarget'));
   const revenue = divide12(numOrNull('revenueTarget'));
   const useDays = divide12(numOrNull('useDaysTarget'));
+  const won = divide12(numOrNull('wonTarget'));
 
   // 12 ヶ月分を 1 SQL で MERGE（UNNEST で行展開）
   // 各月: { month, cv, room, room_days, gross_profit, revenue, use_days }
@@ -115,7 +116,8 @@ export async function POST(request: Request) {
       ${roomDays.values[i] == null ? 'NULL' : `CAST(${roomDays.values[i]} AS INT64)`} AS room_days,
       ${grossProfit.values[i] == null ? 'NULL' : `CAST(${grossProfit.values[i]} AS NUMERIC)`} AS gross_profit,
       ${revenue.values[i] == null ? 'NULL' : `CAST(${revenue.values[i]} AS NUMERIC)`} AS revenue,
-      ${useDays.values[i] == null ? 'NULL' : `CAST(${useDays.values[i]} AS NUMERIC)`} AS use_days
+      ${useDays.values[i] == null ? 'NULL' : `CAST(${useDays.values[i]} AS NUMERIC)`} AS use_days,
+      ${won.values[i] == null ? 'NULL' : `CAST(${won.values[i]} AS INT64)`} AS won
     )`;
   }).join(',\n');
 
@@ -132,6 +134,7 @@ export async function POST(request: Request) {
         s.gross_profit AS gross_profit_target,
         s.revenue AS revenue_target,
         s.use_days AS use_days_target,
+        s.won AS won_target,
         @updatedBy AS updated_by
       FROM UNNEST([${monthsArray}]) AS s
     ) S
@@ -146,15 +149,16 @@ export async function POST(request: Request) {
         gross_profit_target = IFNULL(S.gross_profit_target, T.gross_profit_target),
         revenue_target      = IFNULL(S.revenue_target,      T.revenue_target),
         use_days_target     = IFNULL(S.use_days_target,     T.use_days_target),
+        won_target          = IFNULL(S.won_target,          T.won_target),
         axis                = S.axis,
         updated_at          = CURRENT_TIMESTAMP(),
         updated_by          = S.updated_by
     WHEN NOT MATCHED THEN
       INSERT (month, platform, axis, cv_target, room_target, room_days_target,
-              gross_profit_target, revenue_target, use_days_target,
+              gross_profit_target, revenue_target, use_days_target, won_target,
               updated_at, updated_by)
       VALUES (S.month, S.platform, S.axis, S.cv_target, S.room_target, S.room_days_target,
-              S.gross_profit_target, S.revenue_target, S.use_days_target,
+              S.gross_profit_target, S.revenue_target, S.use_days_target, S.won_target,
               CURRENT_TIMESTAMP(), S.updated_by)
   `;
 
@@ -185,6 +189,7 @@ export async function POST(request: Request) {
         grossProfitTarget: grossProfit.total,
         revenueTarget: revenue.total,
         useDaysTarget: useDays.total,
+        wonTarget: won.total,
       },
     });
   } catch (err) {
