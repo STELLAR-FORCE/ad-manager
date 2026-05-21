@@ -25,6 +25,7 @@ type FieldKey =
   | 'roomDaysTarget'
   | 'cvTarget'
   | 'roomTarget'
+  | 'wonTarget'
   | 'revenueTarget'
   | 'useDaysTarget';
 
@@ -52,10 +53,17 @@ const FIELDS: { key: FieldKey; label: string; placeholder: string; unit: string;
   },
   {
     key: 'roomTarget',
-    label: '成約室数',
+    label: 'CV 室数',
     placeholder: '例: 1800',
     unit: '室',
     format: (v) => numFormat.format(v) + ' 室',
+  },
+  {
+    key: 'wonTarget',
+    label: '成約数',
+    placeholder: '例: 200',
+    unit: '件',
+    format: (v) => numFormat.format(v) + ' 件',
   },
   {
     key: 'revenueTarget',

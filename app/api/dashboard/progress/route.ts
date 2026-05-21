@@ -176,35 +176,38 @@ async function aggregateTargetsForPeriod(
   key: 'week' | 'month' | 'quarter' | 'halfYear' | 'year',
   today: Date,
   axis: Axis,
-): Promise<{ gross: number; rooms: number; days: number; cv: number }> {
+): Promise<{ gross: number; rooms: number; days: number; cv: number; won: number }> {
   const { firstMonth, lastMonth, weekDivisor } = targetMonthsForPeriod(key, today);
   // axis 別の目標を取る (Issue #93)。既存レコードは axis IS NULL → 'movein' 扱い
+  // won_target は Issue #84 で追加
   const sql = `
     SELECT
       IFNULL(SUM(gross_profit_target), 0) AS gross,
       IFNULL(SUM(room_target), 0) AS rooms,
       IFNULL(SUM(room_days_target), 0) AS days,
-      IFNULL(SUM(cv_target), 0) AS cv
+      IFNULL(SUM(cv_target), 0) AS cv,
+      IFNULL(SUM(won_target), 0) AS won
     FROM ${TARGETS_TABLE}
     WHERE month BETWEEN DATE(@firstMonth) AND DATE(@lastMonth)
       AND platform IS NULL
       AND IFNULL(axis, 'movein') = @axis
   `;
   try {
-    const rows = await query<{ gross: number; rooms: number; days: number; cv: number }>(
+    const rows = await query<{ gross: number; rooms: number; days: number; cv: number; won: number }>(
       sql,
       { firstMonth, lastMonth, axis },
     );
-    const r = rows[0] ?? { gross: 0, rooms: 0, days: 0, cv: 0 };
+    const r = rows[0] ?? { gross: 0, rooms: 0, days: 0, cv: 0, won: 0 };
     return {
       gross: Number(r.gross ?? 0) / weekDivisor,
       rooms: Number(r.rooms ?? 0) / weekDivisor,
       days: Number(r.days ?? 0) / weekDivisor,
       cv: Number(r.cv ?? 0) / weekDivisor,
+      won: Number(r.won ?? 0) / weekDivisor,
     };
   } catch {
     // targets_monthly テーブルが無い / 権限無いなど → 目標 0 として扱う
-    return { gross: 0, rooms: 0, days: 0, cv: 0 };
+    return { gross: 0, rooms: 0, days: 0, cv: 0, won: 0 };
   }
 }
 
@@ -216,8 +219,8 @@ export async function GET(request: Request) {
   const now = new Date();
   const ranges = calcProgressRanges(now);
 
-  // v5: 目標値も axis 別に取得 (Issue #93)
-  const cacheKey = `dashboard-progress:v5:${axis}:${ranges.year.end}`;
+  // v6: won_target 追加 (Issue #84)
+  const cacheKey = `dashboard-progress:v6:${axis}:${ranges.year.end}`;
   try {
     const cacheResult = await cached(cacheKey, async () => {
       // 各期間 × current/previous の集計を並列実行
@@ -264,7 +267,7 @@ export async function GET(request: Request) {
           target: tgt.cv > 0 ? tgt.cv : null,
         };
         // 室数目標 (room_target) は「CV 室数の目標」として CV 室数側に紐付ける。
-        // 成約 (won) は専用の目標カラムが無いため、目標なし（前期間比表示）。
+        // 成約 (won) は won_target を紐付ける (Issue #84)。
         cvRooms[key] = {
           current: Number(cur.cv_rooms ?? 0),
           previous: Number(prev.cv_rooms ?? 0),
@@ -273,7 +276,7 @@ export async function GET(request: Request) {
         won[key] = {
           current: Number(cur.won ?? 0),
           previous: Number(prev.won ?? 0),
-          target: null,
+          target: tgt.won > 0 ? tgt.won : null,
         };
       }
 
