@@ -31,6 +31,7 @@ import {
   type Platform,
 } from '@/lib/campaign-mock-data';
 import { MetricTooltip } from '@/components/ui/metric-tooltip';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 
 // ─── 定数・フォーマット ──────────────────────────────────────────
 
@@ -208,7 +209,22 @@ export default function KeywordsListPage() {
       <div className="space-y-4">
         {/* ヘッダー */}
         <div>
-          <h1 className="text-2xl font-bold">キーワード</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            キーワード
+            <DataSourceTooltip
+              info={{
+                label: 'キーワード一覧',
+                source: 'BigQuery (ad_manager.adm_keywords × adm_daily_metrics)',
+                filters: '検索キャンペーン限定 (ad_type=search)',
+                target:
+                  'キーワード単位の Imp/Click/Cost/CV/CPA/CVR/品質スコア (取れる範囲で)',
+                period: '画面上の期間',
+                axis: '広告 date',
+                cache: '1 時間キャッシュ',
+                note: '現状はサンプルデータ含む可能性あり (`/keywords` 移行中)',
+              }}
+            />
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             全検索キャンペーンのキーワード一覧 — 2026年3月
           </p>

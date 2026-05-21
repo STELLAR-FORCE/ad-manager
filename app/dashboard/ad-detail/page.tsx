@@ -315,6 +315,7 @@ function KpiCard({
   onSetTarget,
   progress,
   breakdown,
+  info,
 }: {
   title: string;
   value?: string;
@@ -338,6 +339,8 @@ function KpiCard({
     display: number | null;
     format: (v: number) => string;
   };
+  /** データソース情報（タイトル横に (i) アイコンとして表示） */
+  info?: import('@/components/ui/data-source-tooltip').DataSourceInfo;
 }) {
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState('');
@@ -376,7 +379,10 @@ function KpiCard({
       <CardContent className="pt-6">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-muted-foreground">{title}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm text-muted-foreground">{title}</p>
+              {info && <DataSourceTooltip info={info} />}
+            </div>
             <p className="text-2xl font-bold mt-1 tabular-nums tracking-tight">
               {rawValue != null && format ? (
                 <CountingNumber
@@ -925,6 +931,16 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             title="総費用"
+            info={{
+              label: '総費用',
+              source: 'BigQuery (ad_manager.adm_daily_metrics)',
+              filters: '画面上の媒体 / 種別 / 期間で絞り込み',
+              target: 'SUM(cost) — 広告日次メトリクスの cost 合計',
+              period: '画面上の日付ピッカーの範囲',
+              axis: '広告 date',
+              cache: '1 時間キャッシュ',
+              note: '予算消化率 = SUM(cost) ÷ SUM(monthly_budget)',
+            }}
             rawValue={Math.round(current.cost)}
             format={(v) => jpyFormat.format(v)}
             sub="期間累計"
@@ -953,6 +969,16 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="CV数"
+            info={{
+              label: 'CV数 (広告コンバージョン)',
+              source: 'BigQuery (ad_manager.adm_daily_metrics)',
+              filters: '画面上の媒体 / 種別 / 期間で絞り込み',
+              target: 'SUM(conversions) — 広告日次の CV (媒体側計上値)',
+              period: '画面上の日付ピッカーの範囲',
+              axis: '広告 date',
+              cache: '1 時間キャッシュ',
+              note: 'これは広告側の CV (媒体タグ計測)。Salesforce のリード数とは別 (リード→案件→契約管理 の業務側 CV はダッシュボード進捗カードを参照)',
+            }}
             rawValue={Math.round(current.conversions)}
             format={(v) => numFormat.format(v)}
             icon={Target}
@@ -983,6 +1009,16 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="CPA"
+            info={{
+              label: 'CPA (広告)',
+              source: 'BigQuery (ad_manager.adm_daily_metrics)',
+              filters: '画面上の媒体 / 種別 / 期間で絞り込み',
+              target: 'SUM(cost) ÷ SUM(conversions) — 広告 CV あたりの費用',
+              period: '画面上の日付ピッカーの範囲',
+              axis: '広告 date',
+              cache: '1 時間キャッシュ',
+              note: '目標 CPA は dashboard.targets_monthly や任意設定値から取得',
+            }}
             rawValue={current.cpa > 0 ? Math.round(current.cpa) : null}
             format={(v) => jpyFormat.format(v)}
             fallback="—"
@@ -1018,6 +1054,15 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="CVR"
+            info={{
+              label: 'CVR (クリック → CV 率)',
+              source: 'BigQuery (ad_manager.adm_daily_metrics)',
+              filters: '画面上の媒体 / 種別 / 期間で絞り込み',
+              target: 'SUM(conversions) ÷ SUM(clicks) — クリック単位の CV 率',
+              period: '画面上の日付ピッカーの範囲',
+              axis: '広告 date',
+              cache: '1 時間キャッシュ',
+            }}
             rawValue={current.cvr > 0 ? current.cvr : null}
             format={(v) => pctFormat.format(v)}
             decimalPlaces={4}
@@ -1510,6 +1555,20 @@ export default function DashboardPage() {
                       />
                       <Chip.Label>{PLATFORM_LABELS[s.platform]}</Chip.Label>
                     </Chip>
+                    <DataSourceTooltip
+                      info={{
+                        label: `${PLATFORM_LABELS[s.platform]} 媒体別`,
+                        source:
+                          'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns)',
+                        filters: `platform = ${s.platform}。画面上の種別 / 期間で絞り込み`,
+                        target:
+                          'Imp / Click / Cost / CV / CPA / CVR。adType=all のときは search / display も並列表示',
+                        period: '画面上の日付ピッカーの範囲',
+                        axis: '広告 date',
+                        cache: '1 時間キャッシュ',
+                        note: '予算消化率は monthly_budget (platform 別) ベース',
+                      }}
+                    />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>

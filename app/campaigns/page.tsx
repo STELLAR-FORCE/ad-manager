@@ -34,6 +34,7 @@ import {
   type MetricKey,
 } from '@/components/ad-insights/metric-defs';
 import { generateItemTrend } from '@/lib/trend-mock';
+import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 
 // ─── 定数・フォーマット ──────────────────────────────────────────
 
@@ -514,7 +515,23 @@ export default function CampaignsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold">キャンペーン</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            キャンペーン
+            <DataSourceTooltip
+              info={{
+                label: 'キャンペーン一覧',
+                source:
+                  'BigQuery (ad_manager.adm_campaigns × adm_daily_metrics)',
+                filters: '画面上の媒体 / 種別 / ステータス / 期間で絞り込み',
+                target:
+                  'キャンペーンマスタ + 期間内の Imp/Click/Cost/CV/CPA/CVR 集計',
+                period: '画面上の日付ピッカーの範囲',
+                axis: '広告 date',
+                cache: '1 時間キャッシュ',
+                note: '月次予算 (monthly_budget) はキャンペーンマスタの静的値',
+              }}
+            />
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             全キャンペーン一覧
           </p>
