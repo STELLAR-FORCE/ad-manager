@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Save, RefreshCw, Plus } from 'lucide-react';
+import { Save, RefreshCw, Plus, Download, Upload, FileSpreadsheet } from 'lucide-react';
 import { Chip } from '@heroui/react';
 import { jpyCompact, formatMonthLabel, pctFormat } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -77,8 +77,55 @@ export default function TargetsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   const months = useMemo(() => defaultMonths(), []);
+
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+
+  function downloadCsv(mode: 'template' | 'current') {
+    const url = `/api/targets/csv?mode=${mode}&year=${currentYear}`;
+    // 同一オリジンの認証付き endpoint。location 遷移で OK
+    window.location.href = url;
+  }
+
+  async function importCsv(file: File) {
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const text = await file.text();
+      const res = await fetch('/api/targets/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/csv; charset=utf-8' },
+        body: text,
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) {
+        const errs = (json.errors ?? []) as { line: number; message: string }[];
+        const msg = errs
+          .slice(0, 3)
+          .map((e) => `行 ${e.line}: ${e.message}`)
+          .join(' / ');
+        throw new Error(msg || `HTTP ${res.status}`);
+      }
+      setImportMessage({
+        type: 'success',
+        text: `${json.imported} 行をインポートしました`,
+      });
+      await fetchData();
+    } catch (err) {
+      setImportMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const fetchData = useCallback(async () => {
     setRefreshing(true);
@@ -240,6 +287,49 @@ export default function TargetsPage() {
           <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} aria-hidden="true" />
           再読み込み
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => downloadCsv('template')}
+          aria-label="CSV テンプレートをダウンロード"
+          title="CSV テンプレート (空) をダウンロード"
+        >
+          <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
+          テンプレートDL
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => downloadCsv('current')}
+          aria-label="現状の目標値を CSV ダウンロード"
+          title={`${currentYear} 年の現状目標値を CSV でダウンロード`}
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+          現状DL
+        </Button>
+        <label
+          className={cn(
+            'inline-flex items-center gap-2 text-sm h-8 px-3 rounded-md border bg-background hover:bg-muted cursor-pointer transition-colors',
+            importing && 'opacity-50 cursor-not-allowed',
+          )}
+          title="CSV ファイルから一括インポート"
+        >
+          <Upload className="h-4 w-4" aria-hidden="true" />
+          {importing ? 'インポート中…' : 'CSV インポート'}
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            disabled={importing}
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) importCsv(f);
+              e.target.value = '';
+            }}
+          />
+        </label>
         <Button size="sm" className="gap-2" onClick={saveAllDirty} disabled={dirtyCount === 0}>
           <Save className="h-4 w-4" aria-hidden="true" />
           {dirtyCount > 0 ? `${dirtyCount} 件保存` : '保存'}
@@ -250,6 +340,32 @@ export default function TargetsPage() {
         <Card className="border-amber-300 bg-amber-50">
           <CardContent className="pt-4 text-sm text-amber-900">
             {warning}（先に <code>docs/migrations/2026-04-30-targets_monthly.sql</code> を BQ に流してください）
+          </CardContent>
+        </Card>
+      )}
+
+      {importMessage && (
+        <Card
+          className={cn(
+            importMessage.type === 'success'
+              ? 'border-green-300 bg-green-50'
+              : 'border-red-300 bg-red-50',
+          )}
+        >
+          <CardContent
+            className={cn(
+              'pt-4 text-sm flex items-start justify-between gap-3',
+              importMessage.type === 'success' ? 'text-green-900' : 'text-red-900',
+            )}
+          >
+            <span>{importMessage.text}</span>
+            <button
+              type="button"
+              onClick={() => setImportMessage(null)}
+              className="text-xs underline hover:opacity-70"
+            >
+              閉じる
+            </button>
           </CardContent>
         </Card>
       )}
