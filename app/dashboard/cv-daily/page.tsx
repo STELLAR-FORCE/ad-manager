@@ -10,8 +10,17 @@
  * URL は /dashboard/cv-daily のまま（サイドバーのラベルは「月次累計推移」）。
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import {
   LineChart,
   Line,
@@ -22,6 +31,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { Pencil, Calculator } from 'lucide-react';
 import { jpyCompact, jpyFormat, numFormat } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
@@ -29,6 +39,7 @@ import type {
   MonthlyCumulativeResponse,
   MonthlyCumulativePoint,
 } from '@/app/api/dashboard/monthly-cumulative/route';
+import type { CostPlanResponse } from '@/app/api/dashboard/cost-plan/route';
 
 type Axis = 'movein' | 'received';
 const AXIS_TABS: { key: Axis; label: string; hint: string }[] = [
@@ -73,20 +84,27 @@ function buildCumulative(
   costCum: number;
   grossProfitCum: number;
   revenueCum: number;
+  plannedCostCum: number;
   cvTargetCum: number | null;
   cvRoomsTargetCum: number | null;
   roomDaysTargetCum: number | null;
-  costTargetCum: number | null;
+  /** cost_plan_daily に入力があれば日次累計、無ければ月予算按分 */
+  costPlanCum: number | null;
   grossProfitTargetCum: number | null;
   revenueTargetCum: number | null;
 }> {
   const n = days.length;
+  // cost_plan_daily にデータがあるか判定 (累計 > 0)
+  const totalPlanned = days.reduce((s, d) => s + d.plannedCost, 0);
+  const hasPlannedDaily = totalPlanned > 0;
+
   let cvCum = 0;
   let cvRoomsCum = 0;
   let roomDaysCum = 0;
   let costCum = 0;
   let grossProfitCum = 0;
   let revenueCum = 0;
+  let plannedCostCum = 0;
   return days.map((d, i) => {
     cvCum += d.cv;
     cvRoomsCum += d.cvRooms;
@@ -94,10 +112,16 @@ function buildCumulative(
     costCum += d.cost;
     grossProfitCum += d.grossProfit;
     revenueCum += d.revenue;
+    plannedCostCum += d.plannedCost;
     // 目標は月内日数で線形按分 ((i+1) / n)、整数指標は四捨五入で表示
     const ratio = (i + 1) / n;
     const proRated = (total: number | null) =>
       total == null ? null : Math.round(total * ratio);
+    const costPlanCum = hasPlannedDaily
+      ? plannedCostCum
+      : monthlyTarget.cost == null
+        ? null
+        : Math.round(monthlyTarget.cost * ratio);
     return {
       date: d.date,
       day: Number(d.date.slice(8, 10)),
@@ -107,10 +131,11 @@ function buildCumulative(
       costCum,
       grossProfitCum,
       revenueCum,
+      plannedCostCum,
       cvTargetCum: proRated(monthlyTarget.cv),
       cvRoomsTargetCum: proRated(monthlyTarget.cvRooms),
       roomDaysTargetCum: proRated(monthlyTarget.roomDays),
-      costTargetCum: proRated(monthlyTarget.cost),
+      costPlanCum,
       grossProfitTargetCum: proRated(monthlyTarget.grossProfit),
       revenueTargetCum: proRated(monthlyTarget.revenue),
     };
@@ -122,14 +147,24 @@ export default function MonthlyCumulativePage() {
   const [error, setError] = useState<string | null>(null);
   const [axis, setAxis] = useState<Axis>('received');
   const [month, setMonth] = useState<string>(thisMonth());
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const monthOptions = useMemo(() => recentMonths(), []);
+
+  // 消化予定保存時の再 fetch トリガー
+  useEffect(() => {
+    const handler = () => setRefreshKey((k) => k + 1);
+    window.addEventListener('cost-plan-saved', handler);
+    return () => window.removeEventListener('cost-plan-saved', handler);
+  }, []);
 
   useEffect(() => {
     setData(null);
     setError(null);
     const controller = new AbortController();
-    fetch(`/api/dashboard/monthly-cumulative?axis=${axis}&month=${month}`, {
+    // cache-bust: refreshKey が変わったら都度新規 fetch
+    const cacheBust = refreshKey > 0 ? `&_t=${refreshKey}` : '';
+    fetch(`/api/dashboard/monthly-cumulative?axis=${axis}&month=${month}${cacheBust}`, {
       signal: controller.signal,
     })
       .then(async (r) => {
@@ -143,7 +178,7 @@ export default function MonthlyCumulativePage() {
         setError(err instanceof Error ? err.message : String(err));
       });
     return () => controller.abort();
-  }, [axis, month]);
+  }, [axis, month, refreshKey]);
 
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -249,17 +284,35 @@ export default function MonthlyCumulativePage() {
             actualLabel="実績累計"
             targetLabel="目標累計"
           />
-          <CumChart
-            title="消化予算"
-            data={chartData}
-            actualKey="costCum"
-            targetKey="costTargetCum"
-            formatTick={(v) => jpyCompact.format(v)}
-            formatTooltip={(v) => jpyFormat.format(v)}
-            actualLabel="実績累計"
-            targetLabel="消化予定"
-            note="広告 date ベース (軸切替の影響なし)。消化予定 = adm_campaigns.monthly_budget の合計を日数按分"
-          />
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center justify-between gap-2">
+                <span>消化予算</span>
+                <CostPlanEditButton
+                  month={data!.month}
+                  monthlyBudget={data!.monthlyTarget.cost}
+                  onSaved={() => {
+                    // 再 fetch を促す: axis/month 同じでも refresh 用に key を増やす
+                    window.dispatchEvent(new CustomEvent('cost-plan-saved'));
+                  }}
+                />
+              </CardTitle>
+              <p className="text-[11px] text-muted-foreground/70 mt-1">
+                広告 date ベース (軸切替の影響なし)。消化予定は cost_plan_daily を優先、未入力なら月予算 ÷ 日数の按分
+              </p>
+            </CardHeader>
+            <CardContent>
+              <CumChartBody
+                data={chartData}
+                actualKey="costCum"
+                targetKey="costPlanCum"
+                formatTick={(v) => jpyCompact.format(v)}
+                formatTooltip={(v) => jpyFormat.format(v)}
+                actualLabel="実績累計"
+                targetLabel="消化予定"
+              />
+            </CardContent>
+          </Card>
           <CumChart
             title="粗利"
             data={chartData}
@@ -319,100 +372,264 @@ function CumChart({
         {note && <p className="text-[11px] text-muted-foreground/70 mt-1">{note}</p>}
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-            <XAxis
-              dataKey="day"
-              tick={{ fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(d) => `${d}日`}
-            />
-            <YAxis
-              tick={{ fontSize: 11 }}
-              width={64}
-              tickFormatter={formatTick}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              contentStyle={{ fontSize: 12, borderRadius: 8 }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const row = payload[0].payload as Record<string, number | string | null>;
-                const actualRaw = row[actualKey];
-                const targetRaw = targetKey ? row[targetKey] : null;
-                const actual = typeof actualRaw === 'number' ? actualRaw : null;
-                const target = typeof targetRaw === 'number' ? targetRaw : null;
-                const diff = actual != null && target != null ? actual - target : null;
-                return (
-                  <div className="rounded-lg border border-border bg-background shadow-md p-2.5 text-xs space-y-1 min-w-[160px]">
-                    <div className="font-medium text-foreground">{label}日</div>
-                    {actual != null && (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#6366f1' }} aria-hidden="true" />
-                          {actualLabel}
-                        </span>
-                        <span className="tabular-nums font-semibold">{formatTooltip(actual)}</span>
-                      </div>
-                    )}
-                    {target != null && (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#10b981' }} aria-hidden="true" />
-                          {targetLabel}
-                        </span>
-                        <span className="tabular-nums">{formatTooltip(target)}</span>
-                      </div>
-                    )}
-                    {diff != null && (
-                      <div className="pt-1 mt-1 border-t border-border/50 flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground">差分</span>
-                        <span
-                          className={cn(
-                            'tabular-nums font-semibold',
-                            diff >= 0 ? 'text-green-600' : 'text-red-500',
-                          )}
-                        >
-                          {diff >= 0 ? '+' : ''}
-                          {formatTooltip(diff)}
-                          <span className="ml-1 text-[10px] font-normal text-muted-foreground">
-                            ({diff >= 0 ? '達成' : 'ショート'})
-                          </span>
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              }}
-            />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Line
-              type="monotone"
-              dataKey={actualKey}
-              name={actualLabel}
-              stroke="#6366f1"
-              strokeWidth={2}
-              dot={{ r: 2 }}
-              isAnimationActive={false}
-            />
-            {targetKey && (
-              <Line
-                type="monotone"
-                dataKey={targetKey}
-                name={targetLabel}
-                stroke="#10b981"
-                strokeDasharray="4 4"
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+        <CumChartBody
+          data={data}
+          actualKey={actualKey}
+          targetKey={targetKey}
+          formatTick={formatTick}
+          formatTooltip={formatTooltip}
+          actualLabel={actualLabel}
+          targetLabel={targetLabel}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+type CumChartBodyProps = Omit<CumChartProps, 'title' | 'note'>;
+
+function CumChartBody({
+  data,
+  actualKey,
+  targetKey,
+  formatTick,
+  formatTooltip,
+  actualLabel,
+  targetLabel,
+}: CumChartBodyProps) {
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <LineChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+        <XAxis
+          dataKey="day"
+          tick={{ fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={(d) => `${d}日`}
+        />
+        <YAxis
+          tick={{ fontSize: 11 }}
+          width={64}
+          tickFormatter={formatTick}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip
+          contentStyle={{ fontSize: 12, borderRadius: 8 }}
+          content={({ active, payload, label }) => {
+            if (!active || !payload?.length) return null;
+            const row = payload[0].payload as Record<string, number | string | null>;
+            const actualRaw = row[actualKey];
+            const targetRaw = targetKey ? row[targetKey] : null;
+            const actual = typeof actualRaw === 'number' ? actualRaw : null;
+            const target = typeof targetRaw === 'number' ? targetRaw : null;
+            const diff = actual != null && target != null ? actual - target : null;
+            return (
+              <div className="rounded-lg border border-border bg-background shadow-md p-2.5 text-xs space-y-1 min-w-[160px]">
+                <div className="font-medium text-foreground">{label}日</div>
+                {actual != null && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#6366f1' }} aria-hidden="true" />
+                      {actualLabel}
+                    </span>
+                    <span className="tabular-nums font-semibold">{formatTooltip(actual)}</span>
+                  </div>
+                )}
+                {target != null && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#10b981' }} aria-hidden="true" />
+                      {targetLabel}
+                    </span>
+                    <span className="tabular-nums">{formatTooltip(target)}</span>
+                  </div>
+                )}
+                {diff != null && (
+                  <div className="pt-1 mt-1 border-t border-border/50 flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">差分</span>
+                    <span
+                      className={cn(
+                        'tabular-nums font-semibold',
+                        diff >= 0 ? 'text-green-600' : 'text-red-500',
+                      )}
+                    >
+                      {diff >= 0 ? '+' : ''}
+                      {formatTooltip(diff)}
+                      <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                        ({diff >= 0 ? '達成' : 'ショート'})
+                      </span>
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          }}
+        />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Line
+          type="monotone"
+          dataKey={actualKey}
+          name={actualLabel}
+          stroke="#6366f1"
+          strokeWidth={2}
+          dot={{ r: 2 }}
+          isAnimationActive={false}
+        />
+        {targetKey && (
+          <Line
+            type="monotone"
+            dataKey={targetKey}
+            name={targetLabel}
+            stroke="#10b981"
+            strokeDasharray="4 4"
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={false}
+          />
+        )}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** 消化予定の編集ボタン (Dialog で 31 日入力) */
+function CostPlanEditButton({
+  month,
+  monthlyBudget,
+  onSaved,
+}: {
+  month: string;
+  monthlyBudget: number | null;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  // Dialog を開いたとき現在値を fetch
+  const load = useCallback(async () => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/dashboard/cost-plan?month=${month}`);
+      const json = (await res.json()) as CostPlanResponse;
+      if (!res.ok) throw new Error((json as unknown as { error: string }).error ?? `HTTP ${res.status}`);
+      const v: Record<string, string> = {};
+      for (const d of json.days) {
+        v[d.date] = d.plannedCost > 0 ? String(d.plannedCost) : '';
+      }
+      setValues(v);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [month]);
+
+  useEffect(() => {
+    if (open) load();
+  }, [open, load]);
+
+  function fillFromMonthlyBudget() {
+    const dates = Object.keys(values).sort();
+    if (dates.length === 0 || monthlyBudget == null || monthlyBudget <= 0) return;
+    const per = Math.round(monthlyBudget / dates.length);
+    const next: Record<string, string> = {};
+    for (const d of dates) next[d] = String(per);
+    setValues(next);
+  }
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const days = Object.entries(values)
+        .map(([date, vstr]) => {
+          const n = Number(String(vstr).replace(/[^\d.-]/g, ''));
+          return { date, plannedCost: Number.isFinite(n) ? n : 0 };
+        })
+        .filter((d) => d.plannedCost > 0); // 0 円は送らない (未入力扱い)
+      const res = await fetch('/api/dashboard/cost-plan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month, days }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) throw new Error(json?.error ?? `HTTP ${res.status}`);
+      setMessage(`${json.updated} 日分を保存しました`);
+      onSaved();
+      setOpen(false);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const dates = Object.keys(values).sort();
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        className="inline-flex items-center gap-1.5 text-xs h-7 px-2.5 rounded-md border bg-background hover:bg-muted transition-colors"
+        aria-label="消化予定を編集"
+      >
+        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+        消化予定編集
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-base flex items-center gap-2">
+            消化予定 編集 ({month})
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5 h-7 text-xs ml-2"
+              onClick={fillFromMonthlyBudget}
+              disabled={loading || saving || monthlyBudget == null}
+              title={monthlyBudget != null ? `${jpyFormat.format(monthlyBudget)} ÷ ${dates.length} 日 で一括セット` : '月予算が未設定'}
+            >
+              <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
+              月予算で初期化
+            </Button>
+          </DialogTitle>
+        </DialogHeader>
+        {loading ? (
+          <p className="text-sm text-muted-foreground py-4">読み込み中…</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[60vh] overflow-y-auto pr-1">
+            {dates.map((d) => (
+              <label key={d} className="space-y-0.5 text-xs">
+                <span className="text-muted-foreground tabular-nums">{Number(d.slice(8, 10))}日</span>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={values[d] ?? ''}
+                    onChange={(e) =>
+                      setValues((prev) => ({ ...prev, [d]: e.target.value }))
+                    }
+                    className="h-7 text-xs tabular-nums"
+                    placeholder="0"
+                  />
+                  <span className="text-[10px] text-muted-foreground shrink-0">円</span>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2 pt-2">
+          <Button size="sm" onClick={save} disabled={saving || loading}>
+            {saving ? '保存中…' : '保存'}
+          </Button>
+          {message && <span className="text-xs text-muted-foreground">{message}</span>}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
