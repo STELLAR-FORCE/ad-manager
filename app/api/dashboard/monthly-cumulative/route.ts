@@ -41,6 +41,7 @@ type SfGrossRow = {
   revenue: number | null;
 };
 type CostRow = { date: { value: string } | string; cost: number | null };
+type PlannedCostRow = { date: { value: string } | string; planned_cost: number | string | null };
 type TargetRow = {
   cv_target: number | null;
   room_target: number | null;
@@ -65,6 +66,8 @@ export type MonthlyCumulativePoint = {
   grossProfit: number;
   /** 売上 (借主への請求額 SUM) */
   revenue: number;
+  /** 日次の消化予定 (cost_plan_daily)。未入力日は 0 */
+  plannedCost: number;
 };
 
 export type MonthlyCumulativeResponse = {
@@ -119,8 +122,8 @@ export async function GET(request: Request) {
   const dateCol = axisDateColumn(axis);
 
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  // v4: 粗利・売上 + その目標を追加
-  const cacheKey = `monthly-cumulative:v4:${axis}:${month}:${todayStr}`;
+  // v5: 日次消化予定 (cost_plan_daily) を追加
+  const cacheKey = `monthly-cumulative:v5:${axis}:${month}:${todayStr}`;
 
   try {
     const result = await cached(cacheKey, async () => {
@@ -188,22 +191,38 @@ export async function GET(request: Request) {
       `;
 
       // 消化予算 目標 = 全キャンペーンの monthly_budget 合計 (axis 共通)
+      // cost_plan_daily にデータが無い月のフォールバック
       const budgetSql = `
         SELECT IFNULL(SUM(monthly_budget), 0) AS total_budget
         FROM ${table('adm_campaigns')}
       `;
 
-      const [sfRows, sfGrossRows, costRows, targetRows, budgetRows] = await Promise.all([
-        query<SfRow>(sfSql, { startDate, endDate }),
-        query<SfGrossRow>(sfGrossSql, { startDate, endDate }),
-        query<CostRow>(costSql, { startDate, endDate }),
-        query<TargetRow>(targetSql, { startDate, axis }).catch(() => [] as TargetRow[]),
-        query<BudgetRow>(budgetSql).catch(() => [] as BudgetRow[]),
-      ]);
+      // 日次消化予定 (cost_plan_daily)
+      const plannedSql = `
+        SELECT date, planned_cost
+        FROM ${tableIn('dashboard', 'cost_plan_daily')}
+        WHERE date BETWEEN DATE(@startDate) AND DATE(@endDate)
+        ORDER BY date
+      `;
+
+      const [sfRows, sfGrossRows, costRows, targetRows, budgetRows, plannedRows] =
+        await Promise.all([
+          query<SfRow>(sfSql, { startDate, endDate }),
+          query<SfGrossRow>(sfGrossSql, { startDate, endDate }),
+          query<CostRow>(costSql, { startDate, endDate }),
+          query<TargetRow>(targetSql, { startDate, axis }).catch(() => [] as TargetRow[]),
+          query<BudgetRow>(budgetSql).catch(() => [] as BudgetRow[]),
+          query<PlannedCostRow>(plannedSql, { startDate, endDate }).catch(
+            () => [] as PlannedCostRow[],
+          ),
+        ]);
 
       const sfMap = new Map(sfRows.map((r) => [isoDate(r.date), r]));
       const sfGrossMap = new Map(sfGrossRows.map((r) => [isoDate(r.date), r]));
       const costMap = new Map(costRows.map((r) => [isoDate(r.date), r]));
+      const plannedMap = new Map(
+        plannedRows.map((r) => [isoDate(r.date), Number(r.planned_cost ?? 0)]),
+      );
 
       const days: MonthlyCumulativePoint[] = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -219,6 +238,7 @@ export async function GET(request: Request) {
           cost: Number(cost?.cost ?? 0),
           grossProfit: Number(sfg?.gross_profit ?? 0),
           revenue: Number(sfg?.revenue ?? 0),
+          plannedCost: plannedMap.get(dateKey) ?? 0,
         });
       }
 
