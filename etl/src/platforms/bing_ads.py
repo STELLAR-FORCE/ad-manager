@@ -153,7 +153,20 @@ class BingAdsClient(AdPlatformClient):
                 overwrite_result_file=True,
             )
 
-            result_file = self._reporting_manager.download_report(params)
+            try:
+                result_file = self._reporting_manager.download_report(params)
+            except Exception as e:
+                # suds.WebFault は fault.detail に SOAP 詳細 (BatchError / OperationError) を持つ
+                # デフォルトでは表面メッセージしか出ないので、詳細を引き出してログ出力
+                from suds import WebFault  # type: ignore
+                if isinstance(e, WebFault):
+                    fault = getattr(e, "fault", None)
+                    detail = getattr(fault, "detail", None) if fault is not None else None
+                    logger.error(
+                        "Bing Ads レポート取得失敗 (WebFault detail): %r",
+                        detail,
+                    )
+                raise
 
             if result_file is None:
                 logger.info("Bing Ads: レポートデータなし")
@@ -309,12 +322,14 @@ class BingAdsClient(AdPlatformClient):
         request.ExcludeReportHeader = True
         request.ExcludeReportFooter = True
         request.ExcludeColumnHeaders = False
+        # 注: QualityScore は Bing Ads API v13 で CampaignPerformanceReport には
+        # 含められない (KeywordPerformanceReport のみサポート)。2026-05-17 頃から
+        # SOAP "Invalid client data" で拒否されるようになったため削除。
         request.Columns.CampaignPerformanceReportColumn = [
             "CampaignId",
             "CampaignName",
             "CampaignStatus",
             "CampaignType",
-            "QualityScore",
             "Impressions",
             "Clicks",
             "Spend",
@@ -343,7 +358,7 @@ class BingAdsClient(AdPlatformClient):
                 daily_budget=None,  # CampaignPerformanceReport に予算カラムなし
                 monthly_budget=None,
                 bid_strategy=None,  # Campaign レポートには BidStrategyType がない
-                optimization_score=self._safe_float(r.get("QualityScore")) or None,
+                optimization_score=None,  # QualityScore は CampaignPerformanceReport で取得不可
             )
 
         campaigns = list(seen.values())
@@ -364,12 +379,13 @@ class BingAdsClient(AdPlatformClient):
         request.ExcludeReportHeader = True
         request.ExcludeReportFooter = True
         request.ExcludeColumnHeaders = False
+        # 注: AdGroupPerformanceReport にも QualityScore はサポートされていない
+        # (Keyword レポートのみ)。Campaign と同じく削除。
         request.Columns.AdGroupPerformanceReportColumn = [
             "CampaignId",
             "AdGroupId",
             "AdGroupName",
             "Status",
-            "QualityScore",
             "Impressions",
             "Clicks",
             "Spend",
@@ -403,7 +419,7 @@ class BingAdsClient(AdPlatformClient):
                 type="標準",
                 bid_strategy=None,
                 target_cpa=None,
-                quality_score=self._safe_float(r.get("QualityScore")) or None,
+                quality_score=None,  # AdGroupPerformanceReport で取得不可
                 impressions=impressions,
                 clicks=clicks,
                 ctr=derived["ctr"],
