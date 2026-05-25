@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { query, table } from '@/lib/bigquery';
+import { query, table, tableIn } from '@/lib/bigquery';
 
 type CampaignRow = {
   id: string;
@@ -11,6 +11,7 @@ type CampaignRow = {
 };
 
 type SpendRow = { campaign_id: string; platform: string; cost: number | null };
+type PlannedRow = { total: number | string | null };
 
 function firstDayOfMonth(month: string): string {
   return `${month}-01`;
@@ -30,7 +31,8 @@ export async function GET(request: NextRequest) {
     const start = firstDayOfMonth(month);
     const end = firstDayOfNextMonth(month);
 
-    const [campaigns, metrics] = await Promise.all([
+    // cost_plan_daily の月合計を当月総予算とする (cv-daily の消化予定編集で入力)
+    const [campaigns, metrics, plannedRows] = await Promise.all([
       query<CampaignRow>(
         `SELECT id, name, platform, ad_type, status, monthly_budget
          FROM ${table('adm_campaigns')}
@@ -43,34 +45,36 @@ export async function GET(request: NextRequest) {
          GROUP BY campaign_id, platform`,
         { start, end },
       ),
+      query<PlannedRow>(
+        `SELECT IFNULL(SUM(planned_cost), 0) AS total
+         FROM ${tableIn('dashboard', 'cost_plan_daily')}
+         WHERE date >= DATE(@start) AND date < DATE(@end)`,
+        { start, end },
+      ).catch(() => [] as PlannedRow[]),
     ]);
 
     const spentByCampaign = new Map<string, number>(
       metrics.map((m) => [`${m.platform}:${m.campaign_id}`, Number(m.cost ?? 0)]),
     );
+    const totalPlanned = Number(plannedRows[0]?.total ?? 0);
 
     const result = campaigns.map((c) => {
       const spent = spentByCampaign.get(`${c.platform}:${c.id}`) ?? 0;
-      const budget = Number(c.monthly_budget ?? 0);
-      const remaining = Math.max(0, budget - spent);
-      const utilization = budget > 0 ? (spent / budget) * 100 : 0;
-
       return {
         id: c.id,
         name: c.name,
         platform: c.platform,
         adType: c.ad_type,
         status: c.status,
-        monthlyBudget: budget,
+        // monthly_budget はキャンペーンマスタ側の参考値 (UI 表示はしないが互換のため残す)
+        monthlyBudget: Number(c.monthly_budget ?? 0),
         spent,
-        remaining,
-        utilization,
       };
     });
 
-    return Response.json({ month, campaigns: result });
+    return Response.json({ month, campaigns: result, totalPlannedBudget: totalPlanned });
   } catch (error) {
     console.error('budget GET error:', error);
-    return Response.json({ month, campaigns: [] });
+    return Response.json({ month, campaigns: [], totalPlannedBudget: 0 });
   }
 }
