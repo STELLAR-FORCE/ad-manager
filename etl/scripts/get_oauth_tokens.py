@@ -40,8 +40,9 @@ PLATFORMS = {
         "scope": "",
     },
     "bing": {
-        "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-        "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        # stellarforce.com テナント (シングルテナントアプリ化により common 不可)
+        "auth_url": "https://login.microsoftonline.com/ce04d0d5-028e-4a56-b5f6-cb4e0129b4fc/oauth2/v2.0/authorize",
+        "token_url": "https://login.microsoftonline.com/ce04d0d5-028e-4a56-b5f6-cb4e0129b4fc/oauth2/v2.0/token",
         "scope": "https://ads.microsoft.com/msads.manage offline_access",
     },
 }

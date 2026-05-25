@@ -232,33 +232,29 @@ export function parseTargetCsv(text: string): ParsedCsvResult {
 }
 
 /**
- * テンプレート用: 指定年の 12 ヶ月 × (入居日/発生日) × (全体/google/yahoo/bing) を
- * 空欄で生成 (96 行)。
+ * テンプレート用: 指定年の 12 ヶ月 × (入居日/発生日) を全体目標で空欄生成 (24 行)。
  *
- * 全体 (platform=null) はダッシュボード進捗カードが参照する主目標。
- * google/yahoo/bing は媒体別に細かく管理したいときに使う任意行。
+ * 業務的に媒体別の目標値は使わないので全体 (platform=null) のみ。
+ * 必要になれば手動で行を追加して platform 列に google/yahoo/bing を入力する。
  */
 export function buildTemplateRows(year: number): TargetCsvRow[] {
   const rows: TargetCsvRow[] = [];
   const axes: CsvAxis[] = ['movein', 'received'];
-  const platforms: (string | null)[] = [null, 'google', 'yahoo', 'bing'];
   for (let m = 1; m <= 12; m++) {
     const month = `${year}-${String(m).padStart(2, '0')}-01`;
     for (const axis of axes) {
-      for (const platform of platforms) {
-        rows.push({
-          month,
-          platform,
-          axis,
-          cvTarget: null,
-          roomTarget: null,
-          roomDaysTarget: null,
-          grossProfitTarget: null,
-          revenueTarget: null,
-          useDaysTarget: null,
-          wonTarget: null,
-        });
-      }
+      rows.push({
+        month,
+        platform: null,
+        axis,
+        cvTarget: null,
+        roomTarget: null,
+        roomDaysTarget: null,
+        grossProfitTarget: null,
+        revenueTarget: null,
+        useDaysTarget: null,
+        wonTarget: null,
+      });
     }
   }
   return rows;
