@@ -80,21 +80,34 @@ function contractCte(dateExpr: string, granularity: 'month' | 'day'): string {
       ? `FORMAT_DATE('%Y-%m', DATE(${dateExpr}))`
       : `DATE(${dateExpr})`;
   const kind = contractKindCase(SF_COLS.contractName);
+  // mart は契約管理 ID 以外でも行展開されるため、まず契約管理単位に集約する
   return `
     SELECT
-      ${bucket} AS bucket,
-      ${PLATFORM_FROM_MEDIA_CASE} AS platform,
-      SUM(IFNULL(${SF_COLS.contractedRooms}, 0)) AS contracted_rooms,
-      SUM(IFNULL(${SF_COLS.grossProfit}, 0)) AS gross_profit,
-      SUM(IFNULL(${SF_COLS.revenue}, 0)) AS revenue,
-      COUNTIF(${SF_COLS.isInhouse} = TRUE) AS inhouse_won_count,
-      COUNTIF(${kind} = 'new') AS new_cnt,
-      COUNTIF(${kind} = 'renewal') AS renewal_cnt,
-      COUNTIF(${kind} = 'extension') AS extension_cnt,
-      COUNTIF(${kind} = 'cancel') AS cancel_cnt
-    FROM ${SF_MART}
-    WHERE ${SF_COLS.contractId} IS NOT NULL
-      AND DATE(${dateExpr}) BETWEEN @start AND @end
+      bucket,
+      platform,
+      SUM(IFNULL(contracted_rooms, 0)) AS contracted_rooms,
+      SUM(IFNULL(gross_profit, 0)) AS gross_profit,
+      SUM(IFNULL(revenue, 0)) AS revenue,
+      COUNTIF(is_inhouse = TRUE) AS inhouse_won_count,
+      COUNTIF(kind = 'new') AS new_cnt,
+      COUNTIF(kind = 'renewal') AS renewal_cnt,
+      COUNTIF(kind = 'extension') AS extension_cnt,
+      COUNTIF(kind = 'cancel') AS cancel_cnt
+    FROM (
+      SELECT
+        ${SF_COLS.contractId} AS contract_id,
+        ANY_VALUE(${bucket}) AS bucket,
+        ANY_VALUE(${PLATFORM_FROM_MEDIA_CASE}) AS platform,
+        ANY_VALUE(${SF_COLS.contractedRooms}) AS contracted_rooms,
+        ANY_VALUE(${SF_COLS.grossProfit}) AS gross_profit,
+        ANY_VALUE(${SF_COLS.revenue}) AS revenue,
+        ANY_VALUE(${SF_COLS.isInhouse}) AS is_inhouse,
+        ANY_VALUE(${kind}) AS kind
+      FROM ${SF_MART}
+      WHERE ${SF_COLS.contractId} IS NOT NULL
+        AND DATE(${dateExpr}) BETWEEN @start AND @end
+      GROUP BY contract_id
+    )
     GROUP BY 1, 2
   `;
 }
@@ -288,15 +301,29 @@ export const MOVE_IN_PIVOT_SQL = `
  *   （依頼側の `利用期間_日数 × 必要戸数_数値` と対称な算出）
  */
 export const MOVE_IN_SUMMARY_SQL = `
+  -- mart の行展開対策: 契約管理単位で重複除去してから入居月別に集計
+  WITH contract_unique AS (
+    SELECT
+      ${SF_COLS.contractId} AS contract_id,
+      ANY_VALUE(FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart}))) AS move_in_month,
+      ANY_VALUE(${SF_COLS.leadId}) AS lead_id,
+      ANY_VALUE(${SF_COLS.contractedRooms}) AS contracted_rooms,
+      ANY_VALUE(${SF_COLS.grossProfit}) AS gross_profit,
+      ANY_VALUE(${SF_COLS.revenue}) AS revenue,
+      ANY_VALUE(${SF_COLS.useDaysContracted}) AS use_days_contracted
+    FROM ${SF_MART}
+    WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
+      AND ${SF_COLS.contractId} IS NOT NULL
+    GROUP BY contract_id
+  )
   SELECT
-    FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart})) AS move_in_month,
-    COUNT(DISTINCT IF(${SF_COLS.contractId} IS NOT NULL, ${SF_COLS.leadId}, NULL)) AS won_cv,
-    SUM(IFNULL(${SF_COLS.contractedRooms}, 0)) AS contracted_rooms,
-    SUM(IFNULL(${SF_COLS.grossProfit}, 0)) AS gross_profit,
-    SUM(IFNULL(${SF_COLS.revenue}, 0)) AS revenue,
-    SUM(IFNULL(${SF_COLS.useDaysContracted}, 0) * IFNULL(${SF_COLS.contractedRooms}, 0)) AS contracted_room_days
-  FROM ${SF_MART}
-  WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
+    move_in_month,
+    COUNT(DISTINCT lead_id) AS won_cv,
+    SUM(IFNULL(contracted_rooms, 0)) AS contracted_rooms,
+    SUM(IFNULL(gross_profit, 0)) AS gross_profit,
+    SUM(IFNULL(revenue, 0)) AS revenue,
+    SUM(IFNULL(use_days_contracted, 0) * IFNULL(contracted_rooms, 0)) AS contracted_room_days
+  FROM contract_unique
   GROUP BY 1
   ORDER BY 1
 `;
@@ -345,35 +372,56 @@ export const MOVE_IN_FORECAST_SQL = `
     ORDER BY effective_from DESC NULLS LAST
     LIMIT 1
   ),
-  confirmed AS (
+  -- mart は契約管理ID 以外でも行展開されるため、まず契約管理単位に集約してから合算する
+  -- (Issue #97 と同じ重複展開の問題。SUM をそのまま使うと 20〜50 倍に膨らむ)
+  confirmed_unique AS (
     SELECT
-      FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart})) AS move_in_month,
-      SUM(IFNULL(${SF_COLS.grossProfit}, 0)) AS confirmed_gross_profit,
-      SUM(IFNULL(${SF_COLS.contractedRooms}, 0)) AS confirmed_rooms,
-      ARRAY_AGG(
-        SAFE_DIVIDE(${SF_COLS.grossProfit}, NULLIF(${SF_COLS.contractedRooms}, 0))
-        IGNORE NULLS
-      ) AS unit_prices
+      ${SF_COLS.contractId} AS contract_id,
+      ANY_VALUE(FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart}))) AS move_in_month,
+      ANY_VALUE(${SF_COLS.grossProfit}) AS gross_profit,
+      ANY_VALUE(${SF_COLS.contractedRooms}) AS contracted_rooms
     FROM ${SF_MART}
     WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
       AND ${LP_LEAD_FILTER_SQL}
       AND ${SF_COLS.contractId} IS NOT NULL
       AND IFNULL(${SF_COLS.isInhouse}, FALSE) = FALSE
+    GROUP BY contract_id
+  ),
+  confirmed AS (
+    SELECT
+      move_in_month,
+      SUM(IFNULL(gross_profit, 0)) AS confirmed_gross_profit,
+      SUM(IFNULL(contracted_rooms, 0)) AS confirmed_rooms,
+      ARRAY_AGG(
+        SAFE_DIVIDE(gross_profit, NULLIF(contracted_rooms, 0))
+        IGNORE NULLS
+      ) AS unit_prices
+    FROM confirmed_unique
     GROUP BY 1
   ),
-  pipeline AS (
+  -- 案件単位で重複除去 (mart の行展開対策)
+  pipeline_unique AS (
     SELECT
-      FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart})) AS move_in_month,
-      sp.stage_group,
-      SUM(IFNULL(${SF_COLS.needRooms}, 0)) AS rooms,
-      SUM(IFNULL(${SF_COLS.needRooms}, 0) * sp.probability) AS weighted_rooms
+      ${SF_COLS.oppId} AS opp_id,
+      ANY_VALUE(FORMAT_DATE('%Y-%m', DATE(${SF_COLS.usePeriodStart}))) AS move_in_month,
+      ANY_VALUE(${SF_COLS.oppStage}) AS opp_stage,
+      ANY_VALUE(${SF_COLS.needRooms}) AS need_rooms
     FROM ${SF_MART}
-    JOIN stage_prob sp ON sp.stage_name = ${SF_COLS.oppStage}
     WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
       AND ${LP_LEAD_FILTER_SQL}
       AND ${SF_COLS.oppId} IS NOT NULL
       AND ${SF_COLS.contractId} IS NULL
-      AND sp.stage_group IN ('introduced', 'early')
+    GROUP BY opp_id
+  ),
+  pipeline AS (
+    SELECT
+      pu.move_in_month,
+      sp.stage_group,
+      SUM(IFNULL(pu.need_rooms, 0)) AS rooms,
+      SUM(IFNULL(pu.need_rooms, 0) * sp.probability) AS weighted_rooms
+    FROM pipeline_unique pu
+    JOIN stage_prob sp ON sp.stage_name = pu.opp_stage
+    WHERE sp.stage_group IN ('introduced', 'early')
     GROUP BY 1, 2
   ),
   pipeline_pivot AS (

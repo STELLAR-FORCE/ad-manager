@@ -234,7 +234,7 @@ export function ProgressView() {
 
             return (
               <div key={key} className="space-y-1.5">
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5 min-h-[40px]">
                   <Icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                   <span className="text-xs text-muted-foreground">{label}</span>
                   <DataSourceTooltip

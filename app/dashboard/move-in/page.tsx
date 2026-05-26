@@ -46,9 +46,10 @@ import {
   MoveInSummaryCard,
   type MoveInSummaryCardData,
 } from '@/components/dashboard/move-in-summary-card';
-import { jpyFormat, jpyCompact, numFormat, pctFormat, formatMonthLabel } from '@/lib/format';
-import { currentPeriod, periodRange, type Period } from '@/lib/period';
+import { jpyFormat, jpyCompact, jpyCompact2, numFormat, pctFormat, formatMonthLabel } from '@/lib/format';
+import { currentPeriod, periodLabel, periodRange, type Period } from '@/lib/period';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
+import { DataSourceTags } from '@/components/ui/data-source-tags';
 import { cn } from '@/lib/utils';
 
 const TODAY = new Date();
@@ -340,6 +341,9 @@ export default function MoveInPivotPage() {
               }}
             />
           </h1>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-foreground/90">
+            {periodLabel(period)}
+          </p>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
             入居月ごとの着地見込み（LP流入の案件のみ）。営業/経営は時系列、マーケはリードタイム逆算で施策タイミングを判断。
           </p>
@@ -376,12 +380,27 @@ export default function MoveInPivotPage() {
           <Card className="bg-gradient-to-br from-background to-muted/30">
             <CardContent className="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
               <div>
-                <div className="text-xs font-medium text-muted-foreground">予想粗利（期間合計）</div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">予想粗利（期間合計）</span>
+                  <DataSourceTags sources={['contract', 'opportunity']} />
+                  <DataSourceTooltip
+                    info={{
+                      label: '予想粗利',
+                      source: 'Salesforce (mart.salesforce_all_obj)',
+                      filters: 'LP 経由のみ',
+                      target: '確定粗利 + 進行中（加重）の合計 = 期間内の着地見込み粗利',
+                      period: '画面上の期間セレクタで指定した範囲',
+                      axis: '利用期間_始期 (入居日)',
+                      cache: '1 時間キャッシュ',
+                      note: '確定粗利 = 成約済みの粗利、進行中（加重）= 案件フェーズ別の確度で粗利を見積',
+                    }}
+                  />
+                </div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
-                  {jpyCompact.format(periodTotal.forecastTotal)}
+                  {jpyCompact2.format(periodTotal.forecastTotal)}
                 </div>
                 <div className="text-[11px] text-muted-foreground tabular-nums">
-                  目標 {periodTotal.target > 0 ? jpyCompact.format(periodTotal.target) : '—'}
+                  目標 {periodTotal.target > 0 ? jpyCompact2.format(periodTotal.target) : '—'}
                   {periodTotal.target > 0 && (
                     <span className="ml-1.5">
                       （{pctFormat.format(periodTotal.forecastTotal / periodTotal.target)}）
@@ -409,16 +428,45 @@ export default function MoveInPivotPage() {
                 )}
               </div>
               <div>
-                <div className="text-xs font-medium text-muted-foreground">確定粗利</div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">確定粗利</span>
+                  <DataSourceTags sources={['contract']} />
+                  <DataSourceTooltip
+                    info={{
+                      label: '確定粗利',
+                      source: 'Salesforce (mart.salesforce_all_obj)',
+                      filters: 'LP 経由のみ + 契約管理ID NOT NULL',
+                      target: '契約管理レコードの 総売上_粗利 合計 (= 既に成約済みの確定値)',
+                      period: '画面上の期間セレクタで指定した範囲',
+                      axis: '利用期間_始期 (入居日)',
+                      cache: '1 時間キャッシュ',
+                    }}
+                  />
+                </div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
-                  {jpyCompact.format(periodTotal.confirmed)}
+                  {jpyCompact2.format(periodTotal.confirmed)}
                 </div>
                 <div className="text-[11px] text-muted-foreground">契約管理レコードの粗利合計</div>
               </div>
               <div>
-                <div className="text-xs font-medium text-muted-foreground">進行中（加重）</div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">進行中（加重）</span>
+                  <DataSourceTags sources={['opportunity']} />
+                  <DataSourceTooltip
+                    info={{
+                      label: '進行中（加重）',
+                      source: 'Salesforce (mart.salesforce_all_obj)',
+                      filters: 'LP 経由のみ + 案件フェーズが進行中 (紹介後 / 早期)',
+                      target: '案件フェーズ別の確度 × 必要戸数 × ¥100,000/室 — 確定前の見込み粗利',
+                      period: '画面上の期間セレクタで指定した範囲',
+                      axis: '利用期間_始期 (入居日)',
+                      cache: '1 時間キャッシュ',
+                      note: '紹介後 50% / 早期 25% で加重。確度マスタは /targets で編集可能',
+                    }}
+                  />
+                </div>
                 <div className="mt-1 text-2xl font-bold tabular-nums">
-                  {jpyCompact.format(periodTotal.pipeline)}
+                  {jpyCompact2.format(periodTotal.pipeline)}
                 </div>
                 <div className="text-[11px] text-muted-foreground">
                   紹介後 50% / 早期 25% × ¥100,000/室
@@ -426,7 +474,10 @@ export default function MoveInPivotPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground">CV</div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">CV</span>
+                    <DataSourceTags sources={['lead']} />
+                  </div>
                   <div className="mt-1 text-lg font-bold tabular-nums">
                     {numFormat.format(periodTotal.cv)}
                     <span className="ml-1 text-xs font-normal text-muted-foreground">
@@ -435,7 +486,10 @@ export default function MoveInPivotPage() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground">室数</div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">CV 室数</span>
+                    <DataSourceTags sources={['lead']} />
+                  </div>
                   <div className="mt-1 text-lg font-bold tabular-nums">
                     {numFormat.format(periodTotal.rooms)}
                     <span className="ml-1 text-xs font-normal text-muted-foreground">
