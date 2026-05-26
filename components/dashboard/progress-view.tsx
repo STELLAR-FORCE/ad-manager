@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { ProgressResponse } from '@/app/api/dashboard/progress/route';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
+import type { SourceTagKey } from '@/components/ui/data-source-tags';
 
 const jpyFormat = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
@@ -50,48 +51,61 @@ const AXIS_TABS: { key: Axis; label: string; hint: string }[] = [
 ];
 
 // 並び順: CV → CV室数 → ルームデイズ → 成約 → 粗利
-const METRICS = [
+const METRICS: ReadonlyArray<{
+  key: 'cv' | 'cvRooms' | 'roomDays' | 'won' | 'grossProfit';
+  label: string;
+  icon: typeof Target;
+  format: (v: number) => string;
+  formatCompact: (v: number) => string;
+  target: string;
+  sources: SourceTagKey[];
+}> = [
   {
-    key: 'cv' as const,
+    key: 'cv',
     label: 'CV',
     icon: Target,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
     target: 'LP 経由リード件数 (COUNT)',
+    sources: ['lead'],
   },
   {
-    key: 'cvRooms' as const,
+    key: 'cvRooms',
     label: 'CV 室数',
     icon: DoorOpen,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 室',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 室',
     target: '必要戸数_数値 の合計 (SUM)',
+    sources: ['lead'],
   },
   {
-    key: 'roomDays' as const,
+    key: 'roomDays',
     label: 'ルームデイズ',
     icon: BedDouble,
     format: (v: number) => numFormat.format(Math.round(v)) + ' RD',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' RD',
     target: '利用期間_日数 の合計 (SUM) — このカラムは SF 側で既に 日数 × 必要戸数 で算出済',
+    sources: ['lead', 'contract'],
   },
   {
-    key: 'won' as const,
+    key: 'won',
     label: '成約',
     icon: Trophy,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
     target: '契約管理ID が NOT NULL のリードを COUNT DISTINCT',
+    sources: ['lead', 'contract'],
   },
   {
-    key: 'grossProfit' as const,
+    key: 'grossProfit',
     label: '粗利',
     icon: Wallet,
     format: (v: number) => jpyFormat.format(v),
     formatCompact: (v: number) => jpyCompact.format(v),
     target: '総売上_粗利 の合計 (SUM)',
+    sources: ['contract'],
   },
-] as const;
+];
 
 function deltaPct(current: number, previous: number): number | null {
   if (previous <= 0) return null;
@@ -212,7 +226,7 @@ export function ProgressView() {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {METRICS.map(({ key, label, icon: Icon, format, target: aggTarget }) => {
+          {METRICS.map(({ key, label, icon: Icon, format, target: aggTarget, sources }) => {
             const m = data.metrics[key][activeTab];
             const delta = deltaPct(m.current, m.previous);
             const achievementPct =
@@ -226,6 +240,7 @@ export function ProgressView() {
                   <DataSourceTooltip
                     info={{
                       label,
+                      sources,
                       source: 'Salesforce (mart.salesforce_all_obj)',
                       filters:
                         'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)',

@@ -277,6 +277,7 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
           subRender={(d) => `期間内に作成された案件（うち成立 ${numFormat.format(d.won)}件）`}
           info={{
             label: '案件',
+            sources: ['opportunity'],
             source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/summary',
             filters: 'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)',
             target: '案件ID NOT NULL の件数 (リード単位で集約後 → 案件単位 COUNT)',
@@ -293,6 +294,7 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
           subRender={(d) => `失注 ${numFormat.format(d.lost)}件 / 進行中 ${numFormat.format(d.open)}件`}
           info={{
             label: '案件成立',
+            sources: ['opportunity', 'contract'],
             source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/summary',
             filters: 'LP 経由のみ',
             target:
@@ -310,6 +312,7 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
           subRender={() => '成立 / (成立 + 失注)'}
           info={{
             label: 'Win率',
+            sources: ['opportunity'],
             source: 'Salesforce (mart.salesforce_all_obj)',
             filters: 'LP 経由のみ',
             target: '成立件数 ÷ (成立 + 失注) — 失注は案件フェーズが失注/キャンセル系',
@@ -329,6 +332,7 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
           subRender={() => '案件成立までの所要日数'}
           info={{
             label: '平均リードタイム',
+            sources: ['opportunity'],
             source: 'Salesforce (mart.salesforce_all_obj.経過リードタイム)',
             filters: 'LP 経由のみ + 案件フェーズ = 案件成立',
             target: 'AVG(経過リードタイム) — 案件ごとの日数',
@@ -347,6 +351,7 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
             <DataSourceTooltip
               info={{
                 label: '商談 日別推移',
+                sources: ['opportunity'],
                 source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/trend',
                 target:
                   '新規: 案件作成数 / 成約: 案件フェーズ = 案件成立 / 失注: 失注系フェーズ',
@@ -392,6 +397,7 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
               <DataSourceTooltip
                 info={{
                   label: 'ステージ別件数',
+                  sources: ['opportunity'],
                   source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/pipeline',
                   target:
                     '案件フェーズ別の案件件数。進行中 / 成約 (案件成立) / 失注 (理由別) に色分け',
@@ -494,6 +500,7 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
               <DataSourceTooltip
                 info={{
                   label: '媒体別リード件数',
+                  sources: ['lead'],
                   source: 'Salesforce (mart.salesforce_all_obj) /api/salesforce/leads',
                   filters: 'LP 経由判定 (流入元_媒体別 が広告媒体 OR 流入元_LP反響 が LP)',
                   target: 'リード件数を 流入元_媒体別 で集計し Platform にマッピング',

@@ -35,6 +35,7 @@ import { Pencil, Calculator } from 'lucide-react';
 import { jpyCompact, jpyFormat, numFormat } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
+import { DataSourceTags, type SourceTagKey } from '@/components/ui/data-source-tags';
 import type {
   MonthlyCumulativeResponse,
   MonthlyCumulativePoint,
@@ -199,6 +200,7 @@ export default function MonthlyCumulativePage() {
             <DataSourceTooltip
               info={{
                 label: '月次累計推移',
+                sources: ['lead', 'contract', 'ad_console'],
                 source:
                   'Salesforce (mart.salesforce_all_obj) + BigQuery (ad_manager.adm_daily_metrics) + dashboard.targets_monthly',
                 filters: 'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)',
@@ -268,6 +270,7 @@ export default function MonthlyCumulativePage() {
             formatTooltip={(v) => `${numFormat.format(v)} 件`}
             actualLabel="実績累計"
             targetLabel="目標累計"
+            sources={['lead']}
           />
           <CumChart
             title="CV 室数"
@@ -278,6 +281,7 @@ export default function MonthlyCumulativePage() {
             formatTooltip={(v) => `${numFormat.format(v)} 室`}
             actualLabel="実績累計"
             targetLabel="目標累計"
+            sources={['lead']}
           />
           <CumChart
             title="ルームデイズ"
@@ -288,11 +292,15 @@ export default function MonthlyCumulativePage() {
             formatTooltip={(v) => `${numFormat.format(v)} RD`}
             actualLabel="実績累計"
             targetLabel="目標累計"
+            sources={['lead', 'contract']}
           />
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center justify-between gap-2">
-                <span>消化予算</span>
+                <span className="flex items-center gap-2">
+                  <span>消化予算</span>
+                  <DataSourceTags sources={['ad_console']} />
+                </span>
                 <CostPlanEditButton
                   month={data!.month}
                   monthlyBudget={data!.monthlyTarget.cost}
@@ -327,6 +335,7 @@ export default function MonthlyCumulativePage() {
             formatTooltip={(v) => jpyFormat.format(v)}
             actualLabel="実績累計"
             targetLabel="目標累計"
+            sources={['contract']}
           />
           <CumChart
             title="売上"
@@ -337,6 +346,7 @@ export default function MonthlyCumulativePage() {
             formatTooltip={(v) => jpyFormat.format(v)}
             actualLabel="実績累計"
             targetLabel="目標累計"
+            sources={['contract']}
           />
         </div>
       )}
@@ -357,6 +367,7 @@ type CumChartProps = {
   actualLabel: string;
   targetLabel: string;
   note?: string;
+  sources?: SourceTagKey[];
 };
 
 function CumChart({
@@ -369,11 +380,15 @@ function CumChart({
   actualLabel,
   targetLabel,
   note,
+  sources,
 }: CumChartProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle className="text-base flex items-center gap-2">
+          <span>{title}</span>
+          {sources && sources.length > 0 && <DataSourceTags sources={sources} />}
+        </CardTitle>
         {note && <p className="text-[11px] text-muted-foreground/70 mt-1">{note}</p>}
       </CardHeader>
       <CardContent>

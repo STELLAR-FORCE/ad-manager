@@ -520,6 +520,7 @@ export default function CampaignsPage() {
             <DataSourceTooltip
               info={{
                 label: 'キャンペーン一覧',
+                sources: ['ad_console'],
                 source:
                   'BigQuery (ad_manager.adm_campaigns × adm_daily_metrics)',
                 filters: '画面上の媒体 / 種別 / ステータス / 期間で絞り込み',

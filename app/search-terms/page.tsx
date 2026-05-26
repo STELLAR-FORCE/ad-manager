@@ -160,6 +160,7 @@ export default function SearchTermsPage() {
             <DataSourceTooltip
               info={{
                 label: '検索語句分析',
+                sources: ['ad_console'],
                 source: 'BigQuery (ad_manager.adm_search_term_reports)',
                 filters: '画面上の媒体 / ステータスで絞り込み。is_excluded=true は除外候補',
                 target:

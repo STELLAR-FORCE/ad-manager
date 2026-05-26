@@ -214,6 +214,7 @@ export default function KeywordsListPage() {
             <DataSourceTooltip
               info={{
                 label: 'キーワード一覧',
+                sources: ['ad_console'],
                 source: 'BigQuery (ad_manager.adm_keywords × adm_daily_metrics)',
                 filters: '検索キャンペーン限定 (ad_type=search)',
                 target:
