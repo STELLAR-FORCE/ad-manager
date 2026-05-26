@@ -15,6 +15,14 @@ export const jpyCompact = new Intl.NumberFormat('ja-JP', {
   maximumFractionDigits: 0,
 });
 
+/** ¥2.05億 のように小数点 2 桁まで精度を出す compact 表記。大きい数値カード用 */
+export const jpyCompact2 = new Intl.NumberFormat('ja-JP', {
+  style: 'currency',
+  currency: 'JPY',
+  notation: 'compact',
+  maximumFractionDigits: 2,
+});
+
 export const numFormat = new Intl.NumberFormat('ja-JP');
 
 export const pctFormat = new Intl.NumberFormat('ja-JP', {

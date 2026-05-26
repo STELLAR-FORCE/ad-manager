@@ -137,11 +137,11 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
           value={cvAchievement}
           maxValue={100}
           color={statusFromAchievement(data.cv, data.cvTarget) === 'good' ? 'success' : statusFromAchievement(data.cv, data.cvTarget) === 'warn' ? 'warning' : 'danger'}
-          aria-label="CV 達成率"
+          aria-label="成約数 達成率"
           className="w-full"
         >
           <div className="flex items-center justify-between mb-1">
-            <Label className="text-xs font-medium text-muted-foreground">CV</Label>
+            <Label className="text-xs font-medium text-muted-foreground">成約数</Label>
             <div className="flex items-center gap-1.5 text-xs tabular-nums">
               {arrow(data.cv, data.cvTarget)}
               <span className="font-semibold">{numFormat.format(data.cv)}</span>
@@ -161,11 +161,11 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
           value={roomAchievement}
           maxValue={100}
           color={statusFromAchievement(data.rooms, data.roomTarget) === 'good' ? 'success' : statusFromAchievement(data.rooms, data.roomTarget) === 'warn' ? 'warning' : 'danger'}
-          aria-label="室数 達成率"
+          aria-label="成約室数 達成率"
           className="w-full"
         >
           <div className="flex items-center justify-between mb-1">
-            <Label className="text-xs font-medium text-muted-foreground">室数</Label>
+            <Label className="text-xs font-medium text-muted-foreground">成約室数</Label>
             <div className="flex items-center gap-1.5 text-xs tabular-nums">
               {arrow(data.rooms, data.roomTarget)}
               <span className="font-semibold">{numFormat.format(data.rooms)}</span>

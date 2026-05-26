@@ -14,6 +14,7 @@ import type { DateRangeValue } from '@/components/ui/date-range-picker';
 import type { SfOpportunitySummary, SfLeadSummary } from '@/lib/types/salesforce';
 import { cn } from '@/lib/utils';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
+import { DataSourceTags } from '@/components/ui/data-source-tags';
 
 const numFormat = new Intl.NumberFormat('ja-JP');
 const jpyFormat = new Intl.NumberFormat('ja-JP', {
@@ -235,10 +236,12 @@ export function IntegratedFunnel({
             <div className="col-span-3 flex items-center gap-2">
               <span className="size-1.5 rounded-full bg-indigo-500" aria-hidden="true" />
               広告フェーズ
+              <DataSourceTags sources={['ad_console']} />
             </div>
             <div className="col-span-3 flex items-center gap-2">
               <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-              営業フェーズ（Salesforce）
+              営業フェーズ
+              <DataSourceTags sources={['lead', 'opportunity', 'contract']} />
             </div>
           </div>
 
@@ -372,36 +375,37 @@ function FunnelStage({
             )}
           </p>
         </div>
-        {!isFirst && rate != null && (
-          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <ArrowRight className="size-2.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">
-              <span className="opacity-70">{rate.label}</span>{' '}
-              <span className="tabular-nums font-medium text-foreground/80">
-                {rate.value != null ? pctFormat.format(rate.value) : '—'}
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground min-h-[18px]">
+          {!isFirst && rate != null && (
+            <>
+              <ArrowRight className="size-2.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                <span className="opacity-70">{rate.label}</span>{' '}
+                <span className="tabular-nums font-medium text-foreground/80">
+                  {rate.value != null ? pctFormat.format(rate.value) : '—'}
+                </span>
               </span>
-            </span>
-            {rate.caveat && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      className="text-muted-foreground/60 hover:text-muted-foreground transition-colors shrink-0"
-                      aria-label={`${rate.label}の注釈`}
-                    />
-                  }
-                >
-                  <Info className="size-2.5" aria-hidden="true" />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs max-w-[260px]">
-                  {rate.caveat}
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        )}
-        {isFirst && <div className="h-[18px]" aria-hidden="true" />}
+              {rate.caveat && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="text-muted-foreground/60 hover:text-muted-foreground transition-colors shrink-0"
+                        aria-label={`${rate.label}の注釈`}
+                      />
+                    }
+                  >
+                    <Info className="size-2.5" aria-hidden="true" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs max-w-[260px]">
+                    {rate.caveat}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
