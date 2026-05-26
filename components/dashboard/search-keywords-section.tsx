@@ -152,6 +152,7 @@ function CvKeywordList({ items }: { items: CvKeywordItem[] }) {
         <DataSourceTooltip
           info={{
             label: 'CV あり語句',
+            sources: ['ad_console'],
             source: 'BigQuery (ad_manager.adm_search_term_reports)',
             filters:
               'is_excluded=false。マンスリ/ウィークリ系も含む (1 行に折り畳み)',
@@ -229,6 +230,7 @@ function NewKeywordList({ items }: { items: NewKeywordItem[] }) {
         <DataSourceTooltip
           info={{
             label: '新規語句',
+            sources: ['ad_console'],
             source: 'BigQuery (ad_manager.adm_search_term_reports)',
             filters:
               'is_excluded=false + キラーワード (マンスリ/ウィークリ系) 除外',

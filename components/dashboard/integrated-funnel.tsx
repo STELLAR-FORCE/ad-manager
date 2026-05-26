@@ -214,6 +214,7 @@ export function IntegratedFunnel({
           <DataSourceTooltip
             info={{
               label: '広告 → 営業 統合ファネル',
+              sources: ['ad_console', 'lead', 'opportunity', 'contract'],
               source:
                 'BigQuery (ad_manager.adm_daily_metrics) + Salesforce (mart.salesforce_all_obj)',
               filters:

@@ -235,6 +235,7 @@ export default function CvBasedPage() {
             <DataSourceTooltip
               info={{
                 label: '月別 CV / 成約 / 粗利 / 売上',
+                sources: ['lead', 'contract'],
                 source:
                   'Salesforce (mart.salesforce_all_obj) + BigQuery 広告メトリクス (CV_BASED_SQL)',
                 filters: 'LP フィルタなし (全リード対象)',
@@ -296,6 +297,7 @@ export default function CvBasedPage() {
             <DataSourceTooltip
               info={{
                 label: '媒体 × 月 詳細',
+                sources: ['lead', 'contract', 'ad_console'],
                 source:
                   'Salesforce (mart.salesforce_all_obj) + BigQuery 広告メトリクス (CV_BASED_SQL)',
                 filters:

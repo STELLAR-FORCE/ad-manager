@@ -62,6 +62,7 @@ export function LeadActivityFeed() {
           <DataSourceTooltip
             info={{
               label: '直近 7 日の新規依頼',
+              sources: ['lead'],
               source: 'Salesforce (mart.salesforce_all_obj)',
               filters:
                 'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)',

@@ -17,12 +17,15 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { DataSourceTags, type SourceTagKey } from '@/components/ui/data-source-tags';
 
 export type DataSourceInfo = {
   /** 表題（指標名など）。省略すると見出し行を出さない */
   label?: string;
   /** データソース。例: "Salesforce (mart.salesforce_all_obj)" */
   source: string;
+  /** 参照ソースのタグ。リード/契約管理/案件/広告管理画面 のどれを参照しているか (常時 Chip 表示) */
+  sources?: SourceTagKey[];
   /** 適用しているフィルタ。例: "LP 経由のみ"。省略可 */
   filters?: string;
   /** 集計対象。例: "必要戸数_数値 の合計" */
@@ -56,35 +59,43 @@ export function DataSourceTooltip({
   className?: string;
 }) {
   return (
-    <TooltipProvider delay={150}>
-      <Tooltip>
-        <TooltipTrigger
-          aria-label={ariaLabel ?? `${info.label ?? 'データ'} のデータソース`}
-          className={cn(
-            'inline-flex items-center justify-center rounded-full text-muted-foreground/40 hover:text-muted-foreground transition-colors cursor-help',
-            className,
-          )}
-        >
-          <Info className="h-3 w-3" aria-hidden="true" />
-        </TooltipTrigger>
-        <TooltipContent
-          side="top"
-          className="max-w-sm text-left flex-col items-stretch gap-0.5 px-3 py-2 whitespace-normal"
-        >
-          {info.label && (
-            <p className="font-semibold text-[11px] mb-1">{info.label}</p>
-          )}
-          <Row label="ソース" value={info.source} />
-          {info.filters && <Row label="フィルタ" value={info.filters} />}
-          <Row label="対象" value={info.target} />
-          {info.period && <Row label="期間" value={info.period} />}
-          {info.axis && <Row label="軸" value={info.axis} />}
-          {info.cache && <Row label="更新" value={info.cache} />}
-          {info.note && (
-            <p className="pt-1 text-[10px] opacity-70">※ {info.note}</p>
-          )}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <span className="inline-flex items-center gap-1.5">
+      {info.sources && info.sources.length > 0 && <DataSourceTags sources={info.sources} />}
+      <TooltipProvider delay={150}>
+        <Tooltip>
+          <TooltipTrigger
+            aria-label={ariaLabel ?? `${info.label ?? 'データ'} のデータソース`}
+            className={cn(
+              'inline-flex items-center justify-center rounded-full text-muted-foreground/40 hover:text-muted-foreground transition-colors cursor-help',
+              className,
+            )}
+          >
+            <Info className="h-3 w-3" aria-hidden="true" />
+          </TooltipTrigger>
+          <TooltipContent
+            side="top"
+            className="max-w-sm text-left flex-col items-stretch gap-0.5 px-3 py-2 whitespace-normal"
+          >
+            {info.label && (
+              <p className="font-semibold text-[11px] mb-1">{info.label}</p>
+            )}
+            {info.sources && info.sources.length > 0 && (
+              <div className="mb-1.5">
+                <DataSourceTags sources={info.sources} />
+              </div>
+            )}
+            <Row label="ソース" value={info.source} />
+            {info.filters && <Row label="フィルタ" value={info.filters} />}
+            <Row label="対象" value={info.target} />
+            {info.period && <Row label="期間" value={info.period} />}
+            {info.axis && <Row label="軸" value={info.axis} />}
+            {info.cache && <Row label="更新" value={info.cache} />}
+            {info.note && (
+              <p className="pt-1 text-[10px] opacity-70">※ {info.note}</p>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </span>
   );
 }

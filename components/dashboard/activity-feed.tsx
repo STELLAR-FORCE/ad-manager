@@ -52,6 +52,7 @@ export function ActivityFeed() {
           <DataSourceTooltip
             info={{
               label: '直近 7 日の新規成約',
+              sources: ['lead', 'contract'],
               source: 'Salesforce (mart.salesforce_all_obj)',
               filters:
                 'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site) + 契約管理ID NOT NULL',

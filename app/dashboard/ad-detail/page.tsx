@@ -797,6 +797,7 @@ export default function DashboardPage() {
               <DataSourceTooltip
                 info={{
                   label: '広告詳細',
+                  sources: ['ad_console', 'lead', 'contract'],
                   source:
                     'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns) + Salesforce (mart.salesforce_all_obj)',
                   filters: '画面上の媒体・種別・期間で絞り込み可能',
@@ -933,6 +934,7 @@ export default function DashboardPage() {
             title="総費用"
             info={{
               label: '総費用',
+              sources: ['ad_console'],
               source: 'BigQuery (ad_manager.adm_daily_metrics)',
               filters: '画面上の媒体 / 種別 / 期間で絞り込み',
               target: 'SUM(cost) — 広告日次メトリクスの cost 合計',
@@ -971,6 +973,7 @@ export default function DashboardPage() {
             title="CV数"
             info={{
               label: 'CV数 (広告コンバージョン)',
+              sources: ['ad_console'],
               source: 'BigQuery (ad_manager.adm_daily_metrics)',
               filters: '画面上の媒体 / 種別 / 期間で絞り込み',
               target: 'SUM(conversions) — 広告日次の CV (媒体側計上値)',
@@ -1011,6 +1014,7 @@ export default function DashboardPage() {
             title="CPA"
             info={{
               label: 'CPA (広告)',
+              sources: ['ad_console'],
               source: 'BigQuery (ad_manager.adm_daily_metrics)',
               filters: '画面上の媒体 / 種別 / 期間で絞り込み',
               target: 'SUM(cost) ÷ SUM(conversions) — 広告 CV あたりの費用',
@@ -1056,6 +1060,7 @@ export default function DashboardPage() {
             title="CVR"
             info={{
               label: 'CVR (クリック → CV 率)',
+              sources: ['ad_console'],
               source: 'BigQuery (ad_manager.adm_daily_metrics)',
               filters: '画面上の媒体 / 種別 / 期間で絞り込み',
               target: 'SUM(conversions) ÷ SUM(clicks) — クリック単位の CV 率',
@@ -1095,6 +1100,7 @@ export default function DashboardPage() {
                   <DataSourceTooltip
                     info={{
                       label: 'CPA推移',
+                      sources: ['ad_console'],
                       source: 'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns)',
                       filters: '画面上の媒体・種別・期間で絞り込み',
                       target: '日別 cost ÷ conversions を媒体ごとに線描画',
@@ -1273,6 +1279,7 @@ export default function DashboardPage() {
                   <DataSourceTooltip
                     info={{
                       label: 'CV推移',
+                      sources: ['ad_console'],
                       source: 'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns)',
                       filters: '画面上の媒体・種別・期間で絞り込み',
                       target: '日別 SUM(conversions) を媒体ごとに線/積み上げ描画',
@@ -1558,6 +1565,7 @@ export default function DashboardPage() {
                     <DataSourceTooltip
                       info={{
                         label: `${PLATFORM_LABELS[s.platform]} 媒体別`,
+                        sources: ['ad_console'],
                         source:
                           'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns)',
                         filters: `platform = ${s.platform}。画面上の種別 / 期間で絞り込み`,

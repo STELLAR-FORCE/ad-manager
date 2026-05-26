@@ -159,6 +159,7 @@ export function MediaBreakdownCard() {
           <DataSourceTooltip
             info={{
               label: '媒体ブレイクダウン',
+              sources: ['ad_console'],
               source: 'BigQuery (ad_manager.adm_daily_metrics × adm_campaigns)',
               filters: 'platform ∈ {google, yahoo, bing} / ad_type ∈ {search, display}',
               target:

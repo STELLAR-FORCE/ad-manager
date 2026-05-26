@@ -327,6 +327,7 @@ export default function MoveInPivotPage() {
             <DataSourceTooltip
               info={{
                 label: '入居日ベース',
+                sources: ['lead', 'contract'],
                 source: 'Salesforce (mart.salesforce_all_obj)',
                 filters:
                   'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)',
@@ -453,6 +454,7 @@ export default function MoveInPivotPage() {
               <DataSourceTooltip
                 info={{
                   label: '入居月別サマリー (ピボット)',
+                  sources: ['lead', 'contract'],
                   source: 'Salesforce (mart.salesforce_all_obj) /api/dashboard/move-in/pivot',
                   filters: 'LP 経由のみ',
                   target:
