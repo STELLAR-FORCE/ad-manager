@@ -192,24 +192,58 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
             <span className="text-xl font-bold tabular-nums">{jpyCompact.format(forecastTotal)}</span>
             <span className="text-xs text-muted-foreground">({pct(forecastTotal, data.grossProfitTarget)})</span>
           </div>
-          <Meter
-            value={grossAchievement}
-            maxValue={100}
-            color={STATUS_COLOR[status]}
-            aria-label="粗利 達成率"
-            className="w-full"
-          >
-            <Meter.Track>
-              <Meter.Fill />
-            </Meter.Track>
-          </Meter>
+          {/* 確定/進行中 を積み上げ進捗バーで可視化 (目標 = 100% 幅) */}
+          {data.grossProfitTarget != null && data.grossProfitTarget > 0 && (
+            <div
+              className="h-2 w-full overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-label="予想粗利 内訳 (確定 / 進行中)"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.min(100, (forecastTotal / data.grossProfitTarget) * 100)}
+            >
+              <div className="flex h-full w-full">
+                <div
+                  className="bg-emerald-500"
+                  style={{
+                    width: `${Math.min(100, (data.confirmedGrossProfit / data.grossProfitTarget) * 100)}%`,
+                  }}
+                />
+                <div
+                  className="bg-emerald-300/70"
+                  style={{
+                    width: `${Math.min(
+                      Math.max(0, 100 - (data.confirmedGrossProfit / data.grossProfitTarget) * 100),
+                      (data.pipelineForecastGrossProfit / data.grossProfitTarget) * 100,
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] tabular-nums">
             <div>
-              <span className="text-muted-foreground">確定</span>
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <span className="block size-2 rounded-sm bg-emerald-500" aria-hidden="true" />
+                確定
+                {forecastTotal > 0 && (
+                  <span className="opacity-70">
+                    ({pctFormat.format(data.confirmedGrossProfit / forecastTotal)})
+                  </span>
+                )}
+              </div>
               <div className="font-semibold">{jpyCompact.format(data.confirmedGrossProfit)}</div>
             </div>
             <div>
-              <span className="text-muted-foreground">進行中（加重）</span>
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <span className="block size-2 rounded-sm bg-emerald-300/70" aria-hidden="true" />
+                進行中（加重）
+                {forecastTotal > 0 && (
+                  <span className="opacity-70">
+                    ({pctFormat.format(data.pipelineForecastGrossProfit / forecastTotal)})
+                  </span>
+                )}
+              </div>
               <div className="font-semibold">{jpyCompact.format(data.pipelineForecastGrossProfit)}</div>
               <div className="text-muted-foreground text-[10px]">
                 紹介後 {numFormat.format(data.introducedRooms)}室・早期 {numFormat.format(data.earlyRooms)}室

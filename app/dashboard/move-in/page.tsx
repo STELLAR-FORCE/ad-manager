@@ -408,23 +408,57 @@ export default function MoveInPivotPage() {
                   )}
                 </div>
                 {periodTotal.target > 0 && (
-                  <Meter
-                    aria-label="期間合計 達成率"
-                    value={Math.min(100, (periodTotal.forecastTotal / periodTotal.target) * 100)}
-                    maxValue={100}
-                    color={
-                      periodTotal.forecastTotal >= periodTotal.target
-                        ? 'success'
-                        : periodTotal.forecastTotal / periodTotal.target >= 0.7
-                          ? 'warning'
-                          : 'danger'
-                    }
-                    className="mt-2 w-full"
-                  >
-                    <Meter.Track>
-                      <Meter.Fill />
-                    </Meter.Track>
-                  </Meter>
+                  <>
+                    <div
+                      className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted"
+                      role="progressbar"
+                      aria-label="予想粗利 内訳 (確定 / 進行中)"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.min(
+                        100,
+                        ((periodTotal.confirmed + periodTotal.pipeline) / periodTotal.target) * 100,
+                      )}
+                    >
+                      <div className="flex h-full w-full">
+                        <div
+                          className="bg-emerald-500"
+                          style={{
+                            width: `${Math.min(100, (periodTotal.confirmed / periodTotal.target) * 100)}%`,
+                          }}
+                        />
+                        <div
+                          className="bg-emerald-300/70"
+                          style={{
+                            width: `${Math.min(
+                              Math.max(0, 100 - (periodTotal.confirmed / periodTotal.target) * 100),
+                              (periodTotal.pipeline / periodTotal.target) * 100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground tabular-nums">
+                      <span className="flex items-center gap-1">
+                        <span className="block size-2 rounded-sm bg-emerald-500" aria-hidden="true" />
+                        確定 {jpyCompact2.format(periodTotal.confirmed)}
+                        {periodTotal.forecastTotal > 0 && (
+                          <span className="opacity-70">
+                            ({pctFormat.format(periodTotal.confirmed / periodTotal.forecastTotal)})
+                          </span>
+                        )}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="block size-2 rounded-sm bg-emerald-300/70" aria-hidden="true" />
+                        進行中 {jpyCompact2.format(periodTotal.pipeline)}
+                        {periodTotal.forecastTotal > 0 && (
+                          <span className="opacity-70">
+                            ({pctFormat.format(periodTotal.pipeline / periodTotal.forecastTotal)})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </>
                 )}
               </div>
               <div>
