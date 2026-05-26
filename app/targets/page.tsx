@@ -55,10 +55,10 @@ type EditableRow = TargetRow & { dirty: boolean; saving: boolean; error?: string
 const TODAY = new Date();
 const VISIBLE_MONTHS = 12;
 
-/** 当月から前後 6 ヶ月の month キー（'YYYY-MM'）を生成 */
+/** 当年 1 月起点で 12 ヶ月分の month キー（'YYYY-MM'）を生成 */
 function defaultMonths(): string[] {
   const months: string[] = [];
-  const base = new Date(TODAY.getFullYear(), TODAY.getMonth() - 3, 1);
+  const base = new Date(TODAY.getFullYear(), 0, 1);
   for (let i = 0; i < VISIBLE_MONTHS; i++) {
     const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);

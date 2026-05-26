@@ -94,9 +94,17 @@ function buildCumulative(
   revenueTargetCum: number | null;
 }> {
   const n = days.length;
-  // cost_plan_daily にデータがあるか判定 (累計 > 0)
+  // 消化予定線:
+  //   - cost_plan_daily に入力がある日 = その値
+  //   - 入力がない日 = (monthly_budget - 入力済み合計) を空き日数で線形按分
+  //   - 月予算 (monthlyTarget.cost) と cost_plan_daily 合計の大きい方を月末ゴールとする
   const totalPlanned = days.reduce((s, d) => s + d.plannedCost, 0);
-  const hasPlannedDaily = totalPlanned > 0;
+  const monthlyBudget = monthlyTarget.cost ?? 0;
+  const effectiveTotal = Math.max(monthlyBudget, totalPlanned);
+  const filledDays = days.reduce((s, d) => s + (d.plannedCost > 0 ? 1 : 0), 0);
+  const emptyDays = n - filledDays;
+  const remainingBudget = Math.max(0, effectiveTotal - totalPlanned);
+  const perEmptyDay = emptyDays > 0 ? remainingBudget / emptyDays : 0;
 
   let cvCum = 0;
   let cvRoomsCum = 0;
@@ -112,16 +120,13 @@ function buildCumulative(
     costCum += d.cost;
     grossProfitCum += d.grossProfit;
     revenueCum += d.revenue;
-    plannedCostCum += d.plannedCost;
+    const effectivePlanForDay = d.plannedCost > 0 ? d.plannedCost : perEmptyDay;
+    plannedCostCum += effectivePlanForDay;
     // 目標は月内日数で線形按分 ((i+1) / n)、整数指標は四捨五入で表示
     const ratio = (i + 1) / n;
     const proRated = (total: number | null) =>
       total == null ? null : Math.round(total * ratio);
-    const costPlanCum = hasPlannedDaily
-      ? plannedCostCum
-      : monthlyTarget.cost == null
-        ? null
-        : Math.round(monthlyTarget.cost * ratio);
+    const costPlanCum = effectiveTotal === 0 ? null : Math.round(plannedCostCum);
     return {
       date: d.date,
       day: Number(d.date.slice(8, 10)),
