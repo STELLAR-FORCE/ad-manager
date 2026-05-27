@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Meter, Label, Chip } from '@heroui/react';
+import { Chip } from '@heroui/react';
 import { TrendingDown, TrendingUp, Minus, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { jpyCompact, numFormat, pctFormat, formatMonthLabel } from '@/lib/format';
@@ -20,6 +20,10 @@ export type MoveInSummaryCardData = {
   cvTarget: number | null;
   rooms: number;
   roomTarget: number | null;
+  /** 成約数 (契約管理ベース)。CV のうち成約済みを歩留まりバーで重ねる */
+  wonCv: number;
+  /** 成約室数 (契約管理ベース) */
+  wonRooms: number;
   confirmedGrossProfit: number;
   pipelineForecastGrossProfit: number;
   grossProfitTarget: number | null;
@@ -97,15 +101,79 @@ function arrow(actual: number, target: number | null) {
   return <TrendingDown className="h-3.5 w-3.5 text-rose-600" aria-hidden="true" />;
 }
 
+/**
+ * 達成率バー内での「成約 / 未成約」の幅 (%)。目標を 100% 幅とする。
+ * 目標が無い場合は CV 合計を 100% として歩留まり比率で表示。
+ */
+function yieldWidths(won: number, total: number, target: number | null): { won: number; rest: number } {
+  if (target == null || target <= 0) {
+    if (total <= 0) return { won: 0, rest: 0 };
+    return { won: (won / total) * 100, rest: ((total - won) / total) * 100 };
+  }
+  const wonW = Math.min(100, (won / target) * 100);
+  const restW = Math.min(Math.max(0, 100 - wonW), (Math.max(0, total - won) / target) * 100);
+  return { won: wonW, rest: restW };
+}
+
+/** CV数 / CV室数 を「成約(濃) / 未成約(淡)」の歩留まり積み上げバーで表示 */
+function YieldBar({
+  label,
+  won,
+  total,
+  target,
+}: {
+  label: string;
+  won: number;
+  total: number;
+  target: number | null;
+}) {
+  const w = yieldWidths(won, total, target);
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <div className="flex items-center gap-1.5 text-xs tabular-nums">
+          {arrow(total, target)}
+          <span className="font-semibold">{numFormat.format(total)}</span>
+          <span className="text-muted-foreground">
+            / {target != null ? numFormat.format(target) : '—'}
+          </span>
+          <span className="text-muted-foreground">({pct(total, target)})</span>
+        </div>
+      </div>
+      <div
+        className="h-2 w-full overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label={`${label} (成約 / 未成約)`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(w.won + w.rest)}
+      >
+        <div className="flex h-full w-full">
+          <div className="bg-emerald-500" style={{ width: `${w.won}%` }} />
+          <div className="bg-emerald-300/70" style={{ width: `${w.rest}%` }} />
+        </div>
+      </div>
+      <div className="mt-1 flex items-center gap-3 text-[10px] text-muted-foreground tabular-nums">
+        <span className="flex items-center gap-1">
+          <span className="block size-2 rounded-sm bg-emerald-500" aria-hidden="true" />
+          成約 {numFormat.format(won)}
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="block size-2 rounded-sm bg-emerald-300/70" aria-hidden="true" />
+          未成約 {numFormat.format(Math.max(0, total - won))}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function MoveInSummaryCard({ data, today = new Date() }: Props) {
   const [expanded, setExpanded] = useState(false);
   const forecastTotal = data.confirmedGrossProfit + data.pipelineForecastGrossProfit;
   const status = statusFromAchievement(forecastTotal, data.grossProfitTarget);
   const days = daysUntilMoveIn(data.moveInMonth, today);
   const phase = leadTimePhase(days);
-
-  const cvAchievement = data.cvTarget && data.cvTarget > 0 ? Math.min(100, (data.cv / data.cvTarget) * 100) : 0;
-  const roomAchievement = data.roomTarget && data.roomTarget > 0 ? Math.min(100, (data.rooms / data.roomTarget) * 100) : 0;
 
   const unitPriceRatio =
     data.actualUnitPriceMedian == null || data.assumedUnitPrice === 0
@@ -130,6 +198,10 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
             </Chip>
           </div>
         </div>
+
+        {/* CV数 / CV室数 (成約/未成約の歩留まりバー・簡易表示) */}
+        <YieldBar label="CV数" won={data.wonCv} total={data.cv} target={data.cvTarget} />
+        <YieldBar label="CV室数" won={data.wonRooms} total={data.rooms} target={data.roomTarget} />
 
         {/* 予想粗利 (簡易表示・常時) */}
         <div className="space-y-1.5 rounded-md border bg-muted/30 p-3">
@@ -188,57 +260,9 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
           {expanded ? '閉じる' : '詳細'}
         </button>
 
-        {/* 詳細 (成約数 / 成約室数 / 内訳 / 実態単価) */}
+        {/* 詳細 (確定/見込 内訳 / 実態単価) */}
         {expanded && (
           <div className="flex flex-col gap-4">
-            {/* 成約数 達成 */}
-            <Meter
-              value={cvAchievement}
-              maxValue={100}
-              color={statusFromAchievement(data.cv, data.cvTarget) === 'good' ? 'success' : statusFromAchievement(data.cv, data.cvTarget) === 'warn' ? 'warning' : 'danger'}
-              aria-label="成約数 達成率"
-              className="w-full"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <Label className="text-xs font-medium text-muted-foreground">成約数</Label>
-                <div className="flex items-center gap-1.5 text-xs tabular-nums">
-                  {arrow(data.cv, data.cvTarget)}
-                  <span className="font-semibold">{numFormat.format(data.cv)}</span>
-                  <span className="text-muted-foreground">
-                    / {data.cvTarget != null ? numFormat.format(data.cvTarget) : '—'}
-                  </span>
-                  <span className="text-muted-foreground">({pct(data.cv, data.cvTarget)})</span>
-                </div>
-              </div>
-              <Meter.Track>
-                <Meter.Fill />
-              </Meter.Track>
-            </Meter>
-
-            {/* 成約室数 達成 */}
-            <Meter
-              value={roomAchievement}
-              maxValue={100}
-              color={statusFromAchievement(data.rooms, data.roomTarget) === 'good' ? 'success' : statusFromAchievement(data.rooms, data.roomTarget) === 'warn' ? 'warning' : 'danger'}
-              aria-label="成約室数 達成率"
-              className="w-full"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <Label className="text-xs font-medium text-muted-foreground">成約室数</Label>
-                <div className="flex items-center gap-1.5 text-xs tabular-nums">
-                  {arrow(data.rooms, data.roomTarget)}
-                  <span className="font-semibold">{numFormat.format(data.rooms)}</span>
-                  <span className="text-muted-foreground">
-                    / {data.roomTarget != null ? numFormat.format(data.roomTarget) : '—'}
-                  </span>
-                  <span className="text-muted-foreground">({pct(data.rooms, data.roomTarget)})</span>
-                </div>
-              </div>
-              <Meter.Track>
-                <Meter.Fill />
-              </Meter.Track>
-            </Meter>
-
             {/* 確定 / 見込 内訳 */}
             <div className="grid grid-cols-2 gap-2 text-[11px] tabular-nums">
               <div>

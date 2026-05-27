@@ -4,7 +4,7 @@
  * 月次累計推移
  *
  * 指定月（デフォルト今月）の日次データを「累計（実績）」と「目標累計（破線）」で
- * グラフ表示する。CV / CV 室数 / ルームデイズ / 消化予算 / 粗利 / 売上 の 6 指標を
+ * グラフ表示する。CV / CV 室数 / ルームデイズ / 消化予算 / 粗利 の 5 指標を
  * 2 列で表示。軸 (発生日 / 入居日) と 月セレクタで切り替え可能。
  *
  * URL は /dashboard/cv-daily のまま（サイドバーのラベルは「月次累計推移」）。
@@ -331,17 +331,6 @@ export default function MonthlyCumulativePage() {
             data={chartData}
             actualKey="grossProfitCum"
             targetKey="grossProfitTargetCum"
-            formatTick={(v) => jpyCompact.format(v)}
-            formatTooltip={(v) => jpyFormat.format(v)}
-            actualLabel="実績累計"
-            targetLabel="目標累計"
-            sources={['contract']}
-          />
-          <CumChart
-            title="売上"
-            data={chartData}
-            actualKey="revenueCum"
-            targetKey="revenueTargetCum"
             formatTick={(v) => jpyCompact.format(v)}
             formatTooltip={(v) => jpyFormat.format(v)}
             actualLabel="実績累計"
