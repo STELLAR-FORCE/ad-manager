@@ -78,11 +78,10 @@ function axisDateColumn(axis: Axis): string {
  * このダッシュボードは LP 経由のみを対象とするので、Salesforce 由来の集計には
  * すべて LP_LEAD_FILTER_SQL を適用する（流入元_LP反響 ∈ monthly-order/express/standard/site）。
  *
- * 重要 (Issue #97): mart は契約管理単位で行展開されているため、リード単位の集計
- * (cv / cv_rooms / room_days) はサブクエリで先にリード単位に集約してから集計する。
- *
- * 粗利は契約管理単位の値なので SUM のままで OK（複数契約合算）。
- * 成約数は元から COUNT DISTINCT リードID で対応済。
+ * 重要 (Issue #97 / #118): mart は契約管理ID 以外でも行展開されているため、
+ * リード単位の集計 (cv / cv_rooms / room_days) はリードID で、粗利は契約管理ID で
+ * それぞれサブクエリで先に集約してから合算する。
+ * 成約数は元から COUNT DISTINCT リードID 相当 (has_contract) で対応済。
  *
  * `利用期間_日数` は SF 側で既に「日数 × 必要戸数」で算出される計算項目。
  */
@@ -101,10 +100,17 @@ function buildAggregateSql(axis: Axis): string {
       GROUP BY lead_id
     ),
     gross AS (
-      SELECT IFNULL(SUM(${SF_COLS.grossProfit}), 0) AS gross_profit
-      FROM ${SF_MART}
-      WHERE DATE(${dateCol}) BETWEEN DATE(@start) AND DATE(@end)
-        AND ${LP_LEAD_FILTER_SQL}
+      SELECT IFNULL(SUM(gp), 0) AS gross_profit
+      FROM (
+        SELECT
+          ${SF_COLS.contractId} AS contract_id,
+          ANY_VALUE(${SF_COLS.grossProfit}) AS gp
+        FROM ${SF_MART}
+        WHERE DATE(${dateCol}) BETWEEN DATE(@start) AND DATE(@end)
+          AND ${LP_LEAD_FILTER_SQL}
+          AND ${SF_COLS.contractId} IS NOT NULL
+        GROUP BY contract_id
+      )
     )
     SELECT
       (SELECT gross_profit FROM gross) AS gross_profit,

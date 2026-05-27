@@ -150,16 +150,26 @@ export async function GET(request: Request) {
         ORDER BY date
       `;
 
-      // 粗利・売上 (契約管理単位の確定値。行単位 SUM で OK)
-      // axis に応じた日付列でフィルタ
+      // 粗利・売上 (契約管理単位の確定値)
+      // mart は契約管理ID 以外でも行展開されるため (#118)、契約管理単位で
+      // 重複除去してから日別に合算する
       const sfGrossSql = `
         SELECT
-          DATE(${dateCol}) AS date,
-          SUM(IFNULL(${SF_COLS.grossProfit}, 0)) AS gross_profit,
-          SUM(IFNULL(${SF_COLS.revenue}, 0)) AS revenue
-        FROM ${SF_MART}
-        WHERE DATE(${dateCol}) BETWEEN DATE(@startDate) AND DATE(@endDate)
-          AND ${LP_LEAD_FILTER_SQL}
+          date,
+          SUM(IFNULL(gross_profit, 0)) AS gross_profit,
+          SUM(IFNULL(revenue, 0)) AS revenue
+        FROM (
+          SELECT
+            ${SF_COLS.contractId} AS contract_id,
+            ANY_VALUE(DATE(${dateCol})) AS date,
+            ANY_VALUE(${SF_COLS.grossProfit}) AS gross_profit,
+            ANY_VALUE(${SF_COLS.revenue}) AS revenue
+          FROM ${SF_MART}
+          WHERE DATE(${dateCol}) BETWEEN DATE(@startDate) AND DATE(@endDate)
+            AND ${LP_LEAD_FILTER_SQL}
+            AND ${SF_COLS.contractId} IS NOT NULL
+          GROUP BY contract_id
+        )
         GROUP BY date
         ORDER BY date
       `;
