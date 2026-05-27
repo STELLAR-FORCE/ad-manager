@@ -12,15 +12,19 @@ import { ActivityFeed } from '@/components/dashboard/activity-feed';
 import { LeadActivityFeed } from '@/components/dashboard/lead-activity-feed';
 import { SearchKeywordsSection } from '@/components/dashboard/search-keywords-section';
 import { MediaBreakdownCard } from '@/components/dashboard/media-breakdown-card';
+import { AlertCenter } from '@/components/dashboard/alert-center';
 
 export default function DashboardPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">ダッシュボード</h1>
-        <p className="text-xs text-muted-foreground/70 mt-0.5">
-          直近の動きと進捗のサマリー。詳細は左メニューの「広告詳細」「入居日ベース」「CV発生日ベース」などから。
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">ダッシュボード</h1>
+          <p className="text-xs text-muted-foreground/70 mt-0.5">
+            直近の動きと進捗のサマリー。詳細は左メニューの「広告詳細」「入居日ベース」「CV発生日ベース」などから。
+          </p>
+        </div>
+        <AlertCenter />
       </div>
 
       {/* 進捗ビュー（期間タブ切替: 今週 / 今月 / Q / 半期 / 年次） */}
