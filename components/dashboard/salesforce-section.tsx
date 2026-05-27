@@ -305,13 +305,13 @@ export function SalesforceSection({ dateRange }: { dateRange: DateRangeValue }) 
           }}
         />
         <SfKpiCard
-          title="Win率"
+          title="成約率"
           icon={Percent}
           state={summary}
           render={(d) => (d.winRate != null ? pct1Format.format(d.winRate) : '—')}
-          subRender={() => '成立 / (成立 + 失注)'}
+          subRender={() => '成約 / (成約 + 失注)'}
           info={{
-            label: 'Win率',
+            label: '成約率',
             sources: ['opportunity'],
             source: 'Salesforce (mart.salesforce_all_obj)',
             filters: 'LP 経由のみ',

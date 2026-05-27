@@ -192,7 +192,7 @@ export function IntegratedFunnel({
     },
     {
       key: 'win_rate',
-      label: 'Win 率',
+      label: '成約率',
       value: sfSummary?.winRate ?? null,
       caveat: '成約 ÷ (成約 + 失注)',
     },

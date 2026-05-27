@@ -253,7 +253,7 @@ export default function SalesforcePage() {
               hint="失注＋キャンセル合計"
             />
             <KpiTile
-              label="Win 率"
+              label="成約率"
               value={summary.data.winRate != null ? fmtPct.format(summary.data.winRate) : '—'}
               hint="成約 ÷ (成約 + 失注)"
             />
