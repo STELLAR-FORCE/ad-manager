@@ -7,9 +7,10 @@
  * 営業/経営は時系列、マーケはリードタイム逆算で施策タイミングを判断する想定。
  */
 
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Meter, Label, Chip } from '@heroui/react';
-import { TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { TrendingDown, TrendingUp, Minus, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { jpyCompact, numFormat, pctFormat, formatMonthLabel } from '@/lib/format';
 
@@ -97,6 +98,7 @@ function arrow(actual: number, target: number | null) {
 }
 
 export function MoveInSummaryCard({ data, today = new Date() }: Props) {
+  const [expanded, setExpanded] = useState(false);
   const forecastTotal = data.confirmedGrossProfit + data.pipelineForecastGrossProfit;
   const status = statusFromAchievement(forecastTotal, data.grossProfitTarget);
   const days = daysUntilMoveIn(data.moveInMonth, today);
@@ -104,9 +106,6 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
 
   const cvAchievement = data.cvTarget && data.cvTarget > 0 ? Math.min(100, (data.cv / data.cvTarget) * 100) : 0;
   const roomAchievement = data.roomTarget && data.roomTarget > 0 ? Math.min(100, (data.rooms / data.roomTarget) * 100) : 0;
-  const grossAchievement = data.grossProfitTarget && data.grossProfitTarget > 0
-    ? Math.min(100, (forecastTotal / data.grossProfitTarget) * 100)
-    : 0;
 
   const unitPriceRatio =
     data.actualUnitPriceMedian == null || data.assumedUnitPrice === 0
@@ -132,55 +131,7 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
           </div>
         </div>
 
-        {/* CV 達成 */}
-        <Meter
-          value={cvAchievement}
-          maxValue={100}
-          color={statusFromAchievement(data.cv, data.cvTarget) === 'good' ? 'success' : statusFromAchievement(data.cv, data.cvTarget) === 'warn' ? 'warning' : 'danger'}
-          aria-label="成約数 達成率"
-          className="w-full"
-        >
-          <div className="flex items-center justify-between mb-1">
-            <Label className="text-xs font-medium text-muted-foreground">成約数</Label>
-            <div className="flex items-center gap-1.5 text-xs tabular-nums">
-              {arrow(data.cv, data.cvTarget)}
-              <span className="font-semibold">{numFormat.format(data.cv)}</span>
-              <span className="text-muted-foreground">
-                / {data.cvTarget != null ? numFormat.format(data.cvTarget) : '—'}
-              </span>
-              <span className="text-muted-foreground">({pct(data.cv, data.cvTarget)})</span>
-            </div>
-          </div>
-          <Meter.Track>
-            <Meter.Fill />
-          </Meter.Track>
-        </Meter>
-
-        {/* 室数 達成 */}
-        <Meter
-          value={roomAchievement}
-          maxValue={100}
-          color={statusFromAchievement(data.rooms, data.roomTarget) === 'good' ? 'success' : statusFromAchievement(data.rooms, data.roomTarget) === 'warn' ? 'warning' : 'danger'}
-          aria-label="成約室数 達成率"
-          className="w-full"
-        >
-          <div className="flex items-center justify-between mb-1">
-            <Label className="text-xs font-medium text-muted-foreground">成約室数</Label>
-            <div className="flex items-center gap-1.5 text-xs tabular-nums">
-              {arrow(data.rooms, data.roomTarget)}
-              <span className="font-semibold">{numFormat.format(data.rooms)}</span>
-              <span className="text-muted-foreground">
-                / {data.roomTarget != null ? numFormat.format(data.roomTarget) : '—'}
-              </span>
-              <span className="text-muted-foreground">({pct(data.rooms, data.roomTarget)})</span>
-            </div>
-          </div>
-          <Meter.Track>
-            <Meter.Fill />
-          </Meter.Track>
-        </Meter>
-
-        {/* 予想粗利 */}
+        {/* 予想粗利 (簡易表示・常時) */}
         <div className="space-y-1.5 rounded-md border bg-muted/30 p-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">予想粗利</span>
@@ -192,12 +143,12 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
             <span className="text-xl font-bold tabular-nums">{jpyCompact.format(forecastTotal)}</span>
             <span className="text-xs text-muted-foreground">({pct(forecastTotal, data.grossProfitTarget)})</span>
           </div>
-          {/* 確定/進行中 を積み上げ進捗バーで可視化 (目標 = 100% 幅) */}
+          {/* 確定/見込 を積み上げ進捗バーで可視化 (目標 = 100% 幅) */}
           {data.grossProfitTarget != null && data.grossProfitTarget > 0 && (
             <div
               className="h-2 w-full overflow-hidden rounded-full bg-muted"
               role="progressbar"
-              aria-label="予想粗利 内訳 (確定 / 進行中)"
+              aria-label="予想粗利 内訳 (確定 / 見込)"
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.min(100, (forecastTotal / data.grossProfitTarget) * 100)}
@@ -221,61 +172,130 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
               </div>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] tabular-nums">
-            <div>
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <span className="block size-2 rounded-sm bg-emerald-500" aria-hidden="true" />
-                確定
-                {forecastTotal > 0 && (
-                  <span className="opacity-70">
-                    ({pctFormat.format(data.confirmedGrossProfit / forecastTotal)})
-                  </span>
-                )}
-              </div>
-              <div className="font-semibold">{jpyCompact.format(data.confirmedGrossProfit)}</div>
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <span className="block size-2 rounded-sm bg-emerald-300/70" aria-hidden="true" />
-                見込粗利
-                {forecastTotal > 0 && (
-                  <span className="opacity-70">
-                    ({pctFormat.format(data.pipelineForecastGrossProfit / forecastTotal)})
-                  </span>
-                )}
-              </div>
-              <div className="font-semibold">{jpyCompact.format(data.pipelineForecastGrossProfit)}</div>
-              <div className="text-muted-foreground text-[10px]">
-                紹介後 {numFormat.format(data.introducedRooms)}室・早期 {numFormat.format(data.earlyRooms)}室
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* 想定 vs 実態 単価 (= 成約 1 室あたりの確定粗利) */}
-        <div className="flex items-center justify-between rounded-md border-l-2 border-amber-300 bg-amber-50/40 px-3 py-1.5 text-xs dark:bg-amber-950/20">
-          <span
-            className="text-muted-foreground"
-            title="成約 1 室あたりの確定粗利（総売上_粗利 ÷ 成約室数）の中央値。想定は ¥100,000/室"
-          >
-            実態単価（粗利/室・中央値）
-          </span>
-          <div className="text-right tabular-nums">
-            <div className="font-semibold">
-              {data.actualUnitPriceMedian != null
-                ? `${jpyCompact.format(data.actualUnitPriceMedian)}/室`
-                : '—'}
-              <span className="text-muted-foreground font-normal">
-                {' '}/ 想定 {jpyCompact.format(data.assumedUnitPrice)}/室
-              </span>
-            </div>
-            {unitPriceRatio != null && (
-              <div className={cn('text-[10px]', unitPriceRatio < 0.8 ? 'text-amber-700' : 'text-muted-foreground')}>
-                想定の {pctFormat.format(unitPriceRatio)}
+        {/* 詳細トグル */}
+        <button
+          type="button"
+          onClick={() => setExpanded((s) => !s)}
+          className="flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          aria-expanded={expanded}
+        >
+          <ChevronDown
+            className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')}
+            aria-hidden="true"
+          />
+          {expanded ? '閉じる' : '詳細'}
+        </button>
+
+        {/* 詳細 (成約数 / 成約室数 / 内訳 / 実態単価) */}
+        {expanded && (
+          <div className="flex flex-col gap-4">
+            {/* 成約数 達成 */}
+            <Meter
+              value={cvAchievement}
+              maxValue={100}
+              color={statusFromAchievement(data.cv, data.cvTarget) === 'good' ? 'success' : statusFromAchievement(data.cv, data.cvTarget) === 'warn' ? 'warning' : 'danger'}
+              aria-label="成約数 達成率"
+              className="w-full"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs font-medium text-muted-foreground">成約数</Label>
+                <div className="flex items-center gap-1.5 text-xs tabular-nums">
+                  {arrow(data.cv, data.cvTarget)}
+                  <span className="font-semibold">{numFormat.format(data.cv)}</span>
+                  <span className="text-muted-foreground">
+                    / {data.cvTarget != null ? numFormat.format(data.cvTarget) : '—'}
+                  </span>
+                  <span className="text-muted-foreground">({pct(data.cv, data.cvTarget)})</span>
+                </div>
               </div>
-            )}
+              <Meter.Track>
+                <Meter.Fill />
+              </Meter.Track>
+            </Meter>
+
+            {/* 成約室数 達成 */}
+            <Meter
+              value={roomAchievement}
+              maxValue={100}
+              color={statusFromAchievement(data.rooms, data.roomTarget) === 'good' ? 'success' : statusFromAchievement(data.rooms, data.roomTarget) === 'warn' ? 'warning' : 'danger'}
+              aria-label="成約室数 達成率"
+              className="w-full"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs font-medium text-muted-foreground">成約室数</Label>
+                <div className="flex items-center gap-1.5 text-xs tabular-nums">
+                  {arrow(data.rooms, data.roomTarget)}
+                  <span className="font-semibold">{numFormat.format(data.rooms)}</span>
+                  <span className="text-muted-foreground">
+                    / {data.roomTarget != null ? numFormat.format(data.roomTarget) : '—'}
+                  </span>
+                  <span className="text-muted-foreground">({pct(data.rooms, data.roomTarget)})</span>
+                </div>
+              </div>
+              <Meter.Track>
+                <Meter.Fill />
+              </Meter.Track>
+            </Meter>
+
+            {/* 確定 / 見込 内訳 */}
+            <div className="grid grid-cols-2 gap-2 text-[11px] tabular-nums">
+              <div>
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <span className="block size-2 rounded-sm bg-emerald-500" aria-hidden="true" />
+                  確定
+                  {forecastTotal > 0 && (
+                    <span className="opacity-70">
+                      ({pctFormat.format(data.confirmedGrossProfit / forecastTotal)})
+                    </span>
+                  )}
+                </div>
+                <div className="font-semibold">{jpyCompact.format(data.confirmedGrossProfit)}</div>
+              </div>
+              <div>
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <span className="block size-2 rounded-sm bg-emerald-300/70" aria-hidden="true" />
+                  見込粗利
+                  {forecastTotal > 0 && (
+                    <span className="opacity-70">
+                      ({pctFormat.format(data.pipelineForecastGrossProfit / forecastTotal)})
+                    </span>
+                  )}
+                </div>
+                <div className="font-semibold">{jpyCompact.format(data.pipelineForecastGrossProfit)}</div>
+                <div className="text-muted-foreground text-[10px]">
+                  紹介後 {numFormat.format(data.introducedRooms)}室・早期 {numFormat.format(data.earlyRooms)}室
+                </div>
+              </div>
+            </div>
+
+            {/* 想定 vs 実態 単価 (= 成約 1 室あたりの確定粗利) */}
+            <div className="flex items-center justify-between rounded-md border-l-2 border-amber-300 bg-amber-50/40 px-3 py-1.5 text-xs dark:bg-amber-950/20">
+              <span
+                className="text-muted-foreground"
+                title="成約 1 室あたりの確定粗利（総売上_粗利 ÷ 成約室数）の中央値。想定は ¥100,000/室"
+              >
+                実態単価（粗利/室・中央値）
+              </span>
+              <div className="text-right tabular-nums">
+                <div className="font-semibold">
+                  {data.actualUnitPriceMedian != null
+                    ? `${jpyCompact.format(data.actualUnitPriceMedian)}/室`
+                    : '—'}
+                  <span className="text-muted-foreground font-normal">
+                    {' '}/ 想定 {jpyCompact.format(data.assumedUnitPrice)}/室
+                  </span>
+                </div>
+                {unitPriceRatio != null && (
+                  <div className={cn('text-[10px]', unitPriceRatio < 0.8 ? 'text-amber-700' : 'text-muted-foreground')}>
+                    想定の {pctFormat.format(unitPriceRatio)}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
