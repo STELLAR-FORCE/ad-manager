@@ -237,7 +237,7 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
             <div>
               <div className="flex items-center gap-1 text-muted-foreground">
                 <span className="block size-2 rounded-sm bg-emerald-300/70" aria-hidden="true" />
-                進行中（加重）
+                見込粗利
                 {forecastTotal > 0 && (
                   <span className="opacity-70">
                     ({pctFormat.format(data.pipelineForecastGrossProfit / forecastTotal)})

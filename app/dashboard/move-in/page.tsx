@@ -388,11 +388,11 @@ export default function MoveInPivotPage() {
                       label: '予想粗利',
                       source: 'Salesforce (mart.salesforce_all_obj)',
                       filters: 'LP 経由のみ',
-                      target: '確定粗利 + 進行中（加重）の合計 = 期間内の着地見込み粗利',
+                      target: '確定粗利 + 見込粗利（進行中の加重）の合計 = 期間内の着地見込み粗利',
                       period: '画面上の期間セレクタで指定した範囲',
                       axis: '利用期間_始期 (入居日)',
                       cache: '1 時間キャッシュ',
-                      note: '確定粗利 = 成約済みの粗利、進行中（加重）= 案件フェーズ別の確度で粗利を見積',
+                      note: '確定粗利 = 成約済みの粗利、見込粗利 = 案件フェーズ別の確度で粗利を見積',
                     }}
                   />
                 </div>
@@ -484,11 +484,11 @@ export default function MoveInPivotPage() {
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">進行中（加重）</span>
+                  <span className="text-xs font-medium text-muted-foreground">見込粗利</span>
                   <DataSourceTags sources={['opportunity']} />
                   <DataSourceTooltip
                     info={{
-                      label: '進行中（加重）',
+                      label: '見込粗利（進行中案件の加重）',
                       source: 'Salesforce (mart.salesforce_all_obj)',
                       filters: 'LP 経由のみ + 案件フェーズが進行中 (紹介後 / 早期)',
                       target: '案件フェーズ別の確度 × 必要戸数 × ¥100,000/室 — 確定前の見込み粗利',
