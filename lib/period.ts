@@ -149,5 +149,6 @@ export function periodFromSearchParams(sp: URLSearchParams, fallback: Period): P
 
 /** ISO 'YYYY-MM-DD' に整形 */
 export function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // toISOString() は UTC 変換のため JST 月初が前日にずれる。ローカル日付で組み立てる。
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }

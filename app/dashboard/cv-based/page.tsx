@@ -90,7 +90,9 @@ export default function CvBasedPage() {
   const fetchData = useCallback(async () => {
     setRefreshing(true);
     try {
-      const fmt = (d: Date) => d.toISOString().split('T')[0];
+      // toISOString() は UTC 変換で JST 月初が前日にずれるため、ローカル日付で組み立てる
+      const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const params = new URLSearchParams({
         start: fmt(dateRange.main.start),
         end: fmt(dateRange.main.end),

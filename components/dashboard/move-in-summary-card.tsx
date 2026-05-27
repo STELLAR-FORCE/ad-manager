@@ -252,14 +252,21 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
           </div>
         </div>
 
-        {/* 想定 vs 実態 単価 */}
+        {/* 想定 vs 実態 単価 (= 成約 1 室あたりの確定粗利) */}
         <div className="flex items-center justify-between rounded-md border-l-2 border-amber-300 bg-amber-50/40 px-3 py-1.5 text-xs dark:bg-amber-950/20">
-          <span className="text-muted-foreground">実態単価（中央値）</span>
+          <span
+            className="text-muted-foreground"
+            title="成約 1 室あたりの確定粗利（総売上_粗利 ÷ 成約室数）の中央値。想定は ¥100,000/室"
+          >
+            実態単価（粗利/室・中央値）
+          </span>
           <div className="text-right tabular-nums">
             <div className="font-semibold">
-              {data.actualUnitPriceMedian != null ? jpyCompact.format(data.actualUnitPriceMedian) : '—'}
+              {data.actualUnitPriceMedian != null
+                ? `${jpyCompact.format(data.actualUnitPriceMedian)}/室`
+                : '—'}
               <span className="text-muted-foreground font-normal">
-                {' '}/ 想定 {jpyCompact.format(data.assumedUnitPrice)}
+                {' '}/ 想定 {jpyCompact.format(data.assumedUnitPrice)}/室
               </span>
             </div>
             {unitPriceRatio != null && (

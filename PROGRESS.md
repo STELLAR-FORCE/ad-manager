@@ -282,6 +282,56 @@ npm run dev
 
 以降のセッションは共通ルール ([`~/dev/github/CLAUDE.md`](../CLAUDE.md)) のフォーマットで追記する。上記の完了タスクリスト / ページ構成 / DB スキーマ等は現状仕様の参照用として維持。
 
+---
+
+## 2026-05-26 19:50
+
+### やったこと
+- **PR #113** (`ef2105c`): 目標値 CSV テンプレートを 96 行 → 24 行に簡素化 + Bing OAuth エンドポイントをテナント直指定 (`/common` → `/ce04d0d5-...`)
+- **BQ MERGE**: 2026 下期 (7-12 月) の `dashboard.targets_monthly` を上期コピーでモック投入 (movein / received 各 6 件、計 12 行)
+- **Issue #114 起票 → 実装 (PR #116, `abd1b6c`)**: 数値カードに参照ソース 4 タグ Chip 追加
+  - 新規 `components/ui/data-source-tags.tsx` (HeroUI v3 Chip, color="default")
+  - `DataSourceInfo` に `sources?: SourceTagKey[]` を追加し (i) アイコン隣に常時表示
+  - 全 14 箇所 + /dashboard/cv-daily 各 CumChart にタグ展開
+- **/targets** で 2026-01 が見えない件を修正 (`defaultMonths()` 起点を当年 1 月に変更) — PR #115
+- **/dashboard/cv-daily 消化予定累計線**のロジック修正 — PR #115
+  - 旧: cost_plan_daily に 1 円でも入力があると日次累積モード (¥0 付近に張り付く)
+  - 新: 入力日はその値、空欄日は (monthly_budget - 入力済合計) ÷ 空き日数で線形補完
+- **Issue #117 起票**: /dashboard/move-in UI/UX 改善 (タグ/期間表示/ピボット 等)
+- **Issue #118 起票**: mart 行展開バグの全 SQL 監査 (チェックリスト形式)
+- **PR #119 (`432dec7`)**: mart 行展開バグ修正 + /dashboard/move-in UI 改善 + 統合ファネル微調整
+  - `MOVE_IN_FORECAST_SQL` の confirmed CTE → 契約管理 ID で重複除去
+  - `MOVE_IN_FORECAST_SQL` の pipeline CTE → 案件 ID で重複除去
+  - `MOVE_IN_SUMMARY_SQL` / `contractCte` → 契約管理 ID で重複除去
+  - 検証: 2026-05 入居の確定粗利 ¥1.26億 → ¥441万 (約 29 倍の膨張を修正)
+  - /dashboard/move-in: タイトル直下に期間ラベル / 上部 4 タイル各項目にタグ + ツールチップ / 「室数」→「CV 室数」 / サマリーカード「CV」→「成約数」「室数」→「成約室数」 / `jpyCompact2` で小数 2 桁
+  - integrated-funnel: 「営業フェーズ(Salesforce)」→「営業フェーズ」+ タグ / FunnelStage の第 3 行に min-h-[18px] スペーサー (成約カードのズレ修正)
+  - progress-view: カードヘッダ `min-h-[40px] flex-wrap` (タグ数違いによる数字位置ズレ修正)
+- **PR #120 (`e540c2b`)**: 予想粗利を「確定/進行中」の積み上げ進捗バーで可視化
+  - 上部期間合計タイル + 各月 MoveInSummaryCard 両方で適用
+  - バー幅 = 目標、凡例 % = 予想粗利を 100% としたときの構成比
+
+### 決まったこと / 学んだこと
+- **mart 行展開は契約管理 ID 以外でも発生する**: 2026-05 入居で 41 契約 / 27 リード に対し **1916 行**。粗利・売上・成約室数の SUM も `GROUP BY 契約管理ID` (または案件 ID / リード ID) で先に重複除去が必要 — memory `project_sf_mart_row_expansion.md` を 2026-05-26 検証結果で更新済
+- **DataSourceTooltip の sources は自動的に (i) 隣にタグを描画する**。個別に `<DataSourceTags>` を併用するとダブるので、個別書く場合は info.sources を消す
+- **進捗バーの母数の使い分け**: バー幅 = 目標、凡例 % = forecast (予想粗利) の構成比。両方の % を持たせると「目標達成率」と「予想内構成比」が区別できる
+- **タグ色**: HeroUI Chip の color="default" (グレー) に統一。色分けは「業務メンバーが直感的に意味取り違える」リスクを避けて廃止
+
+### 詰まっていること / 保留
+- **Bing Ads ETL 同期停止 (5/17 以降)** — Issue #111: Microsoft Entra ID テナントに Microsoft Advertising API の Service Principal がない。`az ad sp create` は k.nakatomi では Insufficient privileges。Global Administrator 対応待ち
+- **Issue #112 RD 目標 vs 利用日数目標** の運用整理 — 未着手
+
+### 次にやること (2026-05-27 から再開)
+1. **Issue #117 残タスク** (/dashboard/move-in UI)
+   - 半年期間選択時のサマリーカード表示が中途半端 → 仕様議論
+   - 全月詳細ピボットのリアルタイム化 (Salesforce API 直叩きで検討)
+   - ピボットの見やすさ改修 (3 段ヘッダ・ヒートマップ等)
+2. **Issue #118 残タスク** — 他の API/SQL の mart 行展開バグ全件監査
+   - 修正済: move-in/summary, move-in (contractCte), cv-based, MOVE_IN_SUMMARY_SQL
+   - 要監査: /api/dashboard/progress, summary, trend, monthly-cumulative, cv-daily, lead-activities, activities, move-in/pivot, budget-usage, media-breakdown, /api/salesforce/* 等
+3. Issue #112 RD 目標 / 利用日数目標の運用整理
+4. Issue #102 /dashboard/analysis (分析ページ)
+
 <!-- フォーマット:
 
 ## YYYY-MM-DD HH:MM
