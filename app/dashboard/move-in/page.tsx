@@ -271,16 +271,20 @@ export default function MoveInPivotPage() {
     const forecastMap = new Map(summaryData.forecast.map((r) => [r.moveInMonth, r]));
     const leadMap = new Map(summaryData.leadAgg.map((r) => [r.moveInMonth, r]));
     const targetMap = new Map(summaryData.targets.map((r) => [r.month, r]));
+    const summaryMap = new Map(summaryData.summary.map((r) => [r.moveInMonth, r]));
     return months.map<MoveInSummaryCardData>((m) => {
       const f = forecastMap.get(m);
       const l = leadMap.get(m);
       const t = targetMap.get(m);
+      const s = summaryMap.get(m);
       return {
         moveInMonth: m,
         cv: l?.cv ?? 0,
         cvTarget: t?.cvTarget ?? null,
         rooms: l?.cvRooms ?? 0,
         roomTarget: t?.roomTarget ?? null,
+        wonCv: s?.wonCv ?? 0,
+        wonRooms: s?.contractedRooms ?? 0,
         confirmedGrossProfit: f?.confirmedGrossProfit ?? 0,
         pipelineForecastGrossProfit: f?.pipelineForecastGrossProfit ?? 0,
         grossProfitTarget: t?.grossProfitTarget ?? null,
@@ -509,7 +513,7 @@ export default function MoveInPivotPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">CV</span>
+                    <span className="text-xs font-medium text-muted-foreground">CV数</span>
                     <DataSourceTags sources={['lead']} />
                   </div>
                   <div className="mt-1 text-lg font-bold tabular-nums">
@@ -521,7 +525,7 @@ export default function MoveInPivotPage() {
                 </div>
                 <div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">CV 室数</span>
+                    <span className="text-xs font-medium text-muted-foreground">CV室数</span>
                     <DataSourceTags sources={['lead']} />
                   </div>
                   <div className="mt-1 text-lg font-bold tabular-nums">
