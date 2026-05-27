@@ -31,15 +31,23 @@ export async function GET(request: Request) {
   // mart には ForecastCategoryName / SortOrder を持つステージマスタは含まれないため、
   // フォーキャスト分類は API 側で返さない（forecastCategory / sortOrder は null）。
   // UI 側の色分けは kind (open/won/lost) ベースに統一済み。
+  // mart は案件ID 以外でも行展開されるため (#118)、案件単位で重複除去してから
+  // ステージ別に COUNT する
   const sql = `
     SELECT
-      ${SF_COLS.oppStage} AS stage_name,
+      stage_name,
       COUNT(*) AS count
-    FROM ${SF_MART}
-    WHERE ${SF_COLS.oppId} IS NOT NULL
-      AND ${SF_COLS.oppStage} IS NOT NULL
-      AND DATE(${SF_COLS.oppReceptionDate}) BETWEEN DATE(@start) AND DATE(@end)
-    GROUP BY ${SF_COLS.oppStage}
+    FROM (
+      SELECT
+        ${SF_COLS.oppId} AS opp_id,
+        ANY_VALUE(${SF_COLS.oppStage}) AS stage_name
+      FROM ${SF_MART}
+      WHERE ${SF_COLS.oppId} IS NOT NULL
+        AND ${SF_COLS.oppStage} IS NOT NULL
+        AND DATE(${SF_COLS.oppReceptionDate}) BETWEEN DATE(@start) AND DATE(@end)
+      GROUP BY opp_id
+    )
+    GROUP BY stage_name
     ORDER BY count DESC
   `;
 

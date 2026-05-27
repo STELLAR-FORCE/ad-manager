@@ -44,12 +44,15 @@ export async function GET(request: Request) {
       FROM UNNEST(GENERATE_DATE_ARRAY(DATE(@start), DATE(@end))) AS d
     ),
     base AS (
+      -- mart は案件ID 以外でも行展開されるため (#118)、案件単位で重複除去
       SELECT
-        DATE(${SF_COLS.oppReceptionDate}) AS date,
-        ${SF_COLS.oppStage} AS stage
+        ANY_VALUE(DATE(${SF_COLS.oppReceptionDate})) AS date,
+        ${SF_COLS.oppId} AS opp_id,
+        ANY_VALUE(${SF_COLS.oppStage}) AS stage
       FROM ${SF_MART}
       WHERE ${SF_COLS.oppId} IS NOT NULL
         AND DATE(${SF_COLS.oppReceptionDate}) BETWEEN DATE(@start) AND DATE(@end)
+      GROUP BY opp_id
     ),
     daily AS (
       SELECT
