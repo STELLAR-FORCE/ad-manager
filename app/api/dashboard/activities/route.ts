@@ -71,8 +71,9 @@ export async function GET() {
   //
   // Issue #129:
   //   - 失注/キャンセルフェーズは「成約」ではないので除外
-  //   - 借主への請求額が NULL or 0 = 売上未入力 (原価だけ先行入力された途中状態 や
-  //     ヒアリング段階で契約管理が作られた中途半端なレコード) は「成約」として不適切なので除外
+  //   - 総売上(粗利) > 0 を必須化。粗利は SF で 借主請求 - 業者請求 - 紹介料 の自動計算なので、
+  //     借主請求 NULL で業者請求だけ先行入力されたケースはマイナス、ヒアリング段階の中途半端
+  //     なレコードは 0 になる。プラスの粗利が立っているもの = 実質的な成約 とみなす。
   const sql = `
     SELECT
       ANY_VALUE(${SF_COLS.decisionDate}) AS decision_date,
@@ -89,7 +90,7 @@ export async function GET() {
       AND ${SF_COLS.decisionDate} BETWEEN DATE(@start) AND DATE(@end)
       AND ${SF_COLS.lpSource} IN (${lpRyuunyuumotoSqlList()})
       AND (${SF_COLS.oppStage} IS NULL OR ${SF_COLS.oppStage} NOT IN (${lostStagesSqlList()}))
-      AND ${SF_COLS.revenue} > 0
+      AND ${SF_COLS.grossProfit} > 0
     GROUP BY ${SF_COLS.contractId}
     ORDER BY decision_date DESC, ${SF_COLS.contractId} DESC
   `;
