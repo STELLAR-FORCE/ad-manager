@@ -615,12 +615,12 @@ export default function MoveInPivotPage() {
               <Card>
                 <CardContent className="overflow-x-auto p-0">
                   <Table>
-              {/* ─── ヘッダ 3 段 ─── */}
+              {/* ─── ヘッダ 2 段 (目標列削除、件数/室数 実績のみ) ─── */}
               <TableHeader>
-                {/* 1 段目: 入居月（colspan=4 = 件数 2 + 室数 2）。corner = CV発生月ラベル */}
+                {/* 1 段目: 入居月 (件数 + 室数 = colspan=2)。corner = CV発生月ラベル */}
                 <TableRow>
                   <TableHead
-                    rowSpan={3}
+                    rowSpan={2}
                     className="sticky left-0 bg-background z-10 min-w-[160px] align-bottom border-r"
                   >
                     <div className="flex items-end gap-1 pb-2 text-xs text-muted-foreground">
@@ -632,29 +632,22 @@ export default function MoveInPivotPage() {
                   {months.map((m) => (
                     <TableHead
                       key={m}
-                      colSpan={4}
+                      colSpan={2}
                       className="text-center bg-muted/30 border-l font-semibold"
                     >
                       {formatMonthLabel(m).replace('年', '/')}入居
                     </TableHead>
                   ))}
-                  <TableHead colSpan={4} className="text-center bg-muted/50 border-l font-semibold">
+                  <TableHead colSpan={2} className="text-center bg-muted/50 border-l font-semibold">
                     月間CV合計
                   </TableHead>
                 </TableRow>
-                {/* 2 段目: 件数 / 室数（colspan=2 ずつ）*/}
+                {/* 2 段目: 件数 / 室数 */}
                 <TableRow>
                   {months.map((m) => (
                     <CountRoomHeaderCells key={m} />
                   ))}
                   <CountRoomHeaderCells />
-                </TableRow>
-                {/* 3 段目: 目標 / 実績 */}
-                <TableRow>
-                  {months.map((m) => (
-                    <TargetActualHeaderCells key={m} />
-                  ))}
-                  <TargetActualHeaderCells />
                 </TableRow>
               </TableHeader>
 
@@ -677,9 +670,7 @@ export default function MoveInPivotPage() {
                       {months.map((m) => (
                         <CountRoomCells
                           key={`${cv}|${m}`}
-                          countTarget={null}
                           countActual={cellCv(cv, m)}
-                          roomTarget={null}
                           roomActual={cellRooms(cv, m)}
                           formatV={numFormat.format}
                           breakdown={isBefore ? beforeBreakdown.get(m) : undefined}
@@ -688,9 +679,7 @@ export default function MoveInPivotPage() {
                         />
                       ))}
                       <CountRoomCells
-                        countTarget={null}
                         countActual={rowCvTotal}
-                        roomTarget={null}
                         roomActual={rowRoomTotal}
                         formatV={numFormat.format}
                         highlight
@@ -710,18 +699,14 @@ export default function MoveInPivotPage() {
                   {months.map((m) => (
                     <CountRoomCells
                       key={m}
-                      countTarget={cvTarget(m)}
                       countActual={monthCvTotal(m)}
-                      roomTarget={roomTarget(m)}
                       roomActual={monthRoomTotal(m)}
                       formatV={numFormat.format}
                       bold
                     />
                   ))}
                   <CountRoomCells
-                    countTarget={sumNullable(months, cvTarget)}
                     countActual={months.reduce((s, m) => s + monthCvTotal(m), 0)}
-                    roomTarget={sumNullable(months, roomTarget)}
                     roomActual={months.reduce((s, m) => s + monthRoomTotal(m), 0)}
                     formatV={numFormat.format}
                     bold
@@ -954,27 +939,12 @@ function sumNullable(months: string[], get: (m: string) => number | null): numbe
 function CountRoomHeaderCells() {
   return (
     <>
-      <TableHead colSpan={2} className="text-center text-xs bg-blue-50/40 border-l font-medium text-blue-900">
+      <TableHead className="text-center text-xs bg-blue-50/40 border-l font-medium text-blue-900 w-[80px]">
         件数
       </TableHead>
-      <TableHead colSpan={2} className="text-center text-xs bg-emerald-50/40 border-l font-medium text-emerald-900">
+      <TableHead className="text-center text-xs bg-emerald-50/40 border-l font-medium text-emerald-900 w-[80px]">
         室数
       </TableHead>
-    </>
-  );
-}
-
-function TargetActualHeaderCells() {
-  return (
-    <>
-      <TableHead className="text-right text-[11px] bg-amber-50/30 font-medium text-amber-900 border-l w-[68px]">
-        目標
-      </TableHead>
-      <TableHead className="text-right text-[11px] font-medium w-[68px]">実績</TableHead>
-      <TableHead className="text-right text-[11px] bg-amber-50/30 font-medium text-amber-900 border-l w-[68px]">
-        目標
-      </TableHead>
-      <TableHead className="text-right text-[11px] font-medium w-[68px]">実績</TableHead>
     </>
   );
 }
@@ -984,9 +954,7 @@ function TargetActualHeaderCells() {
  * ───────────────────────────────────────────────────────────── */
 
 function CountRoomCells({
-  countTarget,
   countActual,
-  roomTarget,
   roomActual,
   formatV,
   bold,
@@ -995,9 +963,7 @@ function CountRoomCells({
   countMax,
   roomMax,
 }: {
-  countTarget: number | null;
   countActual: number;
-  roomTarget: number | null;
   roomActual: number;
   formatV: (v: number) => string;
   bold?: boolean;
@@ -1011,22 +977,16 @@ function CountRoomCells({
   const heatEnabled = countMax !== undefined && roomMax !== undefined;
 
   const baseCls = cn('text-right tabular-nums px-2', bold && 'font-semibold');
-  // ヒートマップ有効時はハイライト bg を上書き（heat 色を優先）。
-  // 無効時は従来の muted/40 を使う。
-  const targetHighlightCls = highlight ? 'bg-muted/40' : '';
-  const actualHighlightCls = highlight && !heatEnabled ? 'bg-muted/40' : '';
+  const cellCls = cn(baseCls, 'border-l', highlight && !heatEnabled && 'bg-muted/40');
 
-  const targetCls = cn(baseCls, 'bg-amber-50/30 text-muted-foreground border-l', targetHighlightCls);
-  const actualCls = cn(baseCls, actualHighlightCls);
-
-  // 件数 = 青系、室数 = 緑系。最大 35% 不透明度で文字を残す。
+  // 件数 = 青系、室数 = 緑系。最大 60% 不透明度でカラースケールを強調。
   const cvHeatStyle =
     heatEnabled && countMax > 0 && countActual > 0
-      ? { backgroundColor: `rgba(59, 130, 246, ${((countActual / countMax) * 0.35).toFixed(3)})` }
+      ? { backgroundColor: `rgba(59, 130, 246, ${((countActual / countMax) * 0.6).toFixed(3)})` }
       : undefined;
   const roomHeatStyle =
     heatEnabled && roomMax > 0 && roomActual > 0
-      ? { backgroundColor: `rgba(16, 185, 129, ${((roomActual / roomMax) * 0.35).toFixed(3)})` }
+      ? { backgroundColor: `rgba(16, 185, 129, ${((roomActual / roomMax) * 0.6).toFixed(3)})` }
       : undefined;
 
   const hasBreakdown = breakdown && breakdown.length > 0;
@@ -1049,14 +1009,10 @@ function CountRoomCells({
 
   return (
     <>
-      <td className={targetCls}>{countTarget == null ? '' : formatV(countTarget)}</td>
-      <td className={actualCls} style={cvHeatStyle}>
+      <td className={cellCls} style={cvHeatStyle}>
         {renderActual(countActual)}
       </td>
-      <td className={cn(targetCls, 'border-l-2 border-l-border/60')}>
-        {roomTarget == null ? '' : formatV(roomTarget)}
-      </td>
-      <td className={actualCls} style={roomHeatStyle}>
+      <td className={cellCls} style={roomHeatStyle}>
         {renderActual(roomActual)}
       </td>
     </>
@@ -1107,12 +1063,8 @@ function ValuePair({
   );
   return (
     <>
-      <td colSpan={2} className={cls}>
-        {formatV(v1)}
-      </td>
-      <td colSpan={2} className={cn(cls, 'border-l-2 border-l-border/60')}>
-        {formatV(v2)}
-      </td>
+      <td className={cls}>{formatV(v1)}</td>
+      <td className={cn(cls, 'border-l-2 border-l-border/60')}>{formatV(v2)}</td>
     </>
   );
 }
@@ -1151,10 +1103,7 @@ function NeedHalfCell({
   const borderCls = extraBorder ? 'border-l-2 border-l-border/60' : 'border-l';
   if (value == null) {
     return (
-      <td
-        colSpan={2}
-        className={cn('text-right tabular-nums px-2 text-muted-foreground', borderCls, highlight && 'bg-muted/40')}
-      >
+      <td className={cn('text-right tabular-nums px-2 text-muted-foreground', borderCls, highlight && 'bg-muted/40')}>
         —
       </td>
     );
@@ -1163,7 +1112,6 @@ function NeedHalfCell({
   const negative = value < 0;
   return (
     <td
-      colSpan={2}
       className={cn(
         'text-right tabular-nums px-2 font-semibold',
         borderCls,
@@ -1190,7 +1138,6 @@ function CountOnlyPair({
   return (
     <>
       <td
-        colSpan={2}
         className={cn(
           'text-right tabular-nums px-2 border-l',
           highlight && 'bg-muted/40 font-semibold',
@@ -1198,7 +1145,7 @@ function CountOnlyPair({
       >
         {value == null ? <span className="text-muted-foreground">—</span> : formatV(value)}
       </td>
-      <td colSpan={2} className="border-l-2 border-l-border/60 bg-muted/10" aria-hidden="true" />
+      <td className="border-l-2 border-l-border/60 bg-muted/10" aria-hidden="true" />
     </>
   );
 }
@@ -1215,7 +1162,6 @@ function DeltaCountOnlyPair({
   return (
     <>
       <td
-        colSpan={2}
         className={cn(
           'text-right tabular-nums px-2 border-l text-xs',
           delta == null
@@ -1228,7 +1174,7 @@ function DeltaCountOnlyPair({
       >
         {delta == null ? '—' : formatV(delta)}
       </td>
-      <td colSpan={2} className="border-l-2 border-l-border/60 bg-muted/10" aria-hidden="true" />
+      <td className="border-l-2 border-l-border/60 bg-muted/10" aria-hidden="true" />
     </>
   );
 }
@@ -1245,9 +1191,8 @@ function RoomOnlyPair({
 }) {
   return (
     <>
-      <td colSpan={2} className="border-l bg-muted/10" aria-hidden="true" />
+      <td className="border-l bg-muted/10" aria-hidden="true" />
       <td
-        colSpan={2}
         className={cn(
           'text-right tabular-nums px-2 border-l-2 border-l-border/60',
           highlight && 'bg-muted/40 font-semibold',
@@ -1262,9 +1207,8 @@ function RoomOnlyPair({
 function RoomOnlyRatioPair({ ratio, highlight }: { ratio: number | null; highlight?: boolean }) {
   return (
     <>
-      <td colSpan={2} className="border-l bg-muted/10" aria-hidden="true" />
+      <td className="border-l bg-muted/10" aria-hidden="true" />
       <td
-        colSpan={2}
         className={cn(
           'text-right tabular-nums px-2 border-l-2 border-l-border/60 text-xs',
           highlight && 'bg-muted/40 font-semibold',
