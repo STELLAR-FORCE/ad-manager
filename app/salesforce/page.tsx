@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { toLocalIsoDate } from '@/lib/format';
 import {
   LineChart,
   Line,
@@ -52,7 +53,8 @@ function defaultDateRange(): DateRangeValue {
 }
 
 function toDateParam(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // ローカル日付 (JST 等) ベースで文字列化。toISOString() だと UTC 変換で前日にずれる
+  return toLocalIsoDate(d);
 }
 
 const KIND_COLORS = {

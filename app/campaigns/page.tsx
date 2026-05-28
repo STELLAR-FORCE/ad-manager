@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { toLocalIsoDate } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -62,7 +63,7 @@ function buildDates(period: { start: Date; end: Date }): string[] {
     Math.round((period.end.getTime() - period.start.getTime()) / 86_400_000) + 1,
   );
   return Array.from({ length: days }, (_, i) =>
-    new Date(period.start.getTime() + i * 86_400_000).toISOString().split('T')[0],
+    toLocalIsoDate(new Date(period.start.getTime() + i * 86_400_000)),
   );
 }
 
