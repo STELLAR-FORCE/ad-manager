@@ -14,7 +14,12 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/bigquery';
 import { cached } from '@/lib/dashboard-cache';
-import { SF_MART, SF_COLS, lpRyuunyuumotoSqlList, lostStagesSqlList } from '@/lib/salesforce/queries';
+import {
+  SF_MART,
+  SF_COLS,
+  lpRyuunyuumotoSqlList,
+  establishedContractFilterSql,
+} from '@/lib/salesforce/queries';
 
 type Row = {
   decision_date: { value: string } | string;
@@ -69,13 +74,7 @@ export async function GET() {
   // LP 関連リードに紐付く成約のみに絞る（bizdev / 紹介などを除外）
   // 同じ 契約管理ID に対して mart は複数行持ち得るので集約する
   //
-  // Issue #129:
-  //   - 失注/キャンセルフェーズは「成約」ではないので除外
-  //   - 借主への請求額 > 0 を必須化。
-  //     - NULL = 業者請求だけ先行入力された入力途中 → 除外
-  //     - 0    = ヒアリング段階の中途半端なレコード → 除外
-  //     - > 0  = 売上が立っているもの (赤字契約 = 粗利マイナス も計上する)
-  //     正確な粗利を知るため、入力完了済みのレコードは符号問わず全て計上する方針。
+  // Issue #129: 成立した契約管理レコードのみに絞る (失注除外 + 入力完了 or 粗利手動入力済み)
   const sql = `
     SELECT
       ANY_VALUE(${SF_COLS.decisionDate}) AS decision_date,
@@ -91,8 +90,7 @@ export async function GET() {
     WHERE ${SF_COLS.contractId} IS NOT NULL
       AND ${SF_COLS.decisionDate} BETWEEN DATE(@start) AND DATE(@end)
       AND ${SF_COLS.lpSource} IN (${lpRyuunyuumotoSqlList()})
-      AND (${SF_COLS.oppStage} IS NULL OR ${SF_COLS.oppStage} NOT IN (${lostStagesSqlList()}))
-      AND ${SF_COLS.revenue} > 0
+      AND ${establishedContractFilterSql()}
     GROUP BY ${SF_COLS.contractId}
     ORDER BY decision_date DESC, ${SF_COLS.contractId} DESC
   `;

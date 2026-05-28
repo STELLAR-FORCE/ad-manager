@@ -82,6 +82,30 @@ export function lostStagesSqlList(): string {
 }
 
 /**
+ * 「成立した契約管理レコード」を絞り込む共通 SQL フラグメント (Issue #129)。
+ *
+ * mart には 案件フェーズ「ヒアリング/物件紹介済/キャンセル」段階でも契約管理レコードが
+ * 存在することがあり、SUM(粗利) や COUNT を素直にやると入力途中・失注が混入する。
+ * 「業務的に成立したと言える契約」を以下の条件で絞る:
+ *   - 失注/キャンセル系フェーズではない
+ *   - 借主請求 > 0  (売上が立っている)
+ *     ま た は 借主請求 NULL + 粗利 > 0  (請求額未入力でも粗利が手動入力された案件)
+ *
+ * 赤字契約 (借主請求 > 0 + 粗利 < 0) も計上される。入力途中 (業者請求だけ先行) は除外。
+ *
+ * WHERE 句の AND に組み込む形で利用。`契約管理ID IS NOT NULL` は呼び出し側で書く。
+ */
+export function establishedContractFilterSql(): string {
+  return `
+    (
+      ${SF_COLS.revenue} > 0
+      OR (${SF_COLS.revenue} IS NULL AND ${SF_COLS.grossProfit} > 0)
+    )
+    AND (${SF_COLS.oppStage} IS NULL OR ${SF_COLS.oppStage} NOT IN (${lostStagesSqlList()}))
+  `;
+}
+
+/**
  * mart.salesforce_all_obj のカラム名定数。
  * 1 ビューに全フィールドがフラットに展開されている前提で参照する。
  * SQL では `\`カラム名\`` のようにバッククオートで囲む必要があるが、
