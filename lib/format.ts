@@ -31,6 +31,17 @@ export const pctFormat = new Intl.NumberFormat('ja-JP', {
   maximumFractionDigits: 1,
 });
 
+/**
+ * Date オブジェクトをローカル日付 (JST 等) の 'YYYY-MM-DD' 文字列にする。
+ * d.toISOString() は UTC 変換なので、JST 月初を作って文字列化すると前日になるバグを回避。
+ */
+export function toLocalIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /** 'YYYY-MM' → '2026年4月' のような表示。 */
 export function formatMonthLabel(month: string): string {
   const m = /^(\d{4})-(\d{2})$/.exec(month);
