@@ -98,7 +98,13 @@ function buildAggregateSql(axis: Axis): string {
         ${SF_COLS.leadId} AS lead_id,
         ANY_VALUE(${SF_COLS.needRooms}) AS need_rooms,
         ANY_VALUE(${SF_COLS.usePeriodDays}) AS use_period_days,
-        MAX(IF(${SF_COLS.contractId} IS NOT NULL, 1, 0)) AS has_contract
+        -- 「成立した」契約管理を 1 件でも持つリードのみ成約扱い (#129)
+        -- (失注フェーズや 入力途中の契約管理レコードでは has_contract=1 にしない)
+        MAX(IF(
+          ${SF_COLS.contractId} IS NOT NULL
+          AND (${establishedContractFilterSql()}),
+          1, 0
+        )) AS has_contract
       FROM ${SF_MART}
       WHERE DATE(${dateCol}) BETWEEN DATE(@start) AND DATE(@end)
         AND ${LP_LEAD_FILTER_SQL}
