@@ -332,6 +332,38 @@ npm run dev
 3. Issue #112 RD 目標 / 利用日数目標の運用整理
 4. Issue #102 /dashboard/analysis (分析ページ)
 
+---
+
+## 2026-05-27 11:00
+
+### やったこと
+- **実態単価ラベル明確化** (`0f25c2a`): /dashboard/move-in サマリーカードの「実態単価（中央値）」→「実態単価（粗利/室・中央値）」。成約 1 室あたりの確定粗利 (総売上_粗利 ÷ 成約室数) の中央値であることを /室 表記 + title で明示
+- **日付 JST→UTC ずれ修正 (PR #121)**: `toIsoDate` / cv-based の `fmt` が `toISOString()` で月初を前日 (前月末) にしていたバグ。「今月」選択時に前月末が混入。ローカル日付組み立てに修正。Issue #122 で残り 16 箇所の点検を起票
+- **用語統一 (PR #125)**: 「進行中（加重）」→「見込粗利」、「Win率」→「成約率」
+- **move-in サマリーカード簡易表示化 (PR #125, #126)**: デフォルト簡易 + 詳細ボタン展開。CV数/CV室数 を「成約(濃)/未成約(淡)」の歩留まり積み上げバーに (YieldBar)。`data.cv/rooms` は leadAgg 由来 = CV(リード) なので「成約数/成約室数」→「CV数/CV室数」にラベル訂正
+- **月次累計推移から売上削除 (PR #126)**: 6 指標 → 5 指標 (CV数/CV室数/RD/消化予算/粗利)
+- **統合アラートセンター (PR #127, Issue #123 完了)**: /dashboard ヘッダーにベル + Popover。日次/週次ベースで CV 急落 (直近7日 vs 前7日 -30%)・CPA 急騰 (+20%)・予算超過/ペース超過/余り見込み を重要度順に代表 5 件表示、クリックで該当ページ遷移。新規 `/api/dashboard/alerts` + `components/dashboard/alert-center.tsx`
+- **mart 行展開バグ 全 SQL 監査 + 修正 (PR #128, Issue #118 完了)**: Explore で全 14 ファイル監査。残り 4 件を契約管理ID/案件ID で重複除去:
+  - progress (粗利), monthly-cumulative (粗利・売上), salesforce/pipeline (案件 COUNT), salesforce/trend (案件日次 COUNT)
+
+### 決まったこと / 学んだこと
+- **予想粗利の見せ方**: 「予想粗利 = 確定 + 見込」を積み上げバーで可視化。バー幅=目標、凡例%=予想粗利内の構成比
+- **CV歩留まりバー**: CV数/CV室数の達成率バーの中を「成約/未成約」で色分けし、CV→成約の歩留まりを 1 本のバーで表現
+- **アラートは日次/週次の気づき重視**: 月次達成率より「直近 7 日 vs 前 7 日」の変化検知が業務に有用 (ユーザー方針)
+- **toISOString() の罠**: クライアント (JST) で `new Date(y,m,1).toISOString()` は前日になる。ローカル日付は getFullYear/getMonth/getDate で組み立てる
+- mart 行展開バグは progress/monthly-cumulative/pipeline/trend にも潜在していた。SF_MART を SUM/COUNT する箇所は必ず契約管理ID or 案件ID or リードID で先に集約
+
+### 詰まっていること / 保留
+- **Issue #111 Bing ETL 同期停止** — Global Administrator の Service Principal 作成待ち (変化なし)
+- bq CLI 認証が頻繁に切れる (ADC は更新済みで dev server は動く)。#118 の実値検証は未実施 (#94 でカバー予定)
+
+### 次にやること (2026-05-28 から再開)
+1. **Issue #122** — 日付 toISOString() の JST→UTC ずれ 残り 16 箇所の点検 (campaigns / ad-groups 等のクライアント側 + API 側)。共通ヘルパー `toLocalIsoDate` への統一を推奨
+2. **Issue #117 残** — move-in ピボットのリアルタイム化 (SF 直叩き) + デザイン改修
+3. Issue #112 RD 目標 / 利用日数目標の運用整理
+4. Issue #94 各ページの数値ソース確認 (bq 実値検証、#118 修正の効果確認も兼ねる)
+5. Issue #102 /dashboard/analysis (分析ページ)
+
 <!-- フォーマット:
 
 ## YYYY-MM-DD HH:MM

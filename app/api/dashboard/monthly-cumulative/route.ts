@@ -21,7 +21,12 @@
 import { NextResponse } from 'next/server';
 import { query, table, tableIn } from '@/lib/bigquery';
 import { cached } from '@/lib/dashboard-cache';
-import { SF_MART, SF_COLS, LP_LEAD_FILTER_SQL } from '@/lib/salesforce/queries';
+import {
+  SF_MART,
+  SF_COLS,
+  LP_LEAD_FILTER_SQL,
+  establishedContractFilterSql,
+} from '@/lib/salesforce/queries';
 
 type Axis = 'movein' | 'received';
 
@@ -151,8 +156,8 @@ export async function GET(request: Request) {
       `;
 
       // 粗利・売上 (契約管理単位の確定値)
-      // mart は契約管理ID 以外でも行展開されるため (#118)、契約管理単位で
-      // 重複除去してから日別に合算する
+      // - mart は契約管理ID 以外でも行展開されるため (#118)、契約管理単位で重複除去
+      // - 入力途中・失注フェーズの混入を除外 (#129)
       const sfGrossSql = `
         SELECT
           date,
@@ -168,6 +173,7 @@ export async function GET(request: Request) {
           WHERE DATE(${dateCol}) BETWEEN DATE(@startDate) AND DATE(@endDate)
             AND ${LP_LEAD_FILTER_SQL}
             AND ${SF_COLS.contractId} IS NOT NULL
+            AND ${establishedContractFilterSql()}
           GROUP BY contract_id
         )
         GROUP BY date

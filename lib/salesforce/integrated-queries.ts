@@ -26,6 +26,7 @@ import {
   PLATFORM_FROM_MEDIA_CASE,
   LP_LEAD_FILTER_SQL,
   contractKindCase,
+  establishedContractFilterSql,
 } from './queries';
 
 /**
@@ -106,6 +107,7 @@ function contractCte(dateExpr: string, granularity: 'month' | 'day'): string {
       FROM ${SF_MART}
       WHERE ${SF_COLS.contractId} IS NOT NULL
         AND DATE(${dateExpr}) BETWEEN @start AND @end
+        AND ${establishedContractFilterSql()}
       GROUP BY contract_id
     )
     GROUP BY 1, 2
@@ -301,7 +303,7 @@ export const MOVE_IN_PIVOT_SQL = `
  *   （依頼側の `利用期間_日数 × 必要戸数_数値` と対称な算出）
  */
 export const MOVE_IN_SUMMARY_SQL = `
-  -- mart の行展開対策: 契約管理単位で重複除去してから入居月別に集計
+  -- 契約管理単位で重複除去 (#118) + 入力途中・失注の除外 (#129)
   WITH contract_unique AS (
     SELECT
       ${SF_COLS.contractId} AS contract_id,
@@ -314,6 +316,7 @@ export const MOVE_IN_SUMMARY_SQL = `
     FROM ${SF_MART}
     WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
       AND ${SF_COLS.contractId} IS NOT NULL
+      AND ${establishedContractFilterSql()}
     GROUP BY contract_id
   )
   SELECT
@@ -372,8 +375,7 @@ export const MOVE_IN_FORECAST_SQL = `
     ORDER BY effective_from DESC NULLS LAST
     LIMIT 1
   ),
-  -- mart は契約管理ID 以外でも行展開されるため、まず契約管理単位に集約してから合算する
-  -- (Issue #97 と同じ重複展開の問題。SUM をそのまま使うと 20〜50 倍に膨らむ)
+  -- 契約管理単位で重複除去 (Issue #97) + 入力途中・失注フェーズの除外 (#129)
   confirmed_unique AS (
     SELECT
       ${SF_COLS.contractId} AS contract_id,
@@ -385,6 +387,7 @@ export const MOVE_IN_FORECAST_SQL = `
       AND ${LP_LEAD_FILTER_SQL}
       AND ${SF_COLS.contractId} IS NOT NULL
       AND IFNULL(${SF_COLS.isInhouse}, FALSE) = FALSE
+      AND ${establishedContractFilterSql()}
     GROUP BY contract_id
   ),
   confirmed AS (

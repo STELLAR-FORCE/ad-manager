@@ -19,7 +19,12 @@
 import { NextResponse } from 'next/server';
 import { query, tableIn } from '@/lib/bigquery';
 import { cached } from '@/lib/dashboard-cache';
-import { SF_MART, SF_COLS, LP_LEAD_FILTER_SQL } from '@/lib/salesforce/queries';
+import {
+  SF_MART,
+  SF_COLS,
+  LP_LEAD_FILTER_SQL,
+  establishedContractFilterSql,
+} from '@/lib/salesforce/queries';
 import {
   calcProgressRanges,
   type ProgressPeriodKey,
@@ -109,6 +114,7 @@ function buildAggregateSql(axis: Axis): string {
         WHERE DATE(${dateCol}) BETWEEN DATE(@start) AND DATE(@end)
           AND ${LP_LEAD_FILTER_SQL}
           AND ${SF_COLS.contractId} IS NOT NULL
+          AND ${establishedContractFilterSql()}
         GROUP BY contract_id
       )
     )

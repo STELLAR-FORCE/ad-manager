@@ -14,7 +14,12 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/bigquery';
 import { cached } from '@/lib/dashboard-cache';
-import { SF_MART, SF_COLS, lpRyuunyuumotoSqlList } from '@/lib/salesforce/queries';
+import {
+  SF_MART,
+  SF_COLS,
+  lpRyuunyuumotoSqlList,
+  establishedContractFilterSql,
+} from '@/lib/salesforce/queries';
 
 type Row = {
   decision_date: { value: string } | string;
@@ -68,6 +73,8 @@ export async function GET() {
 
   // LP 関連リードに紐付く成約のみに絞る（bizdev / 紹介などを除外）
   // 同じ 契約管理ID に対して mart は複数行持ち得るので集約する
+  //
+  // Issue #129: 成立した契約管理レコードのみに絞る (失注除外 + 入力完了 or 粗利手動入力済み)
   const sql = `
     SELECT
       ANY_VALUE(${SF_COLS.decisionDate}) AS decision_date,
@@ -83,6 +90,7 @@ export async function GET() {
     WHERE ${SF_COLS.contractId} IS NOT NULL
       AND ${SF_COLS.decisionDate} BETWEEN DATE(@start) AND DATE(@end)
       AND ${SF_COLS.lpSource} IN (${lpRyuunyuumotoSqlList()})
+      AND ${establishedContractFilterSql()}
     GROUP BY ${SF_COLS.contractId}
     ORDER BY decision_date DESC, ${SF_COLS.contractId} DESC
   `;
