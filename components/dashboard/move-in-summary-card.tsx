@@ -39,10 +39,23 @@ type Props = {
   today?: Date;
 };
 
-type Status = 'good' | 'warn' | 'risk';
+type Status = 'good' | 'warn' | 'risk' | 'achieved' | 'failed';
 
-function statusFromAchievement(forecast: number, target: number | null): Status {
+/**
+ * 進行中の月: 予想粗利 (確定 + 見込) vs 目標 → 「順調 / 注意 / 危険」
+ * 月終了後: 確定粗利のみ vs 目標 → 「達成 / 未達」(見込分は楽観的なので除く厳格判定)
+ */
+function statusFromAchievement(
+  forecast: number,
+  confirmed: number,
+  target: number | null,
+  ended: boolean,
+): Status {
   if (target == null || target === 0) return 'good';
+  if (ended) {
+    const ratio = confirmed / target;
+    return ratio >= 1 ? 'achieved' : 'failed';
+  }
   const ratio = forecast / target;
   if (ratio >= 1) return 'good';
   if (ratio >= 0.7) return 'warn';
@@ -53,13 +66,26 @@ const STATUS_LABEL: Record<Status, string> = {
   good: '順調',
   warn: '注意',
   risk: '危険',
+  achieved: '達成',
+  failed: '未達',
 };
 
 const STATUS_COLOR: Record<Status, 'success' | 'warning' | 'danger'> = {
   good: 'success',
   warn: 'warning',
   risk: 'danger',
+  achieved: 'success',
+  failed: 'danger',
 };
+
+/** 入居月が終了したか (= 翌月 1 日以降か) */
+function isMoveInMonthEnded(month: string, today: Date): boolean {
+  const m = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!m) return false;
+  const nextMonthFirst = new Date(Number(m[1]), Number(m[2]), 1);
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return todayDay >= nextMonthFirst;
+}
 
 /** 月初の日付。'2026-07' → 2026-07-01 (ローカル) */
 function monthFirstDay(month: string): Date {
@@ -171,7 +197,13 @@ function YieldBar({
 export function MoveInSummaryCard({ data, today = new Date() }: Props) {
   const [expanded, setExpanded] = useState(false);
   const forecastTotal = data.confirmedGrossProfit + data.pipelineForecastGrossProfit;
-  const status = statusFromAchievement(forecastTotal, data.grossProfitTarget);
+  const monthEnded = isMoveInMonthEnded(data.moveInMonth, today);
+  const status = statusFromAchievement(
+    forecastTotal,
+    data.confirmedGrossProfit,
+    data.grossProfitTarget,
+    monthEnded,
+  );
   const days = daysUntilMoveIn(data.moveInMonth, today);
   const phase = leadTimePhase(days);
 
@@ -181,7 +213,12 @@ export function MoveInSummaryCard({ data, today = new Date() }: Props) {
       : data.actualUnitPriceMedian / data.assumedUnitPrice;
 
   return (
-    <Card className={cn('flex flex-col', status === 'risk' && 'border-rose-200', status === 'warn' && 'border-amber-200')}>
+    <Card className={cn(
+      'flex flex-col',
+      (status === 'risk' || status === 'failed') && 'border-rose-200',
+      status === 'warn' && 'border-amber-200',
+      status === 'achieved' && 'border-emerald-200',
+    )}>
       <CardContent className="flex flex-col gap-4 p-5">
         {/* ヘッダ: 入居月 + ステータス + リードタイク */}
         <div className="flex items-start justify-between gap-2">
