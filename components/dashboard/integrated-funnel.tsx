@@ -286,7 +286,16 @@ export function IntegratedFunnel({
               hint="成約案件のみ"
             />
             <span className="ml-auto text-xs text-muted-foreground">
-              ※ 売上・ROAS・室数は BQ テーブル整理後に追加
+              ※ 売上・ROAS・室数は{' '}
+              <a
+                href="https://github.com/STELLAR-FORCE/ad-manager/issues/57"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-dotted hover:text-foreground"
+              >
+                Issue #57
+              </a>{' '}
+              で追加予定
             </span>
           </div>
 
