@@ -37,16 +37,10 @@ function parseDate(s: string | null): string | null {
   return d.toISOString().slice(0, 10);
 }
 
-function shiftDate(dateStr: string, days: number): string {
+function shiftDateByYears(dateStr: string, years: number): string {
   const d = new Date(dateStr + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
+  d.setUTCFullYear(d.getUTCFullYear() + years);
   return d.toISOString().slice(0, 10);
-}
-
-function dateDiffDays(a: string, b: string): number {
-  const da = new Date(a + 'T00:00:00Z').getTime();
-  const db = new Date(b + 'T00:00:00Z').getTime();
-  return Math.round((db - da) / 86_400_000);
 }
 
 export async function GET(request: Request) {
@@ -68,9 +62,9 @@ export async function GET(request: Request) {
     prevStart = cs;
     prevEnd = ce;
   } else {
-    const days = dateDiffDays(start, end);
-    prevEnd = shiftDate(start, -1);
-    prevStart = shiftDate(prevEnd, -days);
+    // デフォルトは昨年同期間 (start/end をそれぞれ -1 年。月日を維持)
+    prevStart = shiftDateByYears(start, -1);
+    prevEnd = shiftDateByYears(end, -1);
   }
 
   try {

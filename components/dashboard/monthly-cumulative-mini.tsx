@@ -200,7 +200,7 @@ export function MonthlyCumulativeMini() {
         actualKey="roomDaysCum"
         targetKey="roomDaysTargetCum"
         formatTick={(v) => numFormat.format(v)}
-        formatTooltip={(v) => `${numFormat.format(v)} RD`}
+        formatTooltip={(v) => `${numFormat.format(v)} 日`}
       />
       <MiniChartCard
         title="消化予算"
