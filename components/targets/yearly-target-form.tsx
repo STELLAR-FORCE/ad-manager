@@ -41,7 +41,7 @@ const FIELDS: { key: FieldKey; label: string; placeholder: string; unit: string;
     label: 'ルームデイズ',
     placeholder: '例: 20000',
     unit: 'RD',
-    format: (v) => numFormat.format(v) + ' RD',
+    format: (v) => numFormat.format(v) + ' 日',
   },
   {
     key: 'cvTarget',

@@ -198,30 +198,30 @@ function buildAnomalies(
   if (cpaTarget && current.cpa > 0 && current.cpa > cpaTarget * 1.2)
     list.push({ type: 'warning', message: `CPA が目標値の ${pct1Format.format(current.cpa / cpaTarget)} に達しています（目標 ${jpyFormat.format(cpaTarget)}、実績 ${jpyFormat.format(Math.round(current.cpa))}）` });
 
-  // CPA 前期比 20%悪化
+  // CPA 昨年比 20%悪化
   if (cpaDelta !== null && cpaDelta > 0.2)
-    list.push({ type: 'warning', message: `CPA が前期比 ${pctFormat.format(cpaDelta)} 悪化しています` });
+    list.push({ type: 'warning', message: `CPA が昨年比 ${pctFormat.format(cpaDelta)} 悪化しています` });
 
-  // CV 前期比 30%急落
+  // CV 昨年比 30%急落
   if (cvDelta !== null && cvDelta < -0.3)
-    list.push({ type: 'warning', message: `CV数が前期比 ${pctFormat.format(Math.abs(cvDelta))} 急落しています` });
+    list.push({ type: 'warning', message: `CV数が昨年比 ${pctFormat.format(Math.abs(cvDelta))} 急落しています` });
 
   // 予算超過
   if (budget && budget.totalBudget > 0 && budget.utilization > 1)
     list.push({ type: 'warning', message: `月次予算を超過しています（消化率 ${pct1Format.format(budget.utilization)}）` });
 
   // ── 注意 ─────────────────────────────────────────
-  // 費用 前期比 30%急増
+  // 費用 昨年比 30%急増
   if (costDelta !== null && costDelta > 0.3)
-    list.push({ type: 'info', message: `費用が前期比 ${pctFormat.format(costDelta)} 急増しています` });
+    list.push({ type: 'info', message: `費用が昨年比 ${pctFormat.format(costDelta)} 急増しています` });
 
-  // 費用 前期比 30%急減（予算未消化の可能性）
+  // 費用 昨年比 30%急減（予算未消化の可能性）
   if (costDelta !== null && costDelta < -0.3)
-    list.push({ type: 'info', message: `費用が前期比 ${pctFormat.format(Math.abs(costDelta))} 大幅減少しています（予算未消化の可能性）` });
+    list.push({ type: 'info', message: `費用が昨年比 ${pctFormat.format(Math.abs(costDelta))} 大幅減少しています（予算未消化の可能性）` });
 
-  // CTR 前期比 20%低下（クリエイティブ疲弊）
+  // CTR 昨年比 20%低下（クリエイティブ疲弊）
   if (ctrDelta !== null && ctrDelta < -0.2)
-    list.push({ type: 'info', message: `CTR が前期比 ${pctFormat.format(Math.abs(ctrDelta))} 低下しています（クリエイティブ疲弊の可能性）` });
+    list.push({ type: 'info', message: `CTR が昨年比 ${pctFormat.format(Math.abs(ctrDelta))} 低下しています（クリエイティブ疲弊の可能性）` });
 
   // 予算残り 10%未満
   if (budget && budget.totalBudget > 0 && budget.utilization >= 0.9 && budget.utilization <= 1)
@@ -699,7 +699,7 @@ export default function DashboardPage() {
   const previous: Metrics = summary?.previous ?? EMPTY_METRICS;
   const byPlatform: PlatformMetrics[] = summary?.byPlatform ?? [];
   const displayTrend = trend;
-  const deltaLabel = dateRange.compareEnabled ? '比較期間比' : '前期間比';
+  const deltaLabel = dateRange.compareEnabled ? '比較期間比' : '昨年比';
   const anomalies = hasSummary ? buildAnomalies(current, previous, budget, cpaTarget) : [];
 
   // 比較トレンドをインデックス合わせでマージ + 累積計算
