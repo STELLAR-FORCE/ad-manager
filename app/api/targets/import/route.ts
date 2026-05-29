@@ -38,7 +38,6 @@ function structLiteral(r: TargetCsvRow, updatedBy: string): string {
     ${orNull(r.roomDaysTarget, 'INT64')} AS room_days_target,
     ${orNull(r.grossProfitTarget, 'NUMERIC')} AS gross_profit_target,
     ${orNull(r.revenueTarget, 'NUMERIC')} AS revenue_target,
-    ${orNull(r.useDaysTarget, 'NUMERIC')} AS use_days_target,
     ${orNull(r.wonTarget, 'INT64')} AS won_target,
     ${sq(updatedBy)} AS updated_by
   )`;
@@ -62,17 +61,16 @@ async function mergeBatch(rows: TargetCsvRow[], updatedBy: string): Promise<void
         room_days_target    = IFNULL(S.room_days_target,    T.room_days_target),
         gross_profit_target = IFNULL(S.gross_profit_target, T.gross_profit_target),
         revenue_target      = IFNULL(S.revenue_target,      T.revenue_target),
-        use_days_target     = IFNULL(S.use_days_target,     T.use_days_target),
         won_target          = IFNULL(S.won_target,          T.won_target),
         axis                = S.axis,
         updated_at          = CURRENT_TIMESTAMP(),
         updated_by          = S.updated_by
     WHEN NOT MATCHED THEN
       INSERT (month, platform, axis, cv_target, room_target, room_days_target,
-              gross_profit_target, revenue_target, use_days_target, won_target,
+              gross_profit_target, revenue_target, won_target,
               updated_at, updated_by)
       VALUES (S.month, S.platform, S.axis, S.cv_target, S.room_target, S.room_days_target,
-              S.gross_profit_target, S.revenue_target, S.use_days_target, S.won_target,
+              S.gross_profit_target, S.revenue_target, S.won_target,
               CURRENT_TIMESTAMP(), S.updated_by)
   `;
   await bq.query({ query: sql, location: LOCATION });

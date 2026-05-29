@@ -43,7 +43,7 @@ import {
 import { Chip, Meter, ProgressCircle } from '@heroui/react';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
 import { IntegratedFunnel } from '@/components/dashboard/integrated-funnel';
-import { SalesforceSection } from '@/components/dashboard/salesforce-section';
+import { MediaDailyCostChart } from '@/components/dashboard/media-daily-cost-chart';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
@@ -1548,8 +1548,6 @@ export default function DashboardPage() {
             {byPlatform.map((s) => {
               const budgetRow = budget?.byPlatform.find((b) => b.platform === s.platform);
               const utilPct = budgetRow ? budgetRow.utilization * 100 : null;
-              const meterColor: 'success' | 'warning' | 'danger' =
-                utilPct == null ? 'success' : utilPct > 100 ? 'danger' : utilPct > 80 ? 'warning' : 'success';
               return (
               <Card key={s.platform}>
                 <CardHeader className="pb-3">
@@ -1619,9 +1617,9 @@ export default function DashboardPage() {
                     />
                   </div>
                   {budgetRow && utilPct != null && (
-                    <div className="mt-4 pt-3 border-t border-border/50 space-y-1.5">
+                    <div className="mt-4 pt-3 border-t border-border/50">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">予算消化率</span>
+                        <span className="text-muted-foreground">月次予算消化率</span>
                         <span className="tabular-nums font-medium">
                           {pct1Format.format(budgetRow.utilization)}
                           <span className="text-muted-foreground/60 ml-1">
@@ -1629,18 +1627,16 @@ export default function DashboardPage() {
                           </span>
                         </span>
                       </div>
-                      <Meter
-                        aria-label={`${PLATFORM_LABELS[s.platform]} 予算消化率`}
-                        value={Math.min(100, utilPct)}
-                        maxValue={100}
-                        size="sm"
-                        color={meterColor}
-                        className="w-full"
-                      >
-                        <Meter.Track>
-                          <Meter.Fill />
-                        </Meter.Track>
-                      </Meter>
+                    </div>
+                  )}
+
+                  {/* 今月の日次消化予定 vs 実績 (累計) — cost_plan_daily_by_platform ベース */}
+                  {(s.platform === 'google' || s.platform === 'yahoo' || s.platform === 'bing') && (
+                    <div className="mt-4 pt-3 border-t border-border/50">
+                      <p className="text-xs text-muted-foreground mb-1">
+                        今月の消化予定 vs 実績 (累計)
+                      </p>
+                      <MediaDailyCostChart platform={s.platform} />
                     </div>
                   )}
                 </CardContent>
@@ -1648,9 +1644,6 @@ export default function DashboardPage() {
             );})}
           </div>
         )}
-
-        {/* ─── 営業パイプライン（Salesforce） ─── */}
-        <SalesforceSection dateRange={dateRange} />
 
         {/* ─── キャッシュ取得時刻インジケーター（左下固定） ─── */}
         {cacheFetchedAt && (

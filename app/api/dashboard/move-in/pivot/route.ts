@@ -9,7 +9,7 @@
  *     pivot: [{ moveInMonth, cvMonth, cv, cvRooms, requestRoomDays }]
  *       - cvMonth は 'YYYY-MM' か特殊値 '__before__'（選択期間より前のCV）
  *     summary: [{ moveInMonth, wonCv, contractedRooms, grossProfit, revenue, contractedRoomDays }]
- *     targets: [{ month, platform=null, cvTarget, roomTarget, ..., useDaysTarget, grossProfitTarget }]
+ *     targets: [{ month, platform=null, cvTarget, roomTarget, roomDaysTarget, grossProfitTarget, revenueTarget, wonTarget }]
  *   }
  */
 
@@ -44,7 +44,6 @@ type RawTargetRow = {
   room_days_target: number | null;
   gross_profit_target: number | null;
   revenue_target: number | null;
-  use_days_target: number | null;
   inhouse_unit_price: number | null;
 };
 
@@ -72,7 +71,7 @@ export async function GET(request: Request) {
         // targets は dashboard データセット未作成だと落ちるので、その場合は空配列
         query<RawTargetRow>(
           `SELECT month, platform, cv_target, room_target, room_days_target,
-                  gross_profit_target, revenue_target, use_days_target, inhouse_unit_price
+                  gross_profit_target, revenue_target, inhouse_unit_price
            FROM ${TARGETS_TABLE}
            WHERE month BETWEEN DATE(@periodStart) AND DATE(@periodEnd)
              AND platform IS NULL
@@ -109,7 +108,6 @@ export async function GET(request: Request) {
       grossProfitTarget:
         r.gross_profit_target == null ? null : Number(r.gross_profit_target),
       revenueTarget: r.revenue_target == null ? null : Number(r.revenue_target),
-      useDaysTarget: r.use_days_target == null ? null : Number(r.use_days_target),
       inhouseUnitPrice:
         r.inhouse_unit_price == null ? null : Number(r.inhouse_unit_price),
     }));

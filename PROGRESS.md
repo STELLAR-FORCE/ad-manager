@@ -364,6 +364,51 @@ npm run dev
 4. Issue #94 各ページの数値ソース確認 (bq 実値検証、#118 修正の効果確認も兼ねる)
 5. Issue #102 /dashboard/analysis (分析ページ)
 
+---
+
+## 2026-05-28 14:30
+
+### やったこと
+- **アスムコーポレーション粗利マイナス調査 (Issue #129 起票)**: ダッシュボード新規成約フィードで -¥150,050 と表示されていた件。BQ で実データ確認 → SF 上は粗利 +23,270 (メゾン・ド・リッシュ確定済み) だが mart は 5/27 02:28 時点の途中状態 (借主請求 NULL・業者請求だけ・粗利マイナス) を保持していた。**ダッシュボードバグではなく SF→staging 同期ラグ + 入力途中レコードの混入**が判明。memory `project_mart_sync_lag.md` に記録
+- **Issue #129 課題 A 全対応 (PR #130, #131)**: 共通フィルタヘルパー `establishedContractFilterSql()` を新設し、粗利・成約集計の全箇所に適用
+  - 条件: 失注/キャンセル除外 + 借主請求 > 0 (赤字契約も計上) または 借主請求 NULL + 粗利 > 0 (粗利だけ手動入力されたウエダのような案件)
+  - 適用: activities / monthly-cumulative / progress (粗利 gross CTE) / MOVE_IN_FORECAST_SQL / MOVE_IN_SUMMARY_SQL / contractCte
+  - **progress の成約数 (has_contract) も同じフィルタに変更** → 5月 14件 → 10件 (失注/入力途中 4件を除外)
+  - 検証 (2026 上半期 move-in 確定粗利): ¥21,144,630 → ¥21,537,984 (+393,354 / +1.9%、失注のマイナス粗利を除外した結果)
+- **Issue #122 クライアント側 5 箇所 (PR #131)**: 共通ヘルパー `toLocalIsoDate()` を `lib/format.ts` に新設し、`toISOString().split('T')[0]` パターンを置換 (campaigns ×3 / ad-groups / salesforce)
+- **入居月終了後は「達成/未達」判定 (PR #132)**: move-in サマリーカードで入居月が終了したら、**確定粗利のみ** vs 目標 で「達成/未達」を厳格判定。進行中は予想粗利 (確定+見込) で「順調/注意/危険」のまま。カード枠線も achieved=緑、failed=赤
+- **ピボット見やすさ改修 (PR #134)**: 全月詳細 (CV発生月 × 入居月) ピボットを整理
+  - ヘッダ 3 段 → 2 段 (TargetActualHeaderCells 削除)
+  - 「目標」列を全削除 (列数 29 → 15 に半減)
+  - ヒートマップ強度 0.35 → 0.6
+  - 下半分の NeedPair / ValuePair / CountOnlyPair 等の colSpan={2} を全て新 2 列構造に整合
+- **Issue #129 / #114 / #118 / #123 / #124 をクローズ** (実装完了分)
+- **新規 Issue #129** (売上未確定/同期ラグ), **#133** (ピボット記載内容の精査)
+- **Bing 権限依頼文を作成**: IT 担当者 (Global Administrator) に依頼する手順書 (Microsoft Entra ID で Cloud Application Administrator ロール付与) を Markdown でユーザーに提供 — ユーザーが並行して担当に確認中
+
+### 決まったこと / 学んだこと
+- **mart.salesforce_all_obj はビュー**、元は `staging.*` (Lead / Opportunity / contract_management__c / Account)。**staging は 1 日 1 回程度の同期**で当日の SF 入力は翌日まで反映されない (memory `project_mart_sync_lag.md`)
+- **「成立した契約」の定義**: 失注除外 + (借主請求 > 0 OR (借主請求 NULL + 粗利 > 0))
+  - 業務的に「契約管理ID NOT NULL」だけでは不十分。ヒアリング段階で先に契約管理レコードが作られる運用がある
+  - 借主請求 NULL でも粗利が手動入力された案件 (ウエダ等) は計上する。赤字契約 (借主請求 > 0 + 粗利 マイナス) も計上 (正確に数字を知りたいユーザー方針)
+- **入居月終了後の判定**は確定粗利のみで厳格に。見込分は楽観的なので除外 (B 案採用)
+- ピボットの「目標」列はそもそも CV発生月別では目標値が無いため null 列で意味なし。削除で情報密度が上がる
+- ヒートマップ強度は 0.6 でも文字は十分読める。0.35 は薄すぎだった
+
+### 詰まっていること / 保留
+- **Issue #111 Bing ETL** — Global Administrator の SP 作成 or ロール付与依頼を IT 担当者に提出済み (ユーザー側で進行中)
+- **Issue #129 課題 B (staging 同期頻度)** — BI 担当への相談待ち
+- bq CLI 認証が頻繁に切れる問題は継続 (`! gcloud auth login` で都度更新)
+- progress 等の他 SQL に成立契約フィルタを入れた効果検証 (#94) は未実施
+
+### 次にやること (2026-05-29 から再開)
+1. **Issue #122 残** — API 側 10 箇所の `toISOString().slice(0,10)` の精査 (parseDate 系は実害ないが点検) + `lib/trend-mock.ts` `ai-advisor/insights`
+2. **Issue #133** — ピボット記載内容 (各行) の精査
+3. **Issue #117 残** — 半年期間選択時のサマリーカード表示調整 (仕様議論)
+4. **Issue #112** — RD目標 / 利用日数目標の運用整理
+5. **Issue #94** — 各ページの数値ソース確認 (本日の修正の効果検証)
+6. **Issue #102** — /dashboard/analysis 分析ページ新規
+
 <!-- フォーマット:
 
 ## YYYY-MM-DD HH:MM

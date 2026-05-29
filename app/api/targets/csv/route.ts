@@ -29,7 +29,6 @@ type RawRow = {
   room_days_target: number | null;
   gross_profit_target: number | null;
   revenue_target: number | null;
-  use_days_target: number | null;
   won_target: number | null;
 };
 
@@ -54,7 +53,7 @@ export async function GET(request: Request) {
       const raw = await query<RawRow>(
         `SELECT month, platform, IFNULL(axis, 'movein') AS axis,
                 cv_target, room_target, room_days_target,
-                gross_profit_target, revenue_target, use_days_target, won_target
+                gross_profit_target, revenue_target, won_target
          FROM ${TARGETS_TABLE}
          WHERE EXTRACT(YEAR FROM month) = @year
          ORDER BY month, IFNULL(platform, ''), axis`,
@@ -69,7 +68,6 @@ export async function GET(request: Request) {
         roomDaysTarget: r.room_days_target,
         grossProfitTarget: r.gross_profit_target == null ? null : Number(r.gross_profit_target),
         revenueTarget: r.revenue_target == null ? null : Number(r.revenue_target),
-        useDaysTarget: r.use_days_target == null ? null : Number(r.use_days_target),
         wonTarget: r.won_target,
       }));
     } catch (err) {
