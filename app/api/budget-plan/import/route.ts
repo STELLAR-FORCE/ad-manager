@@ -82,7 +82,8 @@ export async function POST(request: Request) {
       const { rows } = distributeMonthlyBudget({
         year,
         month,
-        monthlyTotal: csvRow.monthlyTotal,
+        searchMonthly: csvRow.searchMonthly,
+        displayMonthly: csvRow.displayMonthly,
         applyWeekWeight: csvRow.applyWeekWeight,
       });
       await mergeBatch(rows, email);

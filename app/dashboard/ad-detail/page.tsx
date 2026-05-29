@@ -1630,13 +1630,15 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {/* 今月の日次消化予定 vs 実績 (累計) — cost_plan_daily_by_platform ベース */}
+                  {/* 今月の日次消化予定 vs 実績 (累計) — adType フィルタと連動 */}
                   {(s.platform === 'google' || s.platform === 'yahoo' || s.platform === 'bing') && (
                     <div className="mt-4 pt-3 border-t border-border/50">
                       <p className="text-xs text-muted-foreground mb-1">
                         今月の消化予定 vs 実績 (累計)
+                        {adType === 'search' && ' — リスティング'}
+                        {adType === 'display' && ' — ディスプレイ'}
                       </p>
-                      <MediaDailyCostChart platform={s.platform} />
+                      <MediaDailyCostChart platform={s.platform} adType={adType} />
                     </div>
                   )}
                 </CardContent>

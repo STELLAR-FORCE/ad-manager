@@ -193,7 +193,7 @@ export default function BudgetPage() {
               className="gap-2"
               onClick={downloadBudgetCsv}
               aria-label="予算 CSV テンプレートをダウンロード"
-              title="月次予算をまとめて入力する CSV テンプレ"
+              title="月次の リスティング予算 / ディスプレイ予算 をまとめて入力する CSV テンプレ"
             >
               <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
               予算CSV
