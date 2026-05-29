@@ -15,6 +15,7 @@ import { CumChartBody } from '@/components/dashboard/cum-chart-body';
 import type { MediaDailyCostResponse } from '@/app/api/dashboard/media-daily-cost/route';
 
 type Platform = 'google' | 'yahoo' | 'bing';
+type AdTypeFilter = 'all' | 'search' | 'display';
 
 function thisMonth(): string {
   const d = new Date();
@@ -24,10 +25,13 @@ function thisMonth(): string {
 export function MediaDailyCostChart({
   platform,
   month,
+  adType = 'all',
 }: {
   platform: Platform;
   /** 'YYYY-MM'。省略時は今月 */
   month?: string;
+  /** all (両方) / search (リスティング) / display (ディスプレイ)。省略時 all */
+  adType?: AdTypeFilter;
 }) {
   const targetMonth = month ?? thisMonth();
   const [data, setData] = useState<MediaDailyCostResponse | null>(null);
@@ -37,9 +41,10 @@ export function MediaDailyCostChart({
     setData(null);
     setError(null);
     const controller = new AbortController();
-    fetch(`/api/dashboard/media-daily-cost?platform=${platform}&month=${targetMonth}`, {
-      signal: controller.signal,
-    })
+    fetch(
+      `/api/dashboard/media-daily-cost?platform=${platform}&month=${targetMonth}&adType=${adType}`,
+      { signal: controller.signal },
+    )
       .then(async (r) => {
         const json = await r.json();
         if (!r.ok) throw new Error(json?.error ?? `HTTP ${r.status}`);
@@ -51,7 +56,7 @@ export function MediaDailyCostChart({
         setError(err instanceof Error ? err.message : String(err));
       });
     return () => controller.abort();
-  }, [platform, targetMonth]);
+  }, [platform, targetMonth, adType]);
 
   const chartData = useMemo(() => {
     if (!data) return [];

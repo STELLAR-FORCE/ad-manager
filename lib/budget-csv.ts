@@ -12,11 +12,19 @@
 
 export type BudgetCsvRow = {
   month: string; // 'YYYY-MM-01'
-  monthlyTotal: number;
+  /** リスティング (検索広告 = Bing/Yahoo/Google search) の月次予算 */
+  searchMonthly: number;
+  /** ディスプレイ (リタゲ・デマンドジェン = Bing/Yahoo/Google display) の月次予算 */
+  displayMonthly: number;
   applyWeekWeight: boolean;
 };
 
-export const BUDGET_CSV_HEADER = ['対象月', '月次予算', '週重み有効'] as const;
+export const BUDGET_CSV_HEADER = [
+  '対象月',
+  'リスティング予算',
+  'ディスプレイ予算',
+  '週重み有効',
+] as const;
 
 function escapeCsvValue(v: string | number | boolean | null | undefined): string {
   if (v == null) return '';
@@ -26,7 +34,12 @@ function escapeCsvValue(v: string | number | boolean | null | undefined): string
 }
 
 function rowToCsvLine(r: BudgetCsvRow): string {
-  return [r.month.slice(0, 7), r.monthlyTotal, r.applyWeekWeight ? 'true' : 'false']
+  return [
+    r.month.slice(0, 7),
+    r.searchMonthly,
+    r.displayMonthly,
+    r.applyWeekWeight ? 'true' : 'false',
+  ]
     .map(escapeCsvValue)
     .join(',');
 }
@@ -115,7 +128,7 @@ export function parseBudgetCsv(text: string): ParsedBudgetCsv {
   const errors: { line: number; message: string }[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
-    if (cols.length < 3) {
+    if (cols.length < 4) {
       errors.push({ line: i + 1, message: `列数不足 (${cols.length})` });
       continue;
     }
@@ -124,24 +137,35 @@ export function parseBudgetCsv(text: string): ParsedBudgetCsv {
       errors.push({ line: i + 1, message: `対象月 が不正: '${cols[0]}'` });
       continue;
     }
-    const monthlyTotal = parseNum(cols[1]);
-    if (monthlyTotal == null || monthlyTotal <= 0) {
-      errors.push({ line: i + 1, message: `月次予算 が不正: '${cols[1]}'` });
+    const searchMonthly = parseNum(cols[1]);
+    if (searchMonthly == null || searchMonthly < 0) {
+      errors.push({ line: i + 1, message: `リスティング予算 が不正: '${cols[1]}'` });
       continue;
     }
-    rows.push({ month, monthlyTotal, applyWeekWeight: parseBool(cols[2]) });
+    const displayMonthly = parseNum(cols[2]);
+    if (displayMonthly == null || displayMonthly < 0) {
+      errors.push({ line: i + 1, message: `ディスプレイ予算 が不正: '${cols[2]}'` });
+      continue;
+    }
+    rows.push({
+      month,
+      searchMonthly,
+      displayMonthly,
+      applyWeekWeight: parseBool(cols[3]),
+    });
   }
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, rows };
 }
 
-/** テンプレ: 指定年の 12 ヶ月分 (月次予算は空) */
+/** テンプレ: 指定年の 12 ヶ月分 (予算は空) */
 export function buildBudgetTemplateRows(year: number): BudgetCsvRow[] {
   const rows: BudgetCsvRow[] = [];
   for (let m = 1; m <= 12; m++) {
     rows.push({
       month: `${year}-${String(m).padStart(2, '0')}-01`,
-      monthlyTotal: 0,
+      searchMonthly: 0,
+      displayMonthly: 0,
       applyWeekWeight: true,
     });
   }
