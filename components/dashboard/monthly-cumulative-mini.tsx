@@ -3,22 +3,41 @@
 /**
  * ダッシュボードトップに横並び 4 つの小型累計グラフを表示するセクション。
  *
- * 4 指標: CV 数 / CV 室数 / ルームデイズ / 消化予算 (発生日ベース、今月)
- * (旧 /dashboard/cv-daily ページから移行。粗利グラフは廃止)
+ * 4 指標: CV 数 / CV 室数 / ルームデイズ / 消化予算 (旧 /dashboard/cv-daily ページから移行)
+ * 軸 (入居日 / 発生日) と 月 をセレクタで切替可能。
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CumChartBody } from '@/components/dashboard/cum-chart-body';
 import { jpyCompact, jpyFormat, numFormat } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type {
   MonthlyCumulativeResponse,
   MonthlyCumulativePoint,
 } from '@/app/api/dashboard/monthly-cumulative/route';
 
+type Axis = 'movein' | 'received';
+
+const AXIS_TABS: { key: Axis; label: string; hint: string }[] = [
+  { key: 'received', label: '発生日', hint: '受付日時 が期間内' },
+  { key: 'movein', label: '入居日', hint: '利用期間_始期 が期間内' },
+];
+
 function thisMonth(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function recentMonths(): { key: string; label: string }[] {
+  const out: { key: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    out.push({ key, label: `${d.getFullYear()}年${d.getMonth() + 1}月` });
+  }
+  return out;
 }
 
 type ChartRow = {
@@ -77,7 +96,9 @@ function buildCumulative(
 const CHART_HEIGHT = 180;
 
 export function MonthlyCumulativeMini() {
-  const month = thisMonth();
+  const [axis, setAxis] = useState<Axis>('received');
+  const [month, setMonth] = useState<string>(thisMonth());
+  const monthOptions = useMemo(() => recentMonths(), []);
   const [data, setData] = useState<MonthlyCumulativeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,7 +106,7 @@ export function MonthlyCumulativeMini() {
     setData(null);
     setError(null);
     const controller = new AbortController();
-    fetch(`/api/dashboard/monthly-cumulative?axis=received&month=${month}`, {
+    fetch(`/api/dashboard/monthly-cumulative?axis=${axis}&month=${month}`, {
       signal: controller.signal,
     })
       .then(async (r) => {
@@ -99,7 +120,7 @@ export function MonthlyCumulativeMini() {
         setError(err instanceof Error ? err.message : String(err));
       });
     return () => controller.abort();
-  }, [month]);
+  }, [axis, month]);
 
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -115,7 +136,45 @@ export function MonthlyCumulativeMini() {
   }
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="space-y-3">
+      {/* 軸 + 月 セレクタ */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground">月次累計推移</span>
+        <div className="flex gap-1" role="tablist" aria-label="集計軸">
+          {AXIS_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={axis === tab.key}
+              title={tab.hint}
+              onClick={() => setAxis(tab.key)}
+              className={cn(
+                'text-xs px-2.5 py-1 rounded-md transition-colors',
+                axis === tab.key
+                  ? 'bg-primary/15 text-primary border border-primary/30'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground border border-transparent',
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <select
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+          className="h-7 px-2 rounded-md border bg-background text-xs tabular-nums"
+          aria-label="対象月"
+        >
+          {monthOptions.map((m) => (
+            <option key={m.key} value={m.key}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <MiniChartCard
         title="CV 数"
         data={chartData}
@@ -153,6 +212,7 @@ export function MonthlyCumulativeMini() {
         formatTooltip={(v) => jpyFormat.format(v)}
         targetLabel="消化予定"
       />
+      </div>
     </div>
   );
 }
