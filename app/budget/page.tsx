@@ -91,6 +91,17 @@ export default function BudgetPage() {
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showInactive, setShowInactive] = useState(false)
+  type SortKey = 'name' | 'platform' | 'adType' | 'spent'
+  const [sortKey, setSortKey] = useState<SortKey>('spent')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir(key === 'spent' ? 'desc' : 'asc')
+    }
+  }
   const currentYear = new Date().getFullYear()
 
   function downloadBudgetCsv() {
@@ -174,7 +185,7 @@ export default function BudgetPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">予算管理</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              キャンペーン別の消化状況とステータス。当月総予算は「月次累計推移」ページの消化予定編集から設定します。
+              キャンペーン別の消化状況とステータス。月次予算は上の「予算CSV」をインポート、または「日次予算 編集」で個別設定できます。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -319,10 +330,37 @@ export default function BudgetPage() {
 
         {/* Campaign table */}
         {(() => {
-          const visibleCampaigns = showInactive
-            ? campaigns
-            : campaigns.filter((c) => c.status === 'active')
-          const hiddenCount = campaigns.length - visibleCampaigns.length
+          // 0 円消化は常に非表示。配信中フィルタとソートを適用
+          const filtered = campaigns
+            .filter((c) => c.spent > 0)
+            .filter((c) => (showInactive ? true : c.status === 'active'))
+          const visibleCampaigns = [...filtered].sort((a, b) => {
+            const av =
+              sortKey === 'name'
+                ? a.name
+                : sortKey === 'platform'
+                  ? PLATFORM_LABELS[a.platform] ?? a.platform
+                  : sortKey === 'adType'
+                    ? AD_TYPE_LABELS[a.adType] ?? a.adType
+                    : a.spent
+            const bv =
+              sortKey === 'name'
+                ? b.name
+                : sortKey === 'platform'
+                  ? PLATFORM_LABELS[b.platform] ?? b.platform
+                  : sortKey === 'adType'
+                    ? AD_TYPE_LABELS[b.adType] ?? b.adType
+                    : b.spent
+            if (typeof av === 'number' && typeof bv === 'number') {
+              return sortDir === 'asc' ? av - bv : bv - av
+            }
+            return sortDir === 'asc'
+              ? String(av).localeCompare(String(bv), 'ja')
+              : String(bv).localeCompare(String(av), 'ja')
+          })
+          const hiddenCount = campaigns.filter((c) => c.spent > 0).length - visibleCampaigns.length
+          const sortIcon = (key: SortKey) =>
+            sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
           return (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
@@ -358,10 +396,34 @@ export default function BudgetPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>キャンペーン名</TableHead>
-                        <TableHead>媒体</TableHead>
-                        <TableHead>広告種別</TableHead>
-                        <TableHead className="text-right">消化額</TableHead>
+                        <TableHead
+                          className="cursor-pointer select-none hover:text-foreground"
+                          onClick={() => toggleSort('name')}
+                          aria-sort={sortKey === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                        >
+                          キャンペーン名{sortIcon('name')}
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer select-none hover:text-foreground"
+                          onClick={() => toggleSort('platform')}
+                          aria-sort={sortKey === 'platform' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                        >
+                          媒体{sortIcon('platform')}
+                        </TableHead>
+                        <TableHead
+                          className="cursor-pointer select-none hover:text-foreground"
+                          onClick={() => toggleSort('adType')}
+                          aria-sort={sortKey === 'adType' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                        >
+                          広告種別{sortIcon('adType')}
+                        </TableHead>
+                        <TableHead
+                          className="text-right cursor-pointer select-none hover:text-foreground"
+                          onClick={() => toggleSort('spent')}
+                          aria-sort={sortKey === 'spent' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                        >
+                          消化額{sortIcon('spent')}
+                        </TableHead>
                         <TableHead>ステータス</TableHead>
                       </TableRow>
                     </TableHeader>

@@ -32,6 +32,7 @@ import {
 } from '@/lib/campaign-mock-data';
 import { MetricTooltip } from '@/components/ui/metric-tooltip';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
+import { SearchKeywordsSection } from '@/components/dashboard/search-keywords-section';
 
 // ─── 定数・フォーマット ──────────────────────────────────────────
 
@@ -236,6 +237,9 @@ export default function KeywordsListPage() {
           <InfoIcon className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
           <span>サンプルデータを表示しています。</span>
         </div>
+
+        {/* 直近の検索キーワード (BQ 実データ) — CV あり / 新規語句 */}
+        <SearchKeywordsSection />
 
         {/* フィルター */}
         <div className="flex flex-wrap items-center gap-3">

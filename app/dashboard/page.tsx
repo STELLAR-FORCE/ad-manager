@@ -10,8 +10,8 @@
 import { ProgressView } from '@/components/dashboard/progress-view';
 import { ActivityFeed } from '@/components/dashboard/activity-feed';
 import { LeadActivityFeed } from '@/components/dashboard/lead-activity-feed';
-import { SearchKeywordsSection } from '@/components/dashboard/search-keywords-section';
 import { MediaBreakdownCard } from '@/components/dashboard/media-breakdown-card';
+import { MonthlyCumulativeMini } from '@/components/dashboard/monthly-cumulative-mini';
 import { AlertCenter } from '@/components/dashboard/alert-center';
 
 export default function DashboardPage() {
@@ -33,14 +33,14 @@ export default function DashboardPage() {
       {/* 媒体ブレイクダウン（発生日ベース / 今週 vs 先週） */}
       <MediaBreakdownCard />
 
+      {/* 月次累計推移ミニ (CV / CV室数 / RD / 消化予算 を横 4 列) */}
+      <MonthlyCumulativeMini />
+
       {/* 直近 7 日のフィード（新規成約 / 新規依頼を左右 2 カラム） */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ActivityFeed />
         <LeadActivityFeed />
       </div>
-
-      {/* 検索キーワード（媒体タブ切替 / CV あり + 新規 2 カラム） */}
-      <SearchKeywordsSection />
     </div>
   );
 }
