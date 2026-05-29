@@ -43,7 +43,6 @@ import {
 import { Chip, Meter, ProgressCircle } from '@heroui/react';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
 import { IntegratedFunnel } from '@/components/dashboard/integrated-funnel';
-import { SalesforceSection } from '@/components/dashboard/salesforce-section';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
@@ -1648,9 +1647,6 @@ export default function DashboardPage() {
             );})}
           </div>
         )}
-
-        {/* ─── 営業パイプライン（Salesforce） ─── */}
-        <SalesforceSection dateRange={dateRange} />
 
         {/* ─── キャッシュ取得時刻インジケーター（左下固定） ─── */}
         {cacheFetchedAt && (
