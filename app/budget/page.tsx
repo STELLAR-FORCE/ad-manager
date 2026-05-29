@@ -18,6 +18,7 @@ import { InfoIcon, Upload, FileSpreadsheet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Meter } from '@heroui/react'
 import { StatusChip } from '@/components/ui/status-chip'
+import { BudgetDailyEditButton } from '@/components/dashboard/budget-daily-edit-button'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 }).format(n)
@@ -197,6 +198,7 @@ export default function BudgetPage() {
               <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
               予算CSV
             </Button>
+            <BudgetDailyEditButton month={month} />
             <label
               className={cn(
                 'inline-flex items-center gap-2 text-sm h-8 px-3 rounded-md border bg-background hover:bg-muted cursor-pointer transition-colors',
