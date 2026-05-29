@@ -90,6 +90,7 @@ export default function BudgetPage() {
   const [isMock, setIsMock] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [showInactive, setShowInactive] = useState(false)
   const currentYear = new Date().getFullYear()
 
   function downloadBudgetCsv() {
@@ -317,54 +318,81 @@ export default function BudgetPage() {
         )}
 
         {/* Campaign table */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">キャンペーン別予算</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="space-y-2 p-4">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>キャンペーン名</TableHead>
-                    <TableHead>媒体</TableHead>
-                    <TableHead>広告種別</TableHead>
-                    <TableHead className="text-right">消化額</TableHead>
-                    <TableHead>ステータス</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {campaigns.map((c) => {
-                    const statusLabel = STATUS_LABELS[c.status] ?? c.status
-                    return (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-medium max-w-[200px] truncate" title={c.name}>
-                          {c.name.length > 24 ? `${c.name.slice(0, 24)}…` : c.name}
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">{PLATFORM_LABELS[c.platform] ?? c.platform}</span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">{AD_TYPE_LABELS[c.adType] ?? c.adType}</span>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">{fmt(c.spent)}</TableCell>
-                        <TableCell>
-                          <StatusChip status={c.status} label={statusLabel} />
-                        </TableCell>
+        {(() => {
+          const visibleCampaigns = showInactive
+            ? campaigns
+            : campaigns.filter((c) => c.status === 'active')
+          const hiddenCount = campaigns.length - visibleCampaigns.length
+          return (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+                <CardTitle className="text-sm font-medium">
+                  キャンペーン別予算
+                  <span className="ml-2 text-xs font-normal text-muted-foreground tabular-nums">
+                    {visibleCampaigns.length} 件
+                  </span>
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setShowInactive((s) => !s)}
+                  aria-pressed={showInactive}
+                  title={showInactive ? '配信中のみに戻す' : '停止中・終了も含めて表示'}
+                >
+                  {showInactive
+                    ? '配信中のみ表示'
+                    : hiddenCount > 0
+                      ? `停止中・終了も表示 (+${hiddenCount})`
+                      : '停止中・終了も表示'}
+                </Button>
+              </CardHeader>
+              <CardContent className="p-0">
+                {loading ? (
+                  <div className="space-y-2 p-4">
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <Skeleton key={i} className="h-10 w-full" />
+                    ))}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>キャンペーン名</TableHead>
+                        <TableHead>媒体</TableHead>
+                        <TableHead>広告種別</TableHead>
+                        <TableHead className="text-right">消化額</TableHead>
+                        <TableHead>ステータス</TableHead>
                       </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleCampaigns.map((c) => {
+                        const statusLabel = STATUS_LABELS[c.status] ?? c.status
+                        return (
+                          <TableRow key={c.id}>
+                            <TableCell className="font-medium max-w-[200px] truncate" title={c.name}>
+                              {c.name.length > 24 ? `${c.name.slice(0, 24)}…` : c.name}
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm">{PLATFORM_LABELS[c.platform] ?? c.platform}</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm">{AD_TYPE_LABELS[c.adType] ?? c.adType}</span>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums text-sm">{fmt(c.spent)}</TableCell>
+                            <TableCell>
+                              <StatusChip status={c.status} label={statusLabel} />
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })()}
       </div>
   )
 }
