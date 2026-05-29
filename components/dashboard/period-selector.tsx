@@ -117,7 +117,9 @@ export function PeriodSelector({
           onValueChange={(v) => onChange({ ...value, index: Number(v) })}
         >
           <SelectTrigger className="w-36 h-8">
-            <SelectValue />
+            <SelectValue>
+              {indexOpts.find((o) => o.value === value.index)?.label ?? String(value.index)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {indexOpts.map((o) => (
