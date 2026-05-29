@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const start = firstDayOfMonth(month);
     const end = firstDayOfNextMonth(month);
 
-    // cost_plan_daily の月合計を当月総予算とする (cv-daily の消化予定編集で入力)
+    // cost_plan_daily の月合計を当月総予算とする (予算 CSV or 日次予算 編集 で入力)
     const [campaigns, metrics, plannedRows] = await Promise.all([
       query<CampaignRow>(
         `SELECT id, name, platform, ad_type, status, monthly_budget
