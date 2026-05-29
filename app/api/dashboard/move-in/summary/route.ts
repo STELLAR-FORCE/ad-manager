@@ -82,7 +82,6 @@ type RawTargetRow = {
   room_days_target: number | null;
   gross_profit_target: number | null;
   revenue_target: number | null;
-  use_days_target: number | null;
 };
 
 function n(v: number | null | undefined): number {
@@ -111,7 +110,7 @@ export async function GET(request: Request) {
         query<MoveInSummaryRawRow>(MOVE_IN_SUMMARY_SQL, { periodStart, periodEnd }),
         query<RawTargetRow>(
           `SELECT month, cv_target, room_target, room_days_target,
-                  gross_profit_target, revenue_target, use_days_target
+                  gross_profit_target, revenue_target
            FROM ${TARGETS_TABLE}
            WHERE month BETWEEN DATE(@periodStart) AND DATE(@periodEnd)
              AND platform IS NULL
@@ -159,7 +158,6 @@ export async function GET(request: Request) {
       grossProfitTarget:
         r.gross_profit_target == null ? null : Number(r.gross_profit_target),
       revenueTarget: r.revenue_target == null ? null : Number(r.revenue_target),
-      useDaysTarget: r.use_days_target == null ? null : Number(r.use_days_target),
     }));
 
     return NextResponse.json(

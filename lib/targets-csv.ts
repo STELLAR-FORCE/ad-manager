@@ -25,10 +25,10 @@ export type TargetCsvRow = {
   roomDaysTarget: number | null;
   grossProfitTarget: number | null;
   revenueTarget: number | null;
-  useDaysTarget: number | null;
   wonTarget: number | null;
 };
 
+// Issue #112: 利用日数目標 (use_days_target) は RD目標 (room_days_target) に統合済みのため列削除
 export const CSV_HEADER = [
   '対象月',
   '媒体',
@@ -38,7 +38,6 @@ export const CSV_HEADER = [
   'RD目標',
   '粗利目標',
   '売上目標',
-  '利用日数目標',
   '成約数目標',
 ] as const;
 
@@ -77,7 +76,6 @@ function rowToCsvLine(r: TargetCsvRow): string {
     r.roomDaysTarget,
     r.grossProfitTarget,
     r.revenueTarget,
-    r.useDaysTarget,
     r.wonTarget,
   ]
     .map(escapeCsvValue)
@@ -182,7 +180,7 @@ export function parseTargetCsv(text: string): ParsedCsvResult {
   const errors: { line: number; message: string }[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
-    if (cols.length < 10) {
+    if (cols.length < 9) {
       errors.push({ line: i + 1, message: `列数が不足しています (${cols.length} 列)` });
       continue;
     }
@@ -210,8 +208,7 @@ export function parseTargetCsv(text: string): ParsedCsvResult {
       roomDaysTarget: parseNum(cols[5]),
       grossProfitTarget: parseNum(cols[6]),
       revenueTarget: parseNum(cols[7]),
-      useDaysTarget: parseNum(cols[8]),
-      wonTarget: parseNum(cols[9]),
+      wonTarget: parseNum(cols[8]),
     };
     // 全数値カラムが空 = 「入力しなかった行」とみなしてスキップ。
     // (媒体別行で何も入れてない / 媒体別管理しない月のためのテンプレ行)
@@ -221,7 +218,6 @@ export function parseTargetCsv(text: string): ParsedCsvResult {
       row.roomDaysTarget == null &&
       row.grossProfitTarget == null &&
       row.revenueTarget == null &&
-      row.useDaysTarget == null &&
       row.wonTarget == null;
     if (allEmpty) continue;
     rows.push(row);
@@ -252,7 +248,6 @@ export function buildTemplateRows(year: number): TargetCsvRow[] {
         roomDaysTarget: null,
         grossProfitTarget: null,
         revenueTarget: null,
-        useDaysTarget: null,
         wonTarget: null,
       });
     }

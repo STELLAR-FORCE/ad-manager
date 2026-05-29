@@ -26,8 +26,7 @@ type FieldKey =
   | 'cvTarget'
   | 'roomTarget'
   | 'wonTarget'
-  | 'revenueTarget'
-  | 'useDaysTarget';
+  | 'revenueTarget';
 
 const FIELDS: { key: FieldKey; label: string; placeholder: string; unit: string; format: (v: number) => string }[] = [
   {
@@ -71,13 +70,6 @@ const FIELDS: { key: FieldKey; label: string; placeholder: string; unit: string;
     placeholder: '例: 500000000',
     unit: '円',
     format: (v) => jpyFormat.format(v),
-  },
-  {
-    key: 'useDaysTarget',
-    label: '利用日数',
-    placeholder: '例: 18000',
-    unit: '日',
-    format: (v) => numFormat.format(v) + ' 日',
   },
 ];
 

@@ -76,8 +76,8 @@ type TargetRow = {
   month: string;
   cvTarget: number | null;
   roomTarget: number | null;
+  roomDaysTarget: number | null;
   grossProfitTarget: number | null;
-  useDaysTarget: number | null;
 };
 
 type ApiResponse = {
@@ -227,7 +227,7 @@ export default function MoveInPivotPage() {
   const cvTarget = (m: string) => lookups.targetMap.get(m)?.cvTarget ?? null;
   const roomTarget = (m: string) => lookups.targetMap.get(m)?.roomTarget ?? null;
   const grossTarget = (m: string) => lookups.targetMap.get(m)?.grossProfitTarget ?? null;
-  const useDaysTarget = (m: string) => lookups.targetMap.get(m)?.useDaysTarget ?? null;
+  const roomDaysTarget = (m: string) => lookups.targetMap.get(m)?.roomDaysTarget ?? null;
 
   const monthCvTotal = (m: string) => cvMonthRows.reduce((s, cv) => s + cellCv(cv, m), 0);
   const monthRoomTotal = (m: string) => cvMonthRows.reduce((s, cv) => s + cellRooms(cv, m), 0);
@@ -820,20 +820,20 @@ export default function MoveInPivotPage() {
                   />
                 </TableRow>
 
-                {/* ── 利用日数（目標）室数側のみ ── */}
+                {/* ── RD目標（旧「利用日数（目標）」と統合、Issue #112）── */}
                 <TableRow className="border-t-2 border-border">
                   <TableCell className="sticky left-0 bg-background z-10 font-semibold">
-                    利用日数（目標）
+                    RD目標
                   </TableCell>
                   {months.map((m) => (
                     <RoomOnlyPair
                       key={m}
-                      value={useDaysTarget(m)}
+                      value={roomDaysTarget(m)}
                       formatV={numFormat.format}
                     />
                   ))}
                   <RoomOnlyPair
-                    value={sumNullable(months, useDaysTarget)}
+                    value={sumNullable(months, roomDaysTarget)}
                     formatV={numFormat.format}
                     highlight
                   />

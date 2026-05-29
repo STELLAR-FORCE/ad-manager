@@ -31,7 +31,6 @@ type RawTargetRow = {
   room_days_target: number | null;
   gross_profit_target: number | null;
   revenue_target: number | null;
-  use_days_target: number | null;
   won_target: number | null;
   inhouse_unit_price: number | null;
 };
@@ -68,7 +67,7 @@ export async function GET(request: Request) {
     const rows = await query<RawTargetRow>(
       `SELECT month, platform, IFNULL(axis, 'movein') AS axis,
               cv_target, room_target, room_days_target,
-              gross_profit_target, revenue_target, use_days_target, won_target,
+              gross_profit_target, revenue_target, won_target,
               inhouse_unit_price
        FROM ${TARGETS_TABLE}
        WHERE month BETWEEN DATE(@from) AND DATE(@to)
@@ -87,7 +86,6 @@ export async function GET(request: Request) {
         roomDaysTarget: r.room_days_target,
         grossProfitTarget: r.gross_profit_target == null ? null : Number(r.gross_profit_target),
         revenueTarget: r.revenue_target == null ? null : Number(r.revenue_target),
-        useDaysTarget: r.use_days_target == null ? null : Number(r.use_days_target),
         wonTarget: r.won_target,
         inhouseUnitPrice: r.inhouse_unit_price == null ? null : Number(r.inhouse_unit_price),
       })),
@@ -154,7 +152,6 @@ export async function PUT(request: Request) {
     roomDaysTarget: num('roomDaysTarget'),
     grossProfitTarget: num('grossProfitTarget'),
     revenueTarget: num('revenueTarget'),
-    useDaysTarget: num('useDaysTarget'),
     wonTarget: num('wonTarget'),
     inhouseUnitPrice: num('inhouseUnitPrice'),
     updatedBy: email,
@@ -172,7 +169,6 @@ export async function PUT(request: Request) {
         @roomDaysTarget AS room_days_target,
         CAST(@grossProfitTarget AS NUMERIC) AS gross_profit_target,
         CAST(@revenueTarget AS NUMERIC) AS revenue_target,
-        CAST(@useDaysTarget AS NUMERIC) AS use_days_target,
         @wonTarget AS won_target,
         CAST(@inhouseUnitPrice AS NUMERIC) AS inhouse_unit_price,
         @updatedBy AS updated_by
@@ -187,7 +183,6 @@ export async function PUT(request: Request) {
         room_days_target = S.room_days_target,
         gross_profit_target = S.gross_profit_target,
         revenue_target = S.revenue_target,
-        use_days_target = S.use_days_target,
         won_target = S.won_target,
         inhouse_unit_price = S.inhouse_unit_price,
         axis = S.axis,
@@ -195,10 +190,10 @@ export async function PUT(request: Request) {
         updated_by = S.updated_by
     WHEN NOT MATCHED THEN
       INSERT (month, platform, axis, cv_target, room_target, room_days_target,
-              gross_profit_target, revenue_target, use_days_target, won_target,
+              gross_profit_target, revenue_target, won_target,
               inhouse_unit_price, updated_at, updated_by)
       VALUES (S.month, S.platform, S.axis, S.cv_target, S.room_target, S.room_days_target,
-              S.gross_profit_target, S.revenue_target, S.use_days_target, S.won_target,
+              S.gross_profit_target, S.revenue_target, S.won_target,
               S.inhouse_unit_price, CURRENT_TIMESTAMP(), S.updated_by)
   `;
 
@@ -216,7 +211,6 @@ export async function PUT(request: Request) {
         roomDaysTarget: 'INT64',
         grossProfitTarget: 'NUMERIC',
         revenueTarget: 'NUMERIC',
-        useDaysTarget: 'NUMERIC',
         wonTarget: 'INT64',
         inhouseUnitPrice: 'NUMERIC',
         updatedBy: 'STRING',

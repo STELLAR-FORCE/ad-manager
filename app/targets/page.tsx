@@ -45,7 +45,6 @@ type TargetRow = {
   roomDaysTarget: number | null;
   grossProfitTarget: number | null;
   revenueTarget: number | null;
-  useDaysTarget: number | null;
   wonTarget: number | null;
   inhouseUnitPrice: number | null;
 };
@@ -160,7 +159,6 @@ export default function TargetsPage() {
             roomDaysTarget: existing?.roomDaysTarget ?? null,
             grossProfitTarget: existing?.grossProfitTarget ?? null,
             revenueTarget: existing?.revenueTarget ?? null,
-            useDaysTarget: existing?.useDaysTarget ?? null,
             wonTarget: existing?.wonTarget ?? null,
             inhouseUnitPrice: existing?.inhouseUnitPrice ?? null,
             dirty: false,
@@ -207,7 +205,6 @@ export default function TargetsPage() {
           roomDaysTarget: r.roomDaysTarget,
           grossProfitTarget: r.grossProfitTarget,
           revenueTarget: r.revenueTarget,
-          useDaysTarget: r.useDaysTarget,
           wonTarget: r.wonTarget,
           inhouseUnitPrice: r.inhouseUnitPrice,
         }),
@@ -393,7 +390,6 @@ export default function TargetsPage() {
                   <TableHead className="text-right">RD目標</TableHead>
                   <TableHead className="text-right">粗利目標(円)</TableHead>
                   <TableHead className="text-right">売上目標(円)</TableHead>
-                  <TableHead className="text-right">利用日数目標</TableHead>
                   <TableHead className="text-right">成約数目標</TableHead>
                   <TableHead className="text-right">自社単価(円/日)</TableHead>
                   <TableHead className="text-right">操作</TableHead>
@@ -423,10 +419,6 @@ export default function TargetsPage() {
                       value={r.revenueTarget}
                       onChange={(v) => updateField(i, 'revenueTarget', v)}
                       hint={r.revenueTarget != null ? jpyCompact.format(r.revenueTarget) : undefined}
-                    />
-                    <NumCell
-                      value={r.useDaysTarget}
-                      onChange={(v) => updateField(i, 'useDaysTarget', v)}
                     />
                     <NumCell
                       value={r.wonTarget}
