@@ -201,12 +201,6 @@ export default function AdsListPage() {
           </p>
         </div>
 
-        {/* サンプルデータバナー */}
-        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300">
-          <InfoIcon className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
-          <span>サンプルデータを表示しています。</span>
-        </div>
-
         {/* フィルター */}
         <div className="flex flex-wrap items-center gap-3">
           <Select value={platformFilter} onValueChange={(v) => setPlatformFilter(v as Platform | 'all')}>

@@ -541,11 +541,6 @@ export default function CampaignsPage() {
         <DateRangePicker value={dateRange} onChange={setDateRange} today={TODAY} />
       </div>
 
-      <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300">
-        <InfoIcon className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
-        <span>サンプルデータを表示しています。API連携後に実データが反映されます。</span>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Section title="検索" adType="search" period={dateRange.main} />
         <Section title="その他" adType="display" period={dateRange.main} />
