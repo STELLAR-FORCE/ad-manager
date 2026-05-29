@@ -43,6 +43,7 @@ import {
 import { Chip, Meter, ProgressCircle } from '@heroui/react';
 import { CountingNumber } from '@/components/animate-ui/counting-number';
 import { IntegratedFunnel } from '@/components/dashboard/integrated-funnel';
+import { MediaDailyCostChart } from '@/components/dashboard/media-daily-cost-chart';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 import { cn } from '@/lib/utils';
 import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion';
@@ -1640,6 +1641,16 @@ export default function DashboardPage() {
                           <Meter.Fill />
                         </Meter.Track>
                       </Meter>
+                    </div>
+                  )}
+
+                  {/* 今月の日次消化予定 vs 実績 (累計) — cost_plan_daily_by_platform ベース */}
+                  {(s.platform === 'google' || s.platform === 'yahoo' || s.platform === 'bing') && (
+                    <div className="mt-4 pt-3 border-t border-border/50">
+                      <p className="text-xs text-muted-foreground mb-1">
+                        今月の消化予定 vs 実績 (累計)
+                      </p>
+                      <MediaDailyCostChart platform={s.platform} />
                     </div>
                   )}
                 </CardContent>
