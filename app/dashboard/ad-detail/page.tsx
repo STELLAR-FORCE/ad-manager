@@ -1548,8 +1548,6 @@ export default function DashboardPage() {
             {byPlatform.map((s) => {
               const budgetRow = budget?.byPlatform.find((b) => b.platform === s.platform);
               const utilPct = budgetRow ? budgetRow.utilization * 100 : null;
-              const meterColor: 'success' | 'warning' | 'danger' =
-                utilPct == null ? 'success' : utilPct > 100 ? 'danger' : utilPct > 80 ? 'warning' : 'success';
               return (
               <Card key={s.platform}>
                 <CardHeader className="pb-3">
@@ -1619,9 +1617,9 @@ export default function DashboardPage() {
                     />
                   </div>
                   {budgetRow && utilPct != null && (
-                    <div className="mt-4 pt-3 border-t border-border/50 space-y-1.5">
+                    <div className="mt-4 pt-3 border-t border-border/50">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">予算消化率</span>
+                        <span className="text-muted-foreground">月次予算消化率</span>
                         <span className="tabular-nums font-medium">
                           {pct1Format.format(budgetRow.utilization)}
                           <span className="text-muted-foreground/60 ml-1">
@@ -1629,18 +1627,6 @@ export default function DashboardPage() {
                           </span>
                         </span>
                       </div>
-                      <Meter
-                        aria-label={`${PLATFORM_LABELS[s.platform]} 予算消化率`}
-                        value={Math.min(100, utilPct)}
-                        maxValue={100}
-                        size="sm"
-                        color={meterColor}
-                        className="w-full"
-                      >
-                        <Meter.Track>
-                          <Meter.Fill />
-                        </Meter.Track>
-                      </Meter>
                     </div>
                   )}
 
