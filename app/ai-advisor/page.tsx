@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { notify } from '@/lib/toast'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
@@ -231,9 +231,6 @@ export default function AiAdvisorPage() {
                   <SparklesIcon className="size-4" aria-hidden="true" />
                   AIに相談する
                 </CardTitle>
-                <CardDescription className="text-xs">
-                  Claude API連携後に使用可能になります
-                </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3 pb-4">
                 {/* Message area */}
