@@ -30,11 +30,11 @@ export default function DashboardPage() {
       {/* 進捗ビュー（期間タブ切替: 今週 / 今月 / Q / 半期 / 年次） */}
       <ProgressView />
 
+      {/* 月次累計推移ミニ (CV / CV室数 / RD / 消化予算 を 2 列) */}
+      <MonthlyCumulativeMini />
+
       {/* 媒体ブレイクダウン（発生日ベース / 今週 vs 先週） */}
       <MediaBreakdownCard />
-
-      {/* 月次累計推移ミニ (CV / CV室数 / RD / 消化予算 を横 4 列) */}
-      <MonthlyCumulativeMini />
 
       {/* 直近 7 日のフィード（新規成約 / 新規依頼を左右 2 カラム） */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
