@@ -14,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { InfoIcon } from 'lucide-react'
+import { InfoIcon, Upload, FileSpreadsheet } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Meter } from '@heroui/react'
 import { StatusChip } from '@/components/ui/status-chip'
 
@@ -86,6 +87,40 @@ export default function BudgetPage() {
   const [totalPlannedBudget, setTotalPlannedBudget] = useState(0)
   const [loading, setLoading] = useState(true)
   const [isMock, setIsMock] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const currentYear = new Date().getFullYear()
+
+  function downloadBudgetCsv() {
+    window.location.href = `/api/budget-plan/csv?mode=template&year=${currentYear}`
+  }
+
+  async function importBudgetCsv(file: File) {
+    setImporting(true)
+    setImportMessage(null)
+    try {
+      const text = await file.text()
+      const res = await fetch('/api/budget-plan/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/csv; charset=utf-8' },
+        body: text,
+      })
+      const json = await res.json()
+      if (!res.ok || json.ok === false) {
+        const errs = (json.errors ?? []) as { line: number; message: string }[]
+        const msg = errs.slice(0, 3).map((e) => `行 ${e.line}: ${e.message}`).join(' / ')
+        throw new Error(msg || json.error || `HTTP ${res.status}`)
+      }
+      setImportMessage({
+        type: 'success',
+        text: `${json.imported} ヶ月分 (${json.totalRows} 行) を展開しました`,
+      })
+    } catch (err) {
+      setImportMessage({ type: 'error', text: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const monthOptions = generateMonthOptions()
 
@@ -140,17 +175,68 @@ export default function BudgetPage() {
               キャンペーン別の消化状況とステータス。当月総予算は「月次累計推移」ページの消化予定編集から設定します。
             </p>
           </div>
-          <Select value={month} onValueChange={(v) => setMonth(v ?? '')}>
-            <SelectTrigger className="w-40" aria-label="表示月を選択">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthOptions.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={month} onValueChange={(v) => setMonth(v ?? '')}>
+              <SelectTrigger className="w-40" aria-label="表示月を選択">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={downloadBudgetCsv}
+              aria-label="予算 CSV テンプレートをダウンロード"
+              title="月次予算をまとめて入力する CSV テンプレ"
+            >
+              <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
+              予算CSV
+            </Button>
+            <label
+              className={cn(
+                'inline-flex items-center gap-2 text-sm h-8 px-3 rounded-md border bg-background hover:bg-muted cursor-pointer transition-colors',
+                importing && 'opacity-50 cursor-not-allowed',
+              )}
+              title="月次予算 CSV をインポート (日次×媒体に自動展開)"
+            >
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              {importing ? '展開中…' : 'CSV インポート'}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={importing}
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) importBudgetCsv(f)
+                  e.target.value = ''
+                }}
+              />
+            </label>
+          </div>
         </div>
+
+        {/* Import banner */}
+        {importMessage && (
+          <div
+            className={cn(
+              'flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm',
+              importMessage.type === 'success'
+                ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900/50 dark:bg-green-950/30 dark:text-green-300'
+                : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300',
+            )}
+          >
+            <span>{importMessage.text}</span>
+            <button type="button" onClick={() => setImportMessage(null)} className="text-xs underline hover:opacity-70">
+              閉じる
+            </button>
+          </div>
+        )}
 
         {/* Mock banner */}
         {isMock && !loading && (
