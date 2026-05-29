@@ -171,14 +171,6 @@ export default function HistoryPage() {
           </Select>
         </div>
 
-        {/* Mock banner */}
-        {isMock && !loading && (
-          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300">
-            <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
-            <span>サンプルデータを表示しています。</span>
-          </div>
-        )}
-
         {/* Timeline */}
         {loading ? (
           <div className="space-y-4">

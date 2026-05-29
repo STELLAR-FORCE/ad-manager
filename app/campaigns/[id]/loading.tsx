@@ -38,9 +38,6 @@ export default function Loading() {
           <Skeleton className="mt-2 h-4 w-56" />
         </div>
 
-        {/* サンプルデータバナー */}
-        <Skeleton className="h-10 w-full rounded-lg" />
-
         {/* 広告グループ件数 */}
         <Skeleton className="h-4 w-28" />
 
