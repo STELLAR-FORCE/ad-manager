@@ -23,7 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker';
 import { RefreshCw, Target, Wallet, TrendingUp, Home, Coins } from 'lucide-react';
 import {
   BarChart,
@@ -35,7 +34,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { jpyFormat, jpyCompact, numFormat, formatMonthLabel } from '@/lib/format';
+import { jpyFormat, numFormat, formatMonthLabel } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { DataSourceTooltip } from '@/components/ui/data-source-tooltip';
 
@@ -73,15 +72,13 @@ const PLATFORM_COLORS: Record<string, string> = {
 };
 
 const TODAY = new Date();
-
-function defaultRange(): DateRangeValue {
-  // デフォルト: 今月 (1 日 〜 今日)
-  const start = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
-  return { main: { start, end: TODAY }, compareEnabled: false, preset: 'thismonth_incl' };
-}
+const CURRENT_YEAR = TODAY.getFullYear();
+// 期間の絞りは年単位。データのある年 + 翌年計画分まで選べるようにする
+const YEAR_OPTIONS = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
 
 export default function CvBasedPage() {
-  const [dateRange, setDateRange] = useState<DateRangeValue>(defaultRange);
+  // デフォルト: 今年 1 年間 (1〜12 月) を月別表示
+  const [year, setYear] = useState<number>(CURRENT_YEAR);
   const [platform, setPlatform] = useState<Platform>('all');
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,12 +87,9 @@ export default function CvBasedPage() {
   const fetchData = useCallback(async () => {
     setRefreshing(true);
     try {
-      // toISOString() は UTC 変換で JST 月初が前日にずれるため、ローカル日付で組み立てる
-      const fmt = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const params = new URLSearchParams({
-        start: fmt(dateRange.main.start),
-        end: fmt(dateRange.main.end),
+        start: `${year}-01-01`,
+        end: `${year}-12-31`,
       });
       const res = await fetch(`/api/dashboard/cv-based?${params}`);
       const data = await res.json();
@@ -106,7 +100,7 @@ export default function CvBasedPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dateRange]);
+  }, [year]);
 
   useEffect(() => {
     fetchData();
@@ -147,19 +141,22 @@ export default function CvBasedPage() {
     );
   }, [filtered]);
 
-  // 月別集約（媒体合算してチャート向け）
+  // 月別集約（媒体合算してチャート向け）。選択年の 1〜12 月を 0 埋めで必ず並べる
   const monthlyData = useMemo(() => {
-    const map = new Map<string, { month: string; cv: number; wonCv: number; grossProfit: number; revenue: number }>();
+    const map = new Map<string, { month: string; cv: number; cvRooms: number; roomDays: number }>();
+    for (let mo = 1; mo <= 12; mo++) {
+      const key = `${year}-${String(mo).padStart(2, '0')}`;
+      map.set(key, { month: key, cv: 0, cvRooms: 0, roomDays: 0 });
+    }
     for (const r of filtered) {
-      const m = map.get(r.month) ?? { month: r.month, cv: 0, wonCv: 0, grossProfit: 0, revenue: 0 };
+      const m = map.get(r.month);
+      if (!m) continue;
       m.cv += r.cv;
-      m.wonCv += r.wonCv;
-      m.grossProfit += r.grossProfit;
-      m.revenue += r.revenue;
-      map.set(r.month, m);
+      m.cvRooms += r.cvRooms;
+      m.roomDays += r.roomDays;
     }
     return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month));
-  }, [filtered]);
+  }, [filtered, year]);
 
   return (
     <div className="space-y-6">
@@ -170,7 +167,18 @@ export default function CvBasedPage() {
             sf_Lead.Field9__c（受付日）軸。広告成果と直接紐づく KPI ビュー。
           </p>
         </div>
-        <DateRangePicker value={dateRange} onChange={setDateRange} today={TODAY} />
+        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+          <SelectTrigger className="w-28" aria-label="表示する年">
+            <SelectValue>{year}年</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {YEAR_OPTIONS.map((y) => (
+              <SelectItem key={y} value={String(y)}>
+                {y}年
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
           <SelectTrigger className="w-32">
             <SelectValue />
@@ -233,7 +241,7 @@ export default function CvBasedPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            月別 CV / 成約 / 粗利 / 売上
+            月別 CV数 / CV室数 / RD
             <DataSourceTooltip
               info={{
                 label: '月別 CV / 成約 / 粗利 / 売上',
@@ -243,7 +251,7 @@ export default function CvBasedPage() {
                 filters: 'LP フィルタあり (流入元_LP反響 ∈ monthly-order/express/standard/site)',
                 target:
                   'CV: リード件数 / 成約CV: 契約管理ID NOT NULL / 粗利: 総売上_粗利 SUM / 売上: 借主への請求額 SUM',
-                period: '画面上の期間ピッカーで指定された範囲を月別に集計',
+                period: '選択した年 (1〜12月) を月別に集計',
                 axis: '受付日 (発生日ベース)',
                 cache: '1 時間キャッシュ',
               }}
@@ -266,15 +274,14 @@ export default function CvBasedPage() {
                 yAxisId="right"
                 orientation="right"
                 tick={{ fontSize: 11 }}
-                tickFormatter={(v) => jpyCompact.format(v)}
+                tickFormatter={(v) => numFormat.format(v)}
                 axisLine={false}
                 tickLine={false}
               />
               <Tooltip
-                formatter={(value, name) => {
+                formatter={(value) => {
                   const v = typeof value === 'number' ? value : Number(value);
                   if (!Number.isFinite(v)) return '—';
-                  if (name === '粗利' || name === '売上') return jpyFormat.format(v);
                   return numFormat.format(v);
                 }}
                 labelFormatter={(label) =>
@@ -282,10 +289,9 @@ export default function CvBasedPage() {
                 }
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar yAxisId="left" dataKey="cv" name="CV" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              <Bar yAxisId="left" dataKey="wonCv" name="成約CV" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar yAxisId="right" dataKey="grossProfit" name="粗利" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              <Bar yAxisId="right" dataKey="revenue" name="売上" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="left" dataKey="cv" name="CV数" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="left" dataKey="cvRooms" name="CV室数" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="right" dataKey="roomDays" name="RD" fill="#f59e0b" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -306,7 +312,7 @@ export default function CvBasedPage() {
                   'LP フィルタあり。媒体は 流入元_媒体別 を Platform に正規化',
                 target:
                   'Imp / Click / Cost (広告メトリクス) + CV / CV室数 / RD / 成約CV / 成約室数 / 粗利 / 売上 (Salesforce)',
-                period: '画面上の期間ピッカーで指定された範囲を月別に集計',
+                period: '選択した年 (1〜12月) を月別に集計',
                 axis: '受付日 (発生日ベース)',
                 cache: '1 時間キャッシュ',
               }}
