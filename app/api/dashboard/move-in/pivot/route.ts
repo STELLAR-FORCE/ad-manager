@@ -70,11 +70,14 @@ export async function GET(request: Request) {
         query<MoveInSummaryRawRow>(MOVE_IN_SUMMARY_SQL, { periodStart, periodEnd }),
         // targets は dashboard データセット未作成だと落ちるので、その場合は空配列
         query<RawTargetRow>(
+          // move-in ページは入居日ベースなので axis='movein' の目標のみを取得する。
+          // axis を絞らないと movein/received の2行が返り、フロントの月キーマップで後勝ちになる。
           `SELECT month, platform, cv_target, room_target, room_days_target,
                   gross_profit_target, revenue_target, inhouse_unit_price
            FROM ${TARGETS_TABLE}
            WHERE month BETWEEN DATE(@periodStart) AND DATE(@periodEnd)
              AND platform IS NULL
+             AND IFNULL(axis, 'movein') = 'movein'
            ORDER BY month`,
           { periodStart, periodEnd },
         ).catch(() => [] as RawTargetRow[]),

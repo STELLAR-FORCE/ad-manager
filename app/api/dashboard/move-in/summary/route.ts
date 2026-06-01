@@ -109,11 +109,14 @@ export async function GET(request: Request) {
         // 全リードベースの成約サマリ（LPフィルタ無し）— 既存ピボットビューと数値を揃えるため
         query<MoveInSummaryRawRow>(MOVE_IN_SUMMARY_SQL, { periodStart, periodEnd }),
         query<RawTargetRow>(
+          // move-in ページは入居日ベースなので axis='movein' の目標のみを取得する。
+          // axis を絞らないと movein/received の2行が返り、フロントの月キーマップで後勝ちになる。
           `SELECT month, cv_target, room_target, room_days_target,
                   gross_profit_target, revenue_target
            FROM ${TARGETS_TABLE}
            WHERE month BETWEEN DATE(@periodStart) AND DATE(@periodEnd)
              AND platform IS NULL
+             AND IFNULL(axis, 'movein') = 'movein'
            ORDER BY month`,
           { periodStart, periodEnd },
         ).catch(() => [] as RawTargetRow[]),
