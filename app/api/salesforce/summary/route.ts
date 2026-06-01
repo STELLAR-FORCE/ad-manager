@@ -6,6 +6,8 @@ import {
   SF_STAGE_WON,
   LP_LEAD_FILTER_SQL,
   lostStagesSqlList,
+  establishedContractFilterSql,
+  contractKindCase,
 } from '@/lib/salesforce/queries';
 import type { SfOpportunitySummary } from '@/lib/types/salesforce';
 
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
   // ad-detail の成約 (won) はダッシュボードと条件を揃える:
   //   - LP フィルタあり (流入元_LP反響 ∈ monthly-order/express/standard/site)
   //   - リード単位 (mart は契約管理単位で行展開されてる)
-  //   - won 判定 = 契約管理ID NOT NULL のリード
+  //   - won 判定 = 成立した契約管理を持つリード、かつ新規のみ (更新/延長/キャンセル除外)
   // 案件件数 (total) / 失注 (lost) / 平均リードタイムは案件単位の集計を維持する。
   // 軸はリードの 受付日時 (= ダッシュボードの「発生日ベース」と同じ)。
   const sql = `
@@ -44,7 +46,12 @@ export async function GET(request: Request) {
         ANY_VALUE(${SF_COLS.oppId}) AS opp_id,
         ANY_VALUE(${SF_COLS.oppStage}) AS stage,
         ANY_VALUE(${SF_COLS.elapsedLeadTime}) AS elapsed_lead_time,
-        MAX(IF(${SF_COLS.contractId} IS NOT NULL, 1, 0)) AS has_contract
+        MAX(IF(
+          ${SF_COLS.contractId} IS NOT NULL
+          AND (${establishedContractFilterSql()})
+          AND ${contractKindCase(SF_COLS.contractName)} = 'new',
+          1, 0
+        )) AS has_contract
       FROM ${SF_MART}
       WHERE DATE(${SF_COLS.receivedAt}) BETWEEN DATE(@start) AND DATE(@end)
         AND ${LP_LEAD_FILTER_SQL}

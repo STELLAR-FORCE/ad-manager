@@ -335,9 +335,9 @@ export default function MoveInPivotPage() {
                 sources: ['lead', 'contract'],
                 source: 'Salesforce (mart.salesforce_all_obj)',
                 filters:
-                  'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)。成約は新規のみ(更新/延長/キャンセルを除外)+ 借主請求>0 または 粗利>0 + 失注フェーズ除外',
+                  'LP 経由のみ (流入元_LP反響 ∈ monthly-order/express/standard/site)。成約 件数/室数 は新規のみ(更新/延長/キャンセルを除外)+ 借主請求>0 または 粗利>0 + 失注フェーズ除外。粗利・売上は更新・延長も実収益として含む',
                 target:
-                  'CV: LP流入リード件数 / CV室数: 必要戸数_数値 SUM / 成約件数・室数: 新規成約 / 粗利・売上: 確定値',
+                  'CV: LP流入リード件数 / CV室数: 必要戸数_数値 SUM / 成約件数・室数: 新規成約のみ / 粗利・売上: 全契約(更新・延長込み)',
                 period: '画面上の期間セレクタで指定した範囲を入居月別に集計',
                 axis: '利用期間_始期 が期間内 (入居日ベース)',
                 cache: '1 時間キャッシュ (再読み込みで更新)',

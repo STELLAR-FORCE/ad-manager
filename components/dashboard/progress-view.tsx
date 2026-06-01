@@ -93,7 +93,7 @@ const METRICS: ReadonlyArray<{
     icon: Trophy,
     format: (v: number) => numFormat.format(Math.round(v)) + ' 件',
     formatCompact: (v: number) => numFormat.format(Math.round(v)) + ' 件',
-    target: '契約管理ID が NOT NULL のリードを COUNT DISTINCT',
+    target: '成立した新規契約を持つリードを COUNT DISTINCT (更新/延長/キャンセルは除外)',
     sources: ['lead', 'contract'],
   },
   {
@@ -102,7 +102,7 @@ const METRICS: ReadonlyArray<{
     icon: Wallet,
     format: (v: number) => jpyFormat.format(v),
     formatCompact: (v: number) => jpyCompact.format(v),
-    target: '総売上_粗利 の合計 (SUM)',
+    target: '総売上_粗利 の合計 (SUM)。粗利は更新・延長も実収益として含む',
     sources: ['contract'],
   },
 ];

@@ -62,7 +62,13 @@ function leadCte(dateExpr: string, granularity: 'month' | 'day'): string {
         ANY_VALUE(DATE(${dateExpr})) AS date_value,
         ANY_VALUE(${SF_COLS.needRooms}) AS need_rooms,
         ANY_VALUE(${SF_COLS.usePeriodDays}) AS use_period_days,
-        MAX(IF(${SF_COLS.oppStage} = @wonStage, 1, 0)) AS won_flag
+        -- 成約 = 成立した契約管理を持つ新規リード (更新/延長/キャンセル除外)。他ページと定義統一
+        MAX(IF(
+          ${SF_COLS.contractId} IS NOT NULL
+          AND (${establishedContractFilterSql()})
+          AND ${contractKindCase(SF_COLS.contractName)} = 'new',
+          1, 0
+        )) AS won_flag
       FROM ${SF_MART}
       WHERE DATE(${dateExpr}) BETWEEN @start AND @end
         -- 発生日ベースも LP 流入のリードを対象にする(他ダッシュボードと母集団を統一)
@@ -88,7 +94,9 @@ function contractCte(dateExpr: string, granularity: 'month' | 'day'): string {
     SELECT
       bucket,
       platform,
-      SUM(IFNULL(contracted_rooms, 0)) AS contracted_rooms,
+      -- 成約室数 = 新規のみ (更新/延長/キャンセル除外)
+      SUM(IF(kind = 'new', IFNULL(contracted_rooms, 0), 0)) AS contracted_rooms,
+      -- 粗利・売上 = 更新・延長も含む (実収益)
       SUM(IFNULL(gross_profit, 0)) AS gross_profit,
       SUM(IFNULL(revenue, 0)) AS revenue,
       COUNTIF(is_inhouse = TRUE) AS inhouse_won_count,
@@ -110,6 +118,7 @@ function contractCte(dateExpr: string, granularity: 'month' | 'day'): string {
       WHERE ${SF_COLS.contractId} IS NOT NULL
         AND DATE(${dateExpr}) BETWEEN @start AND @end
         AND ${establishedContractFilterSql()}
+        AND ${LP_LEAD_FILTER_SQL}
       GROUP BY contract_id
     )
     GROUP BY 1, 2
@@ -307,8 +316,9 @@ export const MOVE_IN_PIVOT_SQL = `
  *   （依頼側の `利用期間_日数 × 必要戸数_数値` と対称な算出）
  */
 export const MOVE_IN_SUMMARY_SQL = `
-  -- 契約管理単位で重複除去 (#118) + 入力途中・失注の除外 (#129)
-  -- 成約 = 新規のみ (更新/延長/キャンセルを除外)。CV (リード) と母集団を揃えるため LP フィルタも適用。
+  -- 契約管理単位で重複除去 (#118) + 入力途中・失注の除外 (#129) + LP フィルタ (CV と母集団統一)
+  -- 成約 件数/室数/RD は新規のみ (更新/延長/キャンセルを除外)。
+  -- 粗利・売上は更新・延長も実収益として含める (kind 条件なし)。
   WITH contract_unique AS (
     SELECT
       ${SF_COLS.contractId} AS contract_id,
@@ -317,22 +327,24 @@ export const MOVE_IN_SUMMARY_SQL = `
       ANY_VALUE(${SF_COLS.contractedRooms}) AS contracted_rooms,
       ANY_VALUE(${SF_COLS.grossProfit}) AS gross_profit,
       ANY_VALUE(${SF_COLS.revenue}) AS revenue,
-      ANY_VALUE(${SF_COLS.useDaysContracted}) AS use_days_contracted
+      ANY_VALUE(${SF_COLS.useDaysContracted}) AS use_days_contracted,
+      ANY_VALUE(${contractKindCase(SF_COLS.contractName)}) AS kind
     FROM ${SF_MART}
     WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
       AND ${SF_COLS.contractId} IS NOT NULL
       AND ${establishedContractFilterSql()}
       AND ${LP_LEAD_FILTER_SQL}
-      AND ${contractKindCase(SF_COLS.contractName)} = 'new'
     GROUP BY contract_id
   )
   SELECT
     move_in_month,
-    COUNT(DISTINCT lead_id) AS won_cv,
-    SUM(IFNULL(contracted_rooms, 0)) AS contracted_rooms,
+    -- 成約 件数/室数/RD = 新規のみ
+    COUNT(DISTINCT IF(kind = 'new', lead_id, NULL)) AS won_cv,
+    SUM(IF(kind = 'new', IFNULL(contracted_rooms, 0), 0)) AS contracted_rooms,
+    SUM(IF(kind = 'new', IFNULL(use_days_contracted, 0) * IFNULL(contracted_rooms, 0), 0)) AS contracted_room_days,
+    -- 粗利・売上 = 更新・延長も含む (実収益)
     SUM(IFNULL(gross_profit, 0)) AS gross_profit,
-    SUM(IFNULL(revenue, 0)) AS revenue,
-    SUM(IFNULL(use_days_contracted, 0) * IFNULL(contracted_rooms, 0)) AS contracted_room_days
+    SUM(IFNULL(revenue, 0)) AS revenue
   FROM contract_unique
   GROUP BY 1
   ORDER BY 1
