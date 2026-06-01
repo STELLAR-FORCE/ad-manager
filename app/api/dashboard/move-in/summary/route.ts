@@ -60,7 +60,8 @@ const LP_LEAD_AGG_SQL = `
       ANY_VALUE(${SF_COLS.usePeriodDays}) AS use_period_days
     FROM ${SF_MART}
     WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
-      AND ${SF_COLS.oppId} IS NOT NULL
+      -- CV = LP 流入の全リード。案件化(案件ID NOT NULL)に絞ると、
+      -- 案件化していない反響リードが落ちて実態より少なく出るため条件を外す。
       AND ${LP_LEAD_FILTER_SQL}
     GROUP BY lead_id
   )

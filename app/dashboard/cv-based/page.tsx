@@ -240,7 +240,7 @@ export default function CvBasedPage() {
                 sources: ['lead', 'contract'],
                 source:
                   'Salesforce (mart.salesforce_all_obj) + BigQuery 広告メトリクス (CV_BASED_SQL)',
-                filters: 'LP フィルタなし (全リード対象)',
+                filters: 'LP フィルタあり (流入元_LP反響 ∈ monthly-order/express/standard/site)',
                 target:
                   'CV: リード件数 / 成約CV: 契約管理ID NOT NULL / 粗利: 総売上_粗利 SUM / 売上: 借主への請求額 SUM',
                 period: '画面上の期間ピッカーで指定された範囲を月別に集計',
@@ -303,7 +303,7 @@ export default function CvBasedPage() {
                 source:
                   'Salesforce (mart.salesforce_all_obj) + BigQuery 広告メトリクス (CV_BASED_SQL)',
                 filters:
-                  'LP フィルタなし。媒体は 流入元_媒体別 を Platform に正規化',
+                  'LP フィルタあり。媒体は 流入元_媒体別 を Platform に正規化',
                 target:
                   'Imp / Click / Cost (広告メトリクス) + CV / CV室数 / RD / 成約CV / 成約室数 / 粗利 / 売上 (Salesforce)',
                 period: '画面上の期間ピッカーで指定された範囲を月別に集計',

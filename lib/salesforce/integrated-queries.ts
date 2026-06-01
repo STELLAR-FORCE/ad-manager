@@ -65,6 +65,8 @@ function leadCte(dateExpr: string, granularity: 'month' | 'day'): string {
         MAX(IF(${SF_COLS.oppStage} = @wonStage, 1, 0)) AS won_flag
       FROM ${SF_MART}
       WHERE DATE(${dateExpr}) BETWEEN @start AND @end
+        -- 発生日ベースも LP 流入のリードを対象にする(他ダッシュボードと母集団を統一)
+        AND ${LP_LEAD_FILTER_SQL}
       GROUP BY lead_id
     )
     GROUP BY bucket, platform
@@ -289,6 +291,8 @@ export const MOVE_IN_PIVOT_SQL = `
       ANY_VALUE(${SF_COLS.usePeriodDays}) AS use_period_days
     FROM ${SF_MART}
     WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
+      -- 月別サマリーカード (LP_LEAD_AGG_SQL) と母集団を揃えるため LP フィルタを掛ける。
+      AND ${LP_LEAD_FILTER_SQL}
     GROUP BY lead_id
   )
   GROUP BY move_in_month, cv_month

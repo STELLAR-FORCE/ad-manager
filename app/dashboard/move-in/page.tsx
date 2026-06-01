@@ -349,7 +349,7 @@ export default function MoveInPivotPage() {
             {periodLabel(period)}
           </p>
           <p className="text-xs text-muted-foreground/70 mt-0.5">
-            入居月ごとの着地見込み（LP流入の案件のみ）。営業/経営は時系列、マーケはリードタイム逆算で施策タイミングを判断。
+            入居月ごとの着地見込み（LP流入のリード全件）。営業/経営は時系列、マーケはリードタイム逆算で施策タイミングを判断。
           </p>
         </div>
         <PeriodSelector value={period} onChange={setPeriod} />
