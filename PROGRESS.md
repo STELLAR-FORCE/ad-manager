@@ -409,6 +409,34 @@ npm run dev
 5. **Issue #94** — 各ページの数値ソース確認 (本日の修正の効果検証)
 6. **Issue #102** — /dashboard/analysis 分析ページ新規
 
+## 2026-06-01 18:40
+### やったこと
+- **入居日ベースの目標バグ修正 (PR #145)**: `targets_monthly` が axis(movein/received)2行を持つのに move-in の pivot/summary が axis 無しで両取り→月キーマップで後勝ち。`axis='movein'` フィルタ追加で解消
+- **CV数/CV室数の母集団統一 (PR #146)**: 入居日ベースCVが `案件ID IS NOT NULL`(案件化のみ)で過少だった→全LPリードに。発生日ベース(cv-based)はLPフィルタ無しだったのでLPフィルタ追加。全月詳細ピボットにもLP追加しカードと一致
+- **cv-based ページ改修 (PR #147)**: デフォルト今年1年間(月別)、期間絞りを年セレクタ化、棒グラフを CV数/CV室数/RD に変更
+- **入居日ベース成約=新規のみ+LP (PR #148)**: `MOVE_IN_SUMMARY_SQL` の成約から更新/延長/キャンセル除外 + LP統一。ツールチップに条件明記
+- **成約を全ページで新規のみに統一 (PR #149)**: 進捗カード/広告詳細/アクティビティ/cv-based の成約件数・室数を新規のみに。広告詳細(salesforce/summary)は established条件すら無かったので併せて修正。**粗利・売上は更新延長込み(実収益)のまま**+各ツールチップに明記
+- **Bing ETL #111 の根本原因を特定 (PR #150 / docs)**: スプシ照合で成約数ズレを調査中に判明。`stellarforce テナント(ce04d0d5)に人間の管理者が不在`。GA=Microsoft Office 365 Portal SP のみ、PIM全タブ空。az CLI + Entraポータルで確認。復旧依頼サマリ `docs/bing-ads-tenant-admin-recovery.md` 作成、Issue #111 追記、管理部向けメール文面も作成
+
+### 決まったこと / 学んだこと
+- **CSV(スプシ)とツールは母集団が違う**: スプシは作成日2026のリードを並べ替え + レコードタイプ/媒体フィルタ。ツールは入居日が期間内の全LPリード(受付時期不問)。完全一致はしない
+- **mart に「作成日(CreatedDate)」は無い**。`受付日`(DATE)はほぼNULL、`受付日時`(TIMESTAMP)が実質の発生日。受付日時2026 ≈ 作成日2026(1716 vs 1749)
+- **mart にレコードタイプ列が無い**ため、SFレポートの「自社マンスリー/転貸」フィルタは再現不可
+- **成約の定義を全社統一**: 件数/室数/RD=新規のみ(更新/延長/キャンセル除外)、粗利/売上=全区分(実収益)
+- **Bing(ads.microsoft.com)のスーパー管理者 ≠ Entraテナント管理者**。SP作成は後者が必要
+- **テナント分離**: stellarforce(ce04d0d5)と ldkhonbu は別テナント。ldkhonbu の管理者付与は stellarforce に無効
+- BQ は未使用named paramを許容する(leadCte の @wonStage 未使用化が安全な根拠)
+
+### 詰まっていること / 保留
+- **Issue #111 Bing ETL — 最深部のブロッカー判明**: stellarforce テナントに人間の管理者がいないため、ロール付与もSP作成も不可。**Microsoftサポートで管理者アクセス回復(admin takeover)が必要**。stellarforce.com のDNS所有証明が要る。代替: 管理部の委任管理(GDAP/CSP)経路。→ ユーザーが管理部にメール送付予定
+- bq/az CLI 認証が頻繁に切れる(az は CAE で数分で失効)。都度 `! az login` / `! gcloud auth login`
+
+### 次にやること
+1. **Bing #111**: 管理部からの回答待ち(委任管理の有無 / Microsoftサポート手続き)。GA設定後は k.nakatomi@stellarforce.com に Cloud App Admin 付与 → SP作成(`az ad sp create --id d42ffc93-c136-491d-b4fd-6f18168c68fd`)→ トークン再取得 → Cloud Run `ad-manager-etl` 再実行
+2. 本日の成約/CV統一の効果を本番で検証(各ページの成約数が揃うか、スプシとの残差が日付軸+レコードタイプのみで説明できるか)
+3. **Issue #94** 数値ソース確認の継続
+4. **Issue #133 / #122 残 / #102** など従来の残タスク
+
 <!-- フォーマット:
 
 ## YYYY-MM-DD HH:MM
