@@ -248,9 +248,10 @@ export default function CvBasedPage() {
                 sources: ['lead', 'contract'],
                 source:
                   'Salesforce (mart.salesforce_all_obj) + BigQuery 広告メトリクス (CV_BASED_SQL)',
-                filters: 'LP フィルタあり (流入元_LP反響 ∈ monthly-order/express/standard/site)',
+                filters:
+                  'LP フィルタあり (流入元_LP反響 ∈ monthly-order/express/standard/site)。成約CV・成約室数は新規のみ(更新/延長/キャンセル除外)。粗利・売上は更新・延長も実収益として含む',
                 target:
-                  'CV: リード件数 / 成約CV: 契約管理ID NOT NULL / 粗利: 総売上_粗利 SUM / 売上: 借主への請求額 SUM',
+                  'CV: リード件数 / 成約CV・成約室数: 新規成約のみ / 粗利: 総売上_粗利 SUM(更新・延長込み) / 売上: 借主への請求額 SUM(更新・延長込み)',
                 period: '選択した年 (1〜12月) を月別に集計',
                 axis: '受付日 (発生日ベース)',
                 cache: '1 時間キャッシュ',

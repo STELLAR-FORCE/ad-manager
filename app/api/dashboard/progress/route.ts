@@ -24,6 +24,7 @@ import {
   SF_COLS,
   LP_LEAD_FILTER_SQL,
   establishedContractFilterSql,
+  contractKindCase,
 } from '@/lib/salesforce/queries';
 import {
   calcProgressRanges,
@@ -100,9 +101,11 @@ function buildAggregateSql(axis: Axis): string {
         ANY_VALUE(${SF_COLS.usePeriodDays}) AS use_period_days,
         -- 「成立した」契約管理を 1 件でも持つリードのみ成約扱い (#129)
         -- (失注フェーズや 入力途中の契約管理レコードでは has_contract=1 にしない)
+        -- 成約数は新規のみ (更新/延長/キャンセルは除外)
         MAX(IF(
           ${SF_COLS.contractId} IS NOT NULL
-          AND (${establishedContractFilterSql()}),
+          AND (${establishedContractFilterSql()})
+          AND ${contractKindCase(SF_COLS.contractName)} = 'new',
           1, 0
         )) AS has_contract
       FROM ${SF_MART}

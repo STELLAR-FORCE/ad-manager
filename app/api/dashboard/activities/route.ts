@@ -19,6 +19,7 @@ import {
   SF_COLS,
   lpRyuunyuumotoSqlList,
   establishedContractFilterSql,
+  contractKindCase,
 } from '@/lib/salesforce/queries';
 
 type Row = {
@@ -91,6 +92,7 @@ export async function GET() {
       AND ${SF_COLS.decisionDate} BETWEEN DATE(@start) AND DATE(@end)
       AND ${SF_COLS.lpSource} IN (${lpRyuunyuumotoSqlList()})
       AND ${establishedContractFilterSql()}
+      AND ${contractKindCase(SF_COLS.contractName)} = 'new'
     GROUP BY ${SF_COLS.contractId}
     ORDER BY decision_date DESC, ${SF_COLS.contractId} DESC
   `;
