@@ -308,6 +308,7 @@ export const MOVE_IN_PIVOT_SQL = `
  */
 export const MOVE_IN_SUMMARY_SQL = `
   -- 契約管理単位で重複除去 (#118) + 入力途中・失注の除外 (#129)
+  -- 成約 = 新規のみ (更新/延長/キャンセルを除外)。CV (リード) と母集団を揃えるため LP フィルタも適用。
   WITH contract_unique AS (
     SELECT
       ${SF_COLS.contractId} AS contract_id,
@@ -321,6 +322,8 @@ export const MOVE_IN_SUMMARY_SQL = `
     WHERE DATE(${SF_COLS.usePeriodStart}) BETWEEN @periodStart AND @periodEnd
       AND ${SF_COLS.contractId} IS NOT NULL
       AND ${establishedContractFilterSql()}
+      AND ${LP_LEAD_FILTER_SQL}
+      AND ${contractKindCase(SF_COLS.contractName)} = 'new'
     GROUP BY contract_id
   )
   SELECT
